@@ -2,7 +2,7 @@
 
 现有华科东校区 3D 校园、主持人控制台及三个真实作品的活动运行版本。观众填写昵称，在校园点位进入作品并返回；主持人控制公告、暂停、光柱、入口和活动阶段，查看个人记录与全场统计。默认出生位置是韵苑食堂。没有积分、钥匙、排行榜或玩家互相可见的多人同步。
 
-已发布试用站点：[观众入口](https://hust-east-campus-activity.vercel.app/) · [主持人控制端](https://hust-east-campus-activity.vercel.app/admin)。本机直连 Vercel 存在超时，通过现有代理的公网接口和资源检查已通过；完整公网浏览器游玩与现场网络尚未验收，具体边界见 [部署验收记录](docs/VERCEL-ACCEPTANCE.md)。
+已发布试用站点：[观众入口](https://hust-east-campus-activity.vercel.app/) · [主持人控制端](https://hust-east-campus-activity.vercel.app/admin)。本机直连 Vercel 存在超时；开启现有代理后，公网接口、真实作品进入／返回、双浏览器观众和主持人联动已验证，现场网络与物理手柄仍未验收，具体边界见 [部署验收记录](docs/VERCEL-ACCEPTANCE.md)。
 
 ## 本地运行
 
