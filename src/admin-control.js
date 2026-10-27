@@ -2,6 +2,7 @@ import './admin-control.css';
 import { geoToLocal } from './geospatial.js';
 import { createLiveMapFrame, getLiveLocationPresets } from './live-locations.js';
 import { ACTIVITY_PHASES, ACTIVITY_WORKS, activityPortals } from './activity-catalog.js';
+import { readAdminCoordinates, bindAdminCoordinateInputs } from './admin-coordinates.js';
 
 const $ = id => document.getElementById(id);
 let csrfToken = '', snapshot = null, busy = false, loggedIn = false, serverOffset = 0;
@@ -183,7 +184,8 @@ function submitObject(type, event) {
   try {
     const key = type === 'marker' ? 'markers' : 'portals';
     const objectId = $(`${type}-id`).value || id(type);
-    const item = { id: objectId, label: $(`${type}-label`).value.trim(), x: selection.x, z: selection.z,
+    const coordinates = coordinateInputs.read();
+    const item = { id: objectId, label: $(`${type}-label`).value.trim(), ...coordinates,
       enabled: $(`${type}-enabled`).checked, radius: Number($(`${type}-radius`).value), ...schedule(type) };
     if (!item.label) throw new Error('请填写名称。');
     if (type === 'marker') Object.assign(item, { color: $('marker-color').value, height: Number($('marker-height').value) });
@@ -356,10 +358,12 @@ function svgElement(name, attributes = {}, text) {
   if (text != null) element.textContent = text;
   return element;
 }
-function setSelection(x, z, label = '自定义地点') {
-  if (![x, z].every(Number.isFinite) || Math.abs(x) > 6000 || Math.abs(z) > 6000) { showNotice('坐标需要在 −6000 至 6000 米之间。', true); return; }
-  selection = { x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, label };
-  $('location-x').value = selection.x; $('location-z').value = selection.z;
+function setSelection(x, z, label = '自定义地点', updateInputs = true) {
+  let coordinates;
+  try { coordinates = readAdminCoordinates(x, z); }
+  catch (error) { showNotice(error.message, true); return; }
+  selection = { ...coordinates, label };
+  if (updateInputs) { $('location-x').value = selection.x; $('location-z').value = selection.z; }
   document.querySelectorAll('[data-location-readout]').forEach(el => { el.textContent = `${label} · ${selection.x}, ${selection.z}`; });
   renderSelection();
 }
@@ -532,7 +536,11 @@ $('location-preset').addEventListener('change', event => {
     mapView.x = preset.x - mapView.width / 2; mapView.z = preset.z - mapView.height / 2; applyMapView();
   }
 });
-for (const key of ['x', 'z']) $(`location-${key}`).addEventListener('change', () => { setSelection(Number($('location-x').value), Number($('location-z').value)); $('location-preset').value = ''; });
+const coordinateInputs = bindAdminCoordinateInputs({
+  xInput: $('location-x'), zInput: $('location-z'),
+  onValid: ({ x, z }) => { setSelection(x, z, '自定义地点', false); $('location-preset').value = ''; },
+  onInvalid: error => showNotice(error.message, true),
+});
 $('campus-picker').addEventListener('click', event => {
   if (!mapReady || busy) return;
   const point = $('campus-picker').createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
