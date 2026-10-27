@@ -1,0 +1,22 @@
+
+// Activity-only control boundary. The original gift source is never changed.
+window.campusWorkAdapter?.register({
+  setPaused(value){
+    if(campusSuspended===value)return;
+    campusSuspended=value;stop();controlBoundary();
+    if(value){
+      campusPhoneSuspended=phone.suspended;
+      campusAudioRunning=phone.audio?.state==='running';
+      phone.setSuspended(true);phone.audio?.suspend?.().catch(()=>{});
+    }else{
+      phone.setSuspended(campusPhoneSuspended);
+      if(campusAudioRunning)phone.audio?.resume?.().catch(()=>{});
+    }
+    sendGameControls(value||bookMenuOpen);last=performance.now();
+  },
+  dispose(){
+    campusSuspended=true;stop();controlBoundary();save();sendGameControls(true);
+    $('#game-host').replaceChildren();phone.audio?.close?.().catch(()=>{});
+    renderer.dispose();renderer.forceContextLoss();
+  },
+});

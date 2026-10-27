@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.vercel/
+.env
+.env.*
+!.env.example
+.dev.vars*
+server-data/
+work-assets/
+output/
+.staging/
+.DS_Store
+*.log
+*.sqlite*
+*.db

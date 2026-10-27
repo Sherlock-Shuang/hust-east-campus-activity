@@ -1,0 +1,23 @@
+{
+  "self":{"name":"访客","avatar":""},
+  "contact":{"name":"书境向导","avatar":""},
+  "conversations":{
+    "intro":[
+      {"type":"incoming","text":"欢迎来到书境。这里的每一本书，都可能通向另一个世界。","delay":0.2},
+      {"type":"reply","suggestions":["我准备好了。","我先四处看看。"]},
+      {"type":"incoming","text":"两段旅程藏在 I921 和 J921。找到书脊，靠近后打开它。","delay":1.1},
+      {"type":"reply","suggestions":["记住了，I921 和 J921。","让我自己去寻找。"]},
+      {"type":"incoming","text":"你可以按 V 切换视角，按 P 查看手机，按 Esc 暂停。","delay":1.1},
+      {"type":"incoming","text":"只有真正完成书中的游戏，图书馆才会记下通关。提前返回也没有关系。","delay":2},
+      {"type":"incoming","text":"现在，把手机收好，开始你的旅程吧。","delay":2.8},
+      {"type":"close","delay":6}
+    ],
+    "birthday":[
+      {"type":"incoming","text":"你已经完成了两段旅程。谢谢你愿意走到这里。","delay":0.2},
+      {"type":"reply","suggestions":["下一站去哪里？","这段旅程很特别。"]},
+      {"type":"incoming","text":"收起手机后，图书馆出口会打开。沿着馆外的小路走一会儿，抬头看看夜空。","delay":1.2},
+      {"type":"close","delay":4.5}
+    ]
+  },
+  "fireworks":{"text":"相遇书境，探索不止","lines":["相遇书境","探索不止"]}
+}

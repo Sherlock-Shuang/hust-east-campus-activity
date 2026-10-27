@@ -1,0 +1,9 @@
+.git
+node_modules
+server-data
+.env*
+.dev.vars*
+work-assets
+output
+*.sqlite*
+*.db

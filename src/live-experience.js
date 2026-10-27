@@ -1,0 +1,194 @@
+import {createLiveClient} from './live-client.js';
+import {isEventActive} from './live-state.js';
+import {mountAudienceUI} from './audience-ui.js';
+import {ACTIVITY_WORKS} from './activity-catalog.js';
+import './live-experience.css';
+
+export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,setSuspended,invalidate,notify}) {
+  const root=document.createElement('div');root.id='live-experience';
+  root.innerHTML=`
+    <div class="live-connection" role="status">正在连接活动</div>
+    <div class="live-marker-labels" aria-label="活动地点"></div>
+    <div class="live-pause" tabindex="-1" hidden><div class="live-pause-symbol" aria-hidden="true"><i></i><i></i></div><span>校园暂时静止</span><p></p><small>请留意活动公告，恢复后可继续探索</small></div>
+    <section class="live-announcement" role="status" aria-live="polite" aria-atomic="true" hidden><span class="live-announcement-tag">校园广播</span><h2></h2><p></p><span class="live-announcement-time"></span></section>
+    <button class="live-portal-prompt" hidden><span>体验入口</span><strong></strong><small>Enter 进入</small></button>
+    <section class="live-portal-view" aria-label="体验程序" hidden><div class="live-portal-bar"><span></span><small>校园位置已保留</small><button type="button">返回校园</button></div><div class="live-portal-loading" role="status" hidden></div><div class="live-portal-frame"></div></section>`;
+  container.append(root);
+  const $=selector=>root.querySelector(selector),pause=$('.live-pause'),announcement=$('.live-announcement'),portalView=$('.live-portal-view'),prompt=$('.live-portal-prompt'),labels=$('.live-marker-labels');
+  const worldGroup=new THREE.Group();worldGroup.name='activity-beacons';scene.add(worldGroup);
+  let client,audienceUI,items=[],visualSignature='',uiSignature='',nearest=null,opened=null,frame=null,frameOrigin=null,lastPaint=0,lastUpdate=0,lastFrozen=false,connectedOnce=false,disposed=false;
+  let loadingTimer,returnPose=null,restorePending=true;
+  const visited=new Set(),visiting=new Set(),visitRetry=new Map();
+  let restoreFocus=null,wasPaused=false;
+  const projected=new THREE.Vector3();
+  const reduced=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+  const interactionRoots=[document.querySelector('body > header'),document.querySelector('.transport-selector'),canvas,...container.querySelectorAll('.view-toolbar,#inspect,#measurement')].filter(Boolean);
+  const setInert=frozen=>interactionRoots.forEach(el=>{el.inert=frozen;});
+  function updateFrozen(){
+    const frozen=!!client?.state.paused||!!opened||!audienceUI?.registered;
+    if(frozen!==lastFrozen){
+      lastFrozen=frozen;
+      if(frozen){restoreFocus=document.activeElement;document.exitPointerLock?.();}
+      setInert(frozen);setSuspended(frozen);
+      if(!frozen&&restoreFocus?.isConnected)restoreFocus.focus({preventScroll:true});
+    }
+  }
+  function bridge(){
+    if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage({type:'campus:activity',attemptId:opened?.attemptId,paused:!!client.state.paused,announcement:isEventActive(client.state.announcement,client.now())?client.state.announcement:null,serverTime:client.now()},frameOrigin);
+  }
+  function loading(message,status='loading'){
+    const el=$('.live-portal-loading');el.hidden=!message;el.dataset.status=status;el.textContent=message;
+    if(status==='error'){const retry=document.createElement('button');retry.type='button';retry.textContent='重试';retry.onclick=()=>{const portal=opened;closePortal();openPortal(portal);};el.append(retry);}
+  }
+  function record(type,details={},options={}){return audienceUI.client.event(type,details,options);}
+  const position=()=>{const s=getPlayer()?.state;return s?{x:s.x,y:s.y,z:s.z}:null;};
+  function rememberPose(){returnPose=getPlayer()?.captureActivityPose?.();if(returnPose)try{sessionStorage.setItem('campus-return-pose',JSON.stringify({audienceId:audienceUI.client.identity.id,pose:returnPose}));}catch{}}
+  function attemptEvent(type,details={},options={}){if(!opened?.openingStarted)return Promise.resolve();return record(type,{pointId:opened.id,workId:opened.workId||opened.id,attemptId:opened.attemptId,...details},options);}
+  function closePortal(reason){
+    if(!opened)return;
+    attemptEvent('returned');clearTimeout(loadingTimer);
+    try{sessionStorage.removeItem('campus-return-pose');}catch{}
+    frame?.contentWindow?.postMessage({type:'campus:dispose',attemptId:opened.attemptId},frameOrigin);
+    $('.live-portal-frame').replaceChildren();portalView.hidden=true;frame=null;frameOrigin=null;opened=null;
+    loading('');updateFrozen();invalidate();if(!client.state.paused)canvas.focus({preventScroll:true});if(reason)notify(reason);
+  }
+  async function openPortal(portal){
+    if(client.state.paused||opened)return;
+    if(!audienceUI.registered)return notify('请先填写昵称参与活动');
+    if(!client.connected)return notify('活动连接恢复后再进入');
+    const current=client.state.portals.find(p=>p.id===portal.id);
+    if(!current||!isEventActive(current,client.now()))return notify('这个入口暂未开放');
+    const player=getPlayer();
+    if(!player?.active||Math.hypot(player.state.x-current.x,player.state.z-current.z)>current.radius||player.state.y>12)return notify('请先靠近这个入口');
+    const url=new URL(current.url,location.href);
+    if(!['http:','https:'].includes(url.protocol))return;
+    const attemptId=crypto.randomUUID();opened={...current,attemptId,openingStarted:false,registeredAttempt:false,ready:false};frameOrigin=url.origin;rememberPose();updateFrozen();
+    $('.live-portal-bar > span').textContent=current.label;portalView.hidden=false;prompt.hidden=true;loading('正在连接作品，首次进入需要加载模型与游戏资源…');
+    try{
+      await record('visit',{pointId:current.id,position:position()},{required:true});visited.add(current.id);
+      if(opened?.attemptId!==attemptId)return;
+      opened.openingStarted=true;
+      await record('opening',{pointId:current.id,workId:current.workId||current.id,attemptId,position:position()},{required:true});
+      if(opened?.attemptId!==attemptId)return;
+      opened.registeredAttempt=true;
+      if(url.origin===location.origin){const response=await fetch(url,{method:'HEAD',cache:'no-store'});if(!response.ok)throw new Error(`作品服务暂不可用（${response.status}）`);}
+    }catch(error){if(opened?.attemptId===attemptId){opened.failed=true;attemptEvent('open_failed');loading(error.message,'error');}return;}
+    if(opened?.attemptId!==attemptId)return;
+    url.searchParams.set('campusParentOrigin',location.origin);url.searchParams.set('campusAttempt',attemptId);
+    frame=document.createElement('iframe');frame.title=current.label;frame.referrerPolicy='same-origin';
+    frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-pointer-lock');
+    // Keep the host's announcement/pause layer above every experience.
+    frame.setAttribute('allow','fullscreen \'none\'');frame.src=url.href;
+    frame.addEventListener('load',()=>{bridge();if(!ACTIVITY_WORKS.some(w=>w.id===opened?.workId))loading('页面已载入，等待作品确认就绪；此时尚未计为已打开。');});
+    frame.addEventListener('error',()=>{if(opened?.attemptId!==attemptId)return;opened.failed=true;clearTimeout(loadingTimer);attemptEvent('open_failed');loading('作品加载失败，请重试或返回校园。','error');});
+    $('.live-portal-frame').replaceChildren(frame);portalView.hidden=false;prompt.hidden=true;
+    loadingTimer=setTimeout(()=>{if(opened?.attemptId===attemptId&&!opened.ready)loading('资源仍在加载。可继续等待，或返回后重试；尚未计为已打开。');},90000);
+    updateFrozen();$('.live-portal-bar button').focus();invalidate();
+  }
+  $('.live-portal-bar button').addEventListener('click',()=>closePortal());
+  prompt.addEventListener('click',()=>nearest&&openPortal(nearest));
+  function keyboard(event){
+    if(event.defaultPrevented||event.repeat||event.ctrlKey||event.metaKey||event.altKey)return;
+    if(event.code==='Enter'&&nearest&&!client.state.paused&&!opened&&event.target===canvas){event.preventDefault();openPortal(nearest);}
+  }
+  window.addEventListener('keydown',keyboard);
+  function message(event){
+    if(!frame||event.source!==frame.contentWindow||event.origin!==frameOrigin)return;
+    if(event.data?.attemptId!==opened?.attemptId)return;
+    if(event.data?.type==='campus:ready'){
+      if(opened.failed)return;
+      const work=ACTIVITY_WORKS.find(w=>w.id===opened.workId);
+      if(event.data.workId&&event.data.workId!==opened.workId)return;
+      bridge();
+      if(!opened.ready&&['page_opened','runtime_ready'].includes(event.data.level)&&(event.data.level==='runtime_ready'||work?.ready!=='runtime_ready')){
+        opened.ready=true;clearTimeout(loadingTimer);loading('');attemptEvent('opened',{readyLevel:event.data.level});
+      }
+    }
+    if(event.data?.type==='campus:error'){opened.failed=true;clearTimeout(loadingTimer);attemptEvent('open_failed');loading('作品未能完成加载，请重试或返回校园。','error');}
+    if(event.data?.type==='campus:exit'&&!client.state.paused)closePortal();
+  }
+  window.addEventListener('message',message);
+  function clearBeacons(){
+    for(const item of items){item.group.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();});item.label.remove();}
+    worldGroup.clear();items=[];
+  }
+  function rebuild(markers,portals){
+    clearBeacons();
+    for(const data of [...markers.map(m=>({...m,kind:'marker'})),...portals.map(p=>({...p,kind:'portal',height:26,color:'#83efd5',beamRadius:1.6}))]){
+      const group=new THREE.Group(),height=data.height,radius=data.kind==='portal'?data.beamRadius:data.radius;
+      group.position.set(data.x,.3,data.z);worldGroup.add(group);
+      const material=new THREE.ShaderMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,uniforms:{color:{value:new THREE.Color(data.color)},intensity:{value:.6}},vertexShader:'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:'varying vec2 vUv; uniform vec3 color;uniform float intensity; void main(){float edge=pow(sin(vUv.x*3.14159265),2.0);float fade=pow(1.0-vUv.y,1.6);gl_FragColor=vec4(color,fade*(0.14+edge*0.5)*intensity);}'});
+      const column=new THREE.Mesh(new THREE.CylinderGeometry(radius*.32,radius,height,24,1,true),material);column.position.y=height/2;group.add(column);
+      const core=new THREE.Mesh(new THREE.CylinderGeometry(.12,.28,height*.88,8,1,true),new THREE.MeshBasicMaterial({color:data.color,transparent:true,opacity:.62,depthWrite:false,blending:THREE.AdditiveBlending}));core.position.y=height*.44;group.add(core);
+      const ring=new THREE.Mesh(new THREE.RingGeometry(radius*.9,radius*1.08,48),new THREE.MeshBasicMaterial({color:data.color,side:THREE.DoubleSide,transparent:true,opacity:.9,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;group.add(ring);
+      const inner=new THREE.Mesh(new THREE.CircleGeometry(radius*.82,32),new THREE.MeshBasicMaterial({color:data.color,transparent:true,opacity:.14,depthWrite:false}));inner.rotation.x=-Math.PI/2;inner.position.y=.015;group.add(inner);
+      const label=document.createElement(data.kind==='portal'?'button':'span');label.className=`live-map-label ${data.kind==='portal'?'is-portal':''}`;label.textContent=data.kind==='portal'?`${data.label} · 体验入口`:data.label;label.style.setProperty('--beacon-color',data.color);labels.append(label);
+      if(data.kind==='portal')label.addEventListener('click',()=>openPortal(data));
+      items.push({group,material,ring,label,data});
+    }
+    invalidate();
+  }
+  function refresh(force=false){
+    if(!client||disposed)return;
+    const state=client.state,now=client.now(),activeAnnouncement=isEventActive(state.announcement,now)?state.announcement:null;
+    const markers=state.markers.filter(m=>isEventActive(m,now)),portals=state.portals.filter(p=>isEventActive(p,now));
+    const signature=JSON.stringify([markers,portals]);
+    if(signature!==visualSignature){visualSignature=signature;rebuild(markers,portals);}
+    if(opened){const current=portals.find(p=>p.id===opened.id);if(!current||current.url!==opened.url)closePortal('入口已关闭，已返回校园');}
+    const nextUI=JSON.stringify([state.paused,state.pauseMessage,activeAnnouncement,state.phase]);
+    if(nextUI!==uiSignature||force){
+      uiSignature=nextUI;pause.hidden=!state.paused;pause.querySelector('p').textContent=state.pauseMessage||'请稍候，活动即将继续';
+      announcement.hidden=!activeAnnouncement;
+      if(activeAnnouncement){announcement.dataset.tone=activeAnnouncement.tone;announcement.querySelector('h2').textContent=activeAnnouncement.title;announcement.querySelector('p').textContent=activeAnnouncement.body;announcement.querySelector('.live-announcement-time').textContent=activeAnnouncement.endAt?`持续至 ${new Date(activeAnnouncement.endAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}`:'';}
+      root.classList.toggle('is-paused',state.paused);updateFrozen();bridge();invalidate();
+      audienceUI?.phase(state.phase);
+      portalView.inert=state.paused;
+      if(state.paused&&!wasPaused){document.exitPointerLock?.();pause.focus({preventScroll:true});}
+      wasPaused=state.paused;
+    }
+    const player=getPlayer();nearest=null;
+    if(restorePending&&audienceUI?.registered&&!lastFrozen&&player){
+      restorePending=false;try{const stored=JSON.parse(sessionStorage.getItem('campus-return-pose'));if(stored?.audienceId===audienceUI.client.identity.id)player.restoreActivityPose?.(stored.pose);}catch{}
+    }
+    if(player?.active&&audienceUI?.registered&&client.connected&&!state.paused&&!opened){
+      let distance=Infinity;
+      for(const portal of portals){const d=Math.hypot(player.state.x-portal.x,player.state.z-portal.z);if(d<=portal.radius&&player.state.y<12){
+        if(d<distance){distance=d;nearest=portal;}
+        if(!visited.has(portal.id)&&!visiting.has(portal.id)&&Date.now()>(visitRetry.get(portal.id)||0)){visiting.add(portal.id);record('visit',{pointId:portal.id,position:position()},{required:true}).then(()=>{visited.add(portal.id);visitRetry.delete(portal.id);}).catch(()=>{visitRetry.set(portal.id,Date.now()+15000);}).finally(()=>visiting.delete(portal.id));}
+      }}
+    }
+    prompt.hidden=!nearest;if(nearest)prompt.querySelector('strong').textContent=nearest.label;
+    root.dataset.paused=String(state.paused);root.dataset.revision=String(state.revision);root.dataset.markerCount=String(markers.length);root.dataset.portalCount=String(portals.length);
+  }
+  client=createLiveClient({onState:()=>{queueMicrotask(()=>refresh(true));},onConnection(connected){
+    if(connected)connectedOnce=true;
+    $('.live-connection').textContent=connected?'活动已连接':connectedOnce?'活动连接中断 · 正在重连':'本地探索 · 活动服务未连接';
+    $('.live-connection').dataset.connected=String(connected);
+  }});
+  audienceUI=mountAudienceUI(root,{onChange(){queueMicrotask(()=>{updateFrozen();refresh(true);});}});
+  updateFrozen();
+  const pagehide=()=>{if(opened?.openingStarted)attemptEvent('returned',{}, {keepalive:true});};window.addEventListener('pagehide',pagehide);
+  const timer=setInterval(()=>refresh(),200);
+  const visibility=()=>refresh(true);document.addEventListener('visibilitychange',visibility);
+  return {
+    get frozen(){return lastFrozen;},get portalOpen(){return !!opened;},get state(){return client.state;},
+    sync(){refresh(true);setSuspended(lastFrozen);if(restorePending&&audienceUI.registered&&!lastFrozen&&getPlayer()){
+      restorePending=false;try{const stored=JSON.parse(sessionStorage.getItem('campus-return-pose'));if(stored?.audienceId===audienceUI.client.identity.id)getPlayer().restoreActivityPose?.(stored.pose);}catch{}
+    }},
+    tick(now){
+      if(!items.length||document.hidden||opened)return false;
+      if(now-lastUpdate<66)return false;lastUpdate=now;
+      camera.updateMatrixWorld();
+      const width=canvas.clientWidth,height=canvas.clientHeight;
+      for(const item of items){
+        const {data,group,label}=item;projected.set(data.x,Math.min(data.height*.65,22),data.z).project(camera);
+        label.hidden=client.state.paused||projected.z>1||projected.z< -1||Math.abs(projected.x)>1||Math.abs(projected.y)>1;
+        label.style.left=`${(projected.x*.5+.5)*width}px`;label.style.top=`${(-projected.y*.5+.5)*height}px`;
+        if(!client.state.paused&&!reduced?.matches){const phase=client.now()/1300+group.position.x*.01;item.material.uniforms.intensity.value=.8+Math.sin(phase)*.12;const scale=1+Math.sin(phase)*.045;item.ring.scale.setScalar(scale);}
+      }
+      if(client.state.paused||reduced?.matches)return false;
+      if(now-lastPaint>=100){lastPaint=now;return true;}return false;
+    },
+    dispose(){disposed=true;clearInterval(timer);client.dispose();closePortal();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},
+  };
+}

@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <meta name="theme-color" content="#e9eeeb" />
+    <title>东九早八 · 三维校园通勤</title>
+    <meta
+      name="description"
+      content="基于真实地理坐标的华科东校区及周边建筑、道路底模。统一米制坐标，区分公开轮廓、实测高度与未知数据。"
+    />
+  </head>
+  <body class="transport-layout">
+    <header>
+      <div class="identity">
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.4"
+        >
+          <path
+            d="M3 27V10l8-3v20M11 27V4l10 3v20M21 27V13l8-3v17M2 27h28M7 13v3m0 4v3M16 10v4m0 4v5m9-8v3m0 3v2"
+          />
+        </svg>
+        <div>
+          <h1>华科东校区</h1>
+          <span>韵苑 → 东九 · 三维校园通勤</span>
+        </div>
+      </div>
+      <div class="stage"><i></i> 早八情景 <b>地图 + 照片参考</b></div>
+      <nav>
+        <button id="help">数据与精度</button
+        ><label class="import-button"
+          >导入 GeoJSON<input
+            type="file"
+            id="import"
+            accept=".geojson,.json"
+            hidden /></label
+        ><button id="export-model">导出 3D</button
+        ><button id="export">GeoJSON</button>
+      </nav>
+    </header>
+    <aside class="sidebar transport-selector" aria-label="选择出行方式">
+      <section id="commute-panel" hidden>
+        <section id="player-panel" aria-labelledby="transport-title">
+          <h2 id="transport-title">出行方式</h2>
+          <div class="player-modes" role="group" aria-label="出行方式">
+            <button data-player-mode="walk" aria-pressed="false" title="步行探索校园">
+              <svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="15.5" cy="4.5" r="2.3"/><path d="m10 12 4-4 4 3 4 1M14 8l-2 9 5 4 1 5m-6-9-4 8M10 12l-4 4"/></svg><span>步行</span>
+            </button>
+            <button data-player-mode="scooter" aria-pressed="false" title="骑电动车前往东九">
+              <svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="6" cy="21" r="3.5"/><circle cx="22" cy="21" r="3.5"/><path d="M6 21h11l4-8-2-8h-4M19 7h4m-5 7H9l-3 7m3-7v-4h5m3 11 2-5"/></svg><span>电动车</span>
+            </button>
+            <button data-player-mode="roadster" aria-pressed="false" title="Roadster 喷气跑车">
+              <svg viewBox="0 0 28 28" aria-hidden="true"><path d="m3 17 3-7 5-2h8l4 5 2 2v6H3Zm4-4h14M7 21v3m14-3v3M5 17h4m10 0h4M13 2v3m-3-2 1 2m6-2-1 2"/></svg><span>喷气跑车</span>
+            </button>
+            <button data-player-mode="helicopter" aria-pressed="false" title="驾驶直升机探索校园">
+              <svg viewBox="0 0 28 28" aria-hidden="true"><path d="M5 4h18M14 4v5m-4 0h8c4 0 7 3 7 6H11L6 11H2V8m13 1v6m-3 0v5m9-5v5M8 20h17M4 4v9"/></svg><span>直升机</span>
+            </button>
+            <button data-player-mode="hoverboard" aria-pressed="false" title="电动飞行滑板">
+              <svg viewBox="0 0 28 28" aria-hidden="true"><path d="m3 14 10-5 12 5-10 5Zm5 2v5m13-5v5M7 24h3m8 0h3M14 3v3M4 6l2 2m18-2-2 2"/><ellipse cx="9" cy="14" rx="2" ry="1"/><ellipse cx="19" cy="14" rx="2" ry="1"/></svg><span>飞行滑板</span>
+            </button>
+            <button data-player-mode="spider" aria-pressed="false" title="蜘蛛侠蛛丝摆荡">
+              <svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="15" cy="8" r="2"/><path d="m12 12 4 3 3-3 5-2m-12 2-3-4-3-1m10 8-3 5-5 3m5-3 6 3 3-1M5 2l1 5m17-4 1 7m-3-8 3 1 2-2"/></svg><span>蛛丝摆荡</span>
+            </button>
+          </div>
+        </section>
+      </section>
+    </aside>
+    <main id="viewport">
+      <canvas id="map-canvas" tabindex="0" aria-label="东校区三维建筑与道路；玩家模式使用 WASD 移动"></canvas>
+      <div class="view-toolbar">
+        <div>
+          <button id="oblique" class="active">三维</button
+          ><button id="top">俯视</button>
+        </div>
+        <button id="home-view">东九近景</button
+        ><button id="reset-view">校园全景</button
+        ><button id="campus-reference-toggle">实景对照</button
+        ><button id="measure">⌁ 量距</button>
+      </div>
+      <div class="data-badge">
+        <span id="data-status">正在读取地理数据</span
+        ><small id="height-status">按源轮廓构建三维建筑</small>
+      </div>
+      <div class="compass">
+        <b>N</b
+        ><svg viewBox="0 0 24 36">
+          <path d="M12 2 2 31l10-7 10 7Z" fill="#426b6a" />
+          <path d="m12 2 0 22 10 7Z" fill="#a6bcba" />
+        </svg>
+      </div>
+      <div id="inspect" hidden>
+        <button id="close-inspect" aria-label="关闭详情">×</button
+        ><span id="inspect-category">建筑</span>
+        <h3 id="inspect-name">—</h3>
+        <dl id="inspect-fields"></dl>
+        <a id="inspect-source" target="_blank" rel="noreferrer"
+          >查看原始地图要素 ↗</a
+        ><button id="focus-selected">居中查看</button>
+      </div>
+      <div id="measurement" hidden>
+        <span>平面量距</span><b id="measure-value">点击第一个位置</b
+        ><small id="measure-description"
+          >再点击第二个位置，读取局部平面距离</small
+        ><button id="clear-measure">清除</button>
+      </div>
+      <div class="model-legend">
+        <span>左键旋转</span><span>右键平移</span><span>滚轮缩放</span>
+      </div>
+      <div id="journey-hud" hidden><span id="journey-stage">韵苑出发</span><b id="journey-progress">0 m</b><small id="journey-detail">跟随车流前进</small><button id="stop-follow">退出跟随</button></div>
+      <div id="web-target-status" hidden aria-live="off"><span class="web-target-dot"></span><span id="web-target-label">寻找可挂丝的建筑</span></div>
+      <div id="web-aim" hidden aria-hidden="true"><i></i></div>
+      <div id="web-point-aim" hidden aria-hidden="true"><i></i><span>G</span></div>
+      <div id="web-speed-shade" hidden aria-hidden="true"></div>
+      <div id="pointer-lock-hint" hidden>鼠标已锁定 · Esc / L 释放鼠标</div>
+      <div id="player-look-reticle" hidden aria-hidden="true"></div>
+      <section id="player-hud" class="player-guide" aria-label="操作提示" hidden>
+        <span id="player-mode-label"></span>
+        <p id="player-help"></p>
+      </section>
+      <footer>
+        <div>
+          <span id="scale-bar"></span><span id="scale-label">100 m</span>
+        </div>
+        <span>WGS 84 → 局部 ENU <i>·</i> 模型单位：米</span
+        ><a
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noreferrer"
+          >© OpenStreetMap contributors · ODbL</a
+        >
+      </footer>
+      <div id="notice" role="status"></div>
+      <div id="load-screen">
+        <span>构建三维校园</span><small>建筑实体 · 立面 · 道路</small>
+      </div>
+    </main>
+    <dialog id="commute-reference-dialog">
+      <button id="close-commute-reference" aria-label="关闭照片依据">×</button>
+      <span class="eyebrow">地图位置 · 照片外观 · 情景参数</span>
+      <h2>实拍照片，逐项对照</h2>
+      <p>本轮补入宣传片文件夹中的 24 张户外参考图，以及校方的韵苑5栋、12栋照片。可按地点筛选、点击放大和查看出处。食堂、教育超市、宿舍立面与湖边铺装逐项对照；方舟桥作为另一座步行桥单独记录。截图日期不等于实际拍摄时间。</p>
+      <div id="photo-reference-grid" class="photo-reference-grid"></div>
+      <h3 class="reference-subheading">地图与模型依据</h3>
+      <div class="reference-card"><b>东九湖水生植物</b><p>小红书原帖可见湖面成片圆叶植物及开阔水面。场景已加入岸侧叶簇、杯状叶片与少量挺水叶；仅作外观参考，分布、覆盖率与季节状态为估计。原始水域轮廓和岛洞保持不变。</p></div>
+      <div class="reference-card"><b>韵苑宿舍与喻岱桥</b><p>华科官方 2020 年《这里是韵苑》照片用于参考浅色墙面、分格窗、楼梯间、空调外机和桥栏。具体开窗位置、尺度及当下外观仍未逐栋测绘。</p><a href="https://news.sina.cn/gn/2020-12-11/detail-iiznctke6018801.d.html" target="_blank" rel="noreferrer">查看校方图文 ↗</a></div>
+      <div class="reference-card"><b>韵苑食堂、教育超市与宿舍</b><p>用户街景确认教育超市位于韵苑食堂底层，深蓝门头下有青绿细线；二楼开敞柱廊、菱形窗门塔和展开雨盖已按照片重建。5栋有单独的弧阳台与圆拱立面，源层数与照片有差异，暂保留地图五层。27栋未套用这套外观。14、18、23栋斜屋面仍参考2022工程答疑。</p><a href="https://www.hbbidcloud.cn/hubei/jyxx/004003/004003006/20220308/8039081a-036f-43b9-afff-686d5635eb3f.html" target="_blank" rel="noreferrer">查看工程答疑 ↗</a></div>
+      <div class="reference-card"><b>东九前场与电动车停放</b><p>长江日报 2023 年现场报道：东九 B 区弧形玻璃、白色圆柱、浅色铺装和成排停放的电动车。报道描述的拥堵时段为下午 15:35，不能当作早八人数统计。</p><a href="https://www.app.dawuhanapp.com/p/29771276.html" target="_blank" rel="noreferrer">查看报道与实拍 ↗</a></div>
+      <div class="reference-card"><b>早高峰道路与车辆外观</b><p>华科官方 2019 年交通治理报道：林荫道路、斑马线、树池、带前篮与防风罩的电动车，以及高峰疏导。照片用于参考外观，未配准到本路线的每个位置。</p><a href="https://www.thepaper.cn/newsDetail_forward_5075801" target="_blank" rel="noreferrer">查看校方照片 ↗</a></div>
+      <div class="reference-card"><b>喻家路、启明路与宿舍支路交会</b><p>OpenStreetMap 节点 11395860771 标注信号控制，更新于 2026-02-26。源点代表路口；模型中的灯杆偏移、形制和 42 / 4 / 28 秒配时为展示估计。</p><a href="https://www.openstreetmap.org/node/11395860771" target="_blank" rel="noreferrer">查看路口源记录 ↗</a></div>
+      <p class="small">默认路线按你确认的 27 栋 → 十字路口 → 过喻岱桥 → 信号灯处左转湖边弯道重建，约 0.87 km，到达湖畔 B/C 前场；可切换 A 北步道。07:35、07:50、07:58、08:05 的人数变化、86% 骑行及 14% 回流比例均为可调假设。楼高、路宽、河槽高差、逐杆位置与信号配时尚未实测。</p>
+    </dialog>
+    <dialog id="precision-dialog">
+      <button id="close-help" aria-label="关闭">×</button
+      ><span class="eyebrow">数据来源与验收边界</span>
+      <h2>米制坐标，不等于完整 1:1 还原。</h2>
+      <p>
+        本阶段使用 OpenStreetMap 的真实经纬度与要素轮廓，统一转换为 WGS 84
+        椭球上的局部东、北、天坐标；场景中 1 单位代表 1
+        米。公开地图自身的定位误差没有被消除。
+      </p>
+      <div class="precision-row">
+        <b>已有</b>
+        <p>
+          带原始要素 ID 的建筑轮廓、道路中线、水域和部分楼层标注。299
+          个建筑要素含 36 个部件，不等于 299 栋独立建筑。点击对象可追溯来源。
+        </p>
+      </div>
+      <div class="precision-row">
+        <b>尚缺</b>
+        <p>
+          完整测绘边界、所有建筑的真实高度、立面、地面高程，以及道路的真实宽度。当前范围还包含周边建筑，未声称东校区全量覆盖。
+        </p>
+      </div>
+      <div class="precision-row">
+        <b>如何显示</b>
+        <p>
+          默认显示三维建筑。优先使用源高度或源楼层标签；缺失时依据建筑用途推定高度。窗列、屋顶、立面和路宽是建模估计，点击对象可查看依据。关闭“三维建筑模式”可对照原始平面轮廓。估算数据不写回源
+          GeoJSON。
+        </p>
+      </div>
+      <div class="precision-row">
+        <b>通勤情景</b>
+        <p>路线参考从韵苑 27 栋旁公共通道出发，过喻岱桥后在用户确认的红绿灯处左转，沿湖边道路到 B/C 前场；也可选择 A 北侧步道。路口有源地图或用户确认依据，灯杆、横向位置和周期配时为估计。照片用于参考车流、停车和街道外观；86% 骑行、14% 回流及各时段人数为情景参数。</p>
+      </div>
+      <div class="precision-row">
+        <b>下一步数据</b>
+        <p>
+          需要校方可用的二维 GIS / CAD、建筑实测高度与地面高程，或带坐标的精修 /
+          倾斜摄影模型。已查到校方三维数据类别，但尚未取得模型文件。
+        </p>
+      </div>
+      <p class="small">
+        地理数据来自 OpenStreetMap，遵循 ODbL；学校官方 GIS
+        数据尚未导出。量距采用当前地理底模平面，不替代工程测量。导入支持带
+        EPSG:4326 经纬度的 GeoJSON FeatureCollection。
+      </p>
+      <div class="source-actions">
+        <a href="https://m.app.dawuhanapp.com/p/29771276.html" target="_blank" rel="noreferrer">校园电动车现场报道 ↗</a>
+        <a
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noreferrer"
+          >数据许可 ↗</a
+        ><a
+          href="https://imo.hust.edu.cn/info/1400/5675.htm"
+          target="_blank"
+          rel="noreferrer"
+          >校方地图服务说明 ↗</a
+        >
+      </div>
+    </dialog>
+    <script type="module" src="/src/survey.js"></script>
+  </body>
+</html>

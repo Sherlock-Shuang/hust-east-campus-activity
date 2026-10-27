@@ -1,0 +1,1027 @@
+{
+  "framework": null,
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build:vercel",
+  "outputDirectory": "dist",
+  "regions": [
+    "hnd1"
+  ],
+  "functions": {
+    "api/activity.mjs": {
+      "maxDuration": 300,
+      "excludeFiles": "{asset-source,work-assets,docs,dist,public}/**"
+    }
+  },
+  "routes": [
+    {
+      "src": "^/(.*)$",
+      "headers": {
+        "X-Content-Type-Options": "nosniff"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/admin$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/admin\\.html$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/api/games$",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/assets/activity-catalog-CZ1ciLpj\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/assets/admin-CyDkU7F9\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/assets/admin-YMlM7ikC\\.css$",
+      "headers": {
+        "Content-Type": "text/css; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/assets/campus-BVE4u7W-\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/assets/campus-j3oWhQCV\\.css$",
+      "headers": {
+        "Content-Type": "text/css; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/assets/GLTFExporter-C4V2D00H\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/assets/three\\.module-Csv-DIJu\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/data/commute-fixtures\\.json$",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/data/east-campus-diagnostics\\.json$",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/data/east-campus\\.geojson$",
+      "headers": {
+        "Content-Type": "application/geo+json; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/data/source-manifest\\.json$",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/experiences/activity-bridge\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/experiences/welcome\\.html$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/index\\.html$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/campus-stone-lawn\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/canopy-road\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/east-nine-approach\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/east-nine-curtainwall\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/east-nine-lake-edge\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/east-nine-lawn-tent\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/east-nine-paver-curve\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/east-nine-tree-avenue\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/fangzhou-side\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/fangzhou-sign\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/fangzhou-steps\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/fangzhou-top\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/forest-lane\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/sphere-sculpture-1\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/sphere-sculpture-2\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/sphere-sculpture-3\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/sphere-sculpture-road\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/street-corner-lawn\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/yujia-river-arch\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/yujia-yellow-walkway\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/yunyuan-canteen-market\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/yunyuan-crossing\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/yunyuan-dorm-court\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/references/local-campus/yunyuan-food-dorm-junction\\.webp$",
+      "headers": {
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/activity-adapter\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/api/games$",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/api/games\\.json$",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/games/isaac/$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/games/isaac/index\\.html$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hero\\.glb$",
+      "headers": {
+        "Content-Type": "model/gltf-binary",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/books\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/camera\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/fireworks-plan\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/fireworks\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/gamepad-menu\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/gamepad\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/journey\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/main\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/phone\\.css$",
+      "headers": {
+        "Content-Type": "text/css; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/phone\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/physics\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/pointer-lock\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/route-config\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/route-geometry\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/route-layout\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/story-flow\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/hub/style\\.css$",
+      "headers": {
+        "Content-Type": "text/css; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/index\\.html$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/SWF%E8%BF%90%E8%A1%8C%E6%A0%B7%E6%9C%AC/The%20Binding%20of%20Isaac\\.swf$",
+      "headers": {
+        "Content-Type": "application/x-shockwave-flash",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E5%89%A7%E6%83%85%E6%89%A9%E5%B1%95/Isaac-High-Damage\\.swf$",
+      "headers": {
+        "Content-Type": "application/x-shockwave-flash",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/birthday\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/gamepad-controller\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/node_modules/@ruffle-rs/ruffle/72a20ef1c0b8ceb37720\\.wasm$",
+      "headers": {
+        "Content-Type": "application/wasm",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/node_modules/@ruffle-rs/ruffle/826bb0938097485a2c9d\\.wasm$",
+      "headers": {
+        "Content-Type": "application/wasm",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/node_modules/@ruffle-rs/ruffle/core\\.ruffle\\.c80159b526e567babaf5\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/node_modules/@ruffle-rs/ruffle/core\\.ruffle\\.f000070ea72f8ae4fe3a\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/node_modules/@ruffle-rs/ruffle/LICENSE_APACHE$",
+      "headers": {
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/node_modules/@ruffle-rs/ruffle/LICENSE_MIT$",
+      "headers": {
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/node_modules/@ruffle-rs/ruffle/ruffle\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/story\\.css$",
+      "headers": {
+        "Content-Type": "text/css; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/story\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/model\\.glb$",
+      "headers": {
+        "Content-Type": "model/gltf-binary",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/portal-books\\.json$",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/story/config\\.json$",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/vendor/controls/OrbitControls\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/vendor/environments/RoomEnvironment\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/vendor/fonts/SourceHanSans-OFL\\.txt$",
+      "headers": {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/vendor/fonts/SourceHanSansCN-Regular\\.otf$",
+      "headers": {
+        "Content-Type": "font/otf",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/vendor/LICENSE$",
+      "headers": {
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/vendor/loaders/GLTFLoader\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/vendor/three\\.module\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/vendor/utils/BufferGeometryUtils\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/tasay/$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/tasay/assets/66c8ec9cf7b1f1e882d92c7f0c2e8d73-B7Cr3f9M\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/tasay/assets/c57832db96fa00de7e7da50eb070bd31-BEq2_Q_C\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/tasay/assets/index-Bw7q8Gi5\\.css$",
+      "headers": {
+        "Content-Type": "text/css; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/tasay/assets/index-dlInCgSp\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/tasay/index\\.html$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/activity-adapter\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/Build/wanyan\\.data$",
+      "headers": {
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/Build/wanyan\\.framework\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/Build/wanyan\\.loader\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/Build/wanyan\\.wasm$",
+      "headers": {
+        "Content-Type": "application/wasm",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/index\\.html$",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/pointer-lock-compat\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/favicon\\.ico$",
+      "headers": {
+        "Content-Type": "image/x-icon",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/fullscreen-button\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/MemoryProfiler\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/progress-bar-empty-dark\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/progress-bar-empty-light\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/progress-bar-full-dark\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/progress-bar-full-light\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/style\\.css$",
+      "headers": {
+        "Content-Type": "text/css; charset=utf-8",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/unity-logo-dark\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/unity-logo-light\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/unity-logo-title-footer\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/TemplateData/webmemd-icon\\.png$",
+      "headers": {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/api/games/?$",
+      "dest": "/works/library/api/games.json",
+      "methods": [
+        "GET",
+        "HEAD"
+      ]
+    },
+    {
+      "src": "^/works/library/api/games/?$",
+      "dest": "/works/library/api/games.json",
+      "methods": [
+        "GET",
+        "HEAD"
+      ]
+    },
+    {
+      "src": "^/admin/?$",
+      "dest": "/admin.html"
+    },
+    {
+      "src": "^/works/library$",
+      "status": 308,
+      "headers": {
+        "Location": "/works/library/"
+      }
+    },
+    {
+      "src": "^/works/wanyan$",
+      "status": 308,
+      "headers": {
+        "Location": "/works/wanyan/"
+      }
+    },
+    {
+      "src": "^/works/tasay$",
+      "status": 308,
+      "headers": {
+        "Location": "/works/tasay/"
+      }
+    },
+    {
+      "src": "^/works/library/games/isaac$",
+      "status": 308,
+      "headers": {
+        "Location": "/works/library/games/isaac/"
+      }
+    },
+    {
+      "src": "^/api/(.*)$",
+      "dest": "/api/activity?__activity_path=$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/works/tasay/(?!api(?:/|$)|assets(?:/|$))[^.]*$",
+      "dest": "/works/tasay/index.html",
+      "methods": [
+        "GET",
+        "HEAD"
+      ]
+    },
+    {
+      "src": "^/works/.*$",
+      "status": 404
+    }
+  ]
+}

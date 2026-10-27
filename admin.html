@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>活动控制台 · 华科东校区</title></head>
+<body>
+  <main id="login-screen" class="login-screen">
+    <form id="login-form" class="login-form">
+      <div class="campus-emblem" aria-hidden="true">东九</div>
+      <p class="overline">华科东校区</p><h1>活动控制台</h1>
+      <p class="intro">发布通知，点亮校园，让每一位参与者跟上活动。</p>
+      <label for="admin-password">管理员密码</label>
+      <input id="admin-password" name="password" type="password" autocomplete="current-password" required placeholder="输入管理员密码">
+      <button id="login-button" class="primary" type="submit">进入控制台 <span aria-hidden="true">↗</span></button>
+      <p id="login-error" class="form-error" role="alert"></p>
+      <p class="login-note">密码由服务端配置。此入口仅供活动组织者使用。</p>
+      <a href="/" class="quiet-link">返回校园</a>
+    </form>
+  </main>
+  <div id="dashboard" hidden>
+    <header class="admin-header"><a class="brand" href="/" target="_blank" rel="noopener"><span class="brand-icon" aria-hidden="true">东九</span><span>校园活动控制台<small>华科东校区</small></span></a>
+      <div class="header-actions"><span id="connection-state" class="connection"><i></i>正在连接</span><span class="online-count"><b id="online-count">—</b> 位观众在线</span><a href="/" target="_blank" rel="noopener">查看校园 ↗</a><button id="logout" class="text-button">退出</button></div>
+    </header>
+    <main class="console-main">
+      <section class="session-bar" aria-label="全场控制"><div class="session-status"><span id="session-dot" class="session-dot"></span><div><h1 id="session-title">校园自由探索中</h1><p id="session-description">玩家可以自由行动，公告和地图事件持续同步。</p></div></div><button id="toggle-pause" class="pause-button">暂停全体玩家</button>
+        <div class="pause-copy"><label for="pause-message">暂停时的提示</label><input id="pause-message" maxlength="240" value="请稍候，活动即将继续" placeholder="例如：请看向主屏幕，我们即将开始下一环节"><button id="save-pause-message" class="secondary small">保存提示</button></div>
+        <form id="phase-form" class="phase-control"><div><label for="activity-phase">当前活动阶段</label><select id="activity-phase"></select></div><div class="phase-guidance-field"><label for="phase-guidance">阶段引导</label><input id="phase-guidance" maxlength="400" placeholder="告诉观众当前环节要做什么"></div><button class="secondary small" type="submit">切换阶段</button><p class="field-note">由主持人推进；切换阶段保留位置与探索记录。</p></form>
+      </section>
+      <section class="audience-top-stats" aria-label="全场统计"><div><span>独立参与人数</span><strong id="stat-participants">—</strong></div><div><span>当前在线观众</span><strong id="stat-online">—</strong></div><div><span>当前体验人数</span><strong id="stat-experiencing">—</strong></div><p id="audience-sync-note">正在读取参与记录</p></section>
+      <div id="admin-notice" class="admin-notice" role="status" aria-live="polite" hidden></div>
+      <div class="workspace">
+        <section class="control-workspace">
+          <nav class="tabs" aria-label="控制内容" role="tablist"><button id="tab-announcement" role="tab" aria-selected="true" aria-controls="panel-announcement" data-tab="announcement">公告</button><button id="tab-marker" role="tab" aria-selected="false" aria-controls="panel-marker" data-tab="marker">地图光柱 <span id="marker-count">0</span></button><button id="tab-portal" role="tab" aria-selected="false" aria-controls="panel-portal" data-tab="portal">体验入口 <span id="portal-count">0</span></button><button id="tab-audience" role="tab" aria-selected="false" aria-controls="panel-audience" data-tab="audience">观众记录 <span id="audience-count">0</span></button></nav>
+          <section id="panel-announcement" class="editor-panel" role="tabpanel" aria-labelledby="tab-announcement">
+            <div class="section-heading"><div><h2>让重要的事，被所有人看见</h2><p>公告会显示在玩家画面前方，暂停时也能接收。</p></div><span id="announcement-status" class="status-pill">暂无公告</span></div>
+            <form id="announcement-form">
+              <label for="announcement-title">标题</label><input id="announcement-title" maxlength="80" required placeholder="例如：下一站，东九！">
+              <label for="announcement-body">公告内容</label><textarea id="announcement-body" maxlength="800" rows="4" placeholder="告诉大家接下来发生什么、要去哪里。"></textarea>
+              <div class="form-row"><div><label for="announcement-tone">呈现风格</label><select id="announcement-tone"><option value="info">校园通知 · 青绿</option><option value="celebrate">活动开启 · 浅蓝</option><option value="urgent">重要提醒 · 朱红</option></select></div></div>
+              <div class="form-row"><div><label for="announcement-start">开始时间 <small>留空立即</small></label><input id="announcement-start" type="datetime-local" step="1"></div><div><label for="announcement-end">结束时间 <small>留空持续显示</small></label><input id="announcement-end" type="datetime-local" step="1"></div></div>
+              <div class="form-actions"><button class="primary" type="submit">发布公告</button><button id="withdraw-announcement" class="secondary" type="button">撤回公告</button><span id="announcement-timing" class="field-note"></span></div>
+            </form>
+            <div class="preview-label">画面预览</div><div id="announcement-preview" class="announcement-preview" data-tone="info"><span>校园广播</span><h3 id="preview-title">下一站，东九！</h3><p id="preview-body">把大家的目光，带到同一个地方。</p></div>
+          </section>
+          <section id="panel-marker" class="editor-panel" role="tabpanel" aria-labelledby="tab-marker" hidden>
+            <div class="section-heading"><div><h2>点亮一个集合地点</h2><p>在右侧地图选点，再设置光柱外观与显示时间。</p></div></div>
+            <form id="marker-form"><input id="marker-id" type="hidden"><label for="marker-label">地点名称</label><input id="marker-label" required maxlength="80" placeholder="例如：东九集合点"><div class="location-readout">已选位置 <strong data-location-readout>请选择地图位置</strong></div>
+              <div class="form-row"><div><label for="marker-color">光柱颜色</label><input id="marker-color" type="color" value="#64e7cf"></div><div><label for="marker-height">高度（米）</label><input id="marker-height" type="number" min="8" max="160" step="1" value="45" required></div><div><label for="marker-radius">光圈半径（米）</label><input id="marker-radius" type="number" min="1" max="25" step=".5" value="4" required></div></div>
+              <div class="form-row"><div><label for="marker-start">开始时间 <small>留空立即</small></label><input id="marker-start" type="datetime-local" step="1"></div><div><label for="marker-end">结束时间 <small>留空持续显示</small></label><input id="marker-end" type="datetime-local" step="1"></div></div>
+              <label class="check-label"><input id="marker-enabled" type="checkbox" checked>保存后启用光柱</label><div class="form-actions"><button id="marker-submit" class="primary" type="submit">添加光柱</button><button class="secondary" type="button" data-clear-form="marker">清空表单</button></div>
+            </form><div class="list-heading"><h3>校园中的光柱</h3><small>最多 12 个</small></div><div id="marker-list" class="object-list"></div>
+          </section>
+          <section id="panel-portal" class="editor-panel" role="tabpanel" aria-labelledby="tab-portal" hidden>
+            <div class="section-heading"><div><h2>在校园里，打开新的体验</h2><p>入口开放后，玩家靠近即可进入配置好的程序。</p></div></div>
+            <div class="form-actions catalog-action"><button id="load-activity-portals" class="secondary small" type="button">载入三个作品点位</button><span class="field-note">保留已有配置，只补充缺少的点位。</span></div><form id="portal-form"><input id="portal-id" type="hidden"><label for="portal-work">对应作品</label><select id="portal-work"><option value="">其他作品</option></select><div id="portal-custom-work-field"><label for="portal-custom-work-id">稳定作品 ID <small>新作品留空自动生成</small></label><input id="portal-custom-work-id" maxlength="64" pattern="[a-zA-Z0-9_-]+" placeholder="例如 short-film-01"></div><label for="portal-label">入口名称</label><input id="portal-label" required maxlength="80" placeholder="例如：书境图书馆"><label for="portal-description">简短介绍</label><input id="portal-description" maxlength="240" placeholder="玩家靠近时，会看到这段介绍"><label for="portal-url">程序地址</label><input id="portal-url" required maxlength="2048" value="/experiences/welcome.html" placeholder="/experiences/welcome.html 或 https://…"><p class="field-note">可先用内置体验页验证。外部网页需要允许嵌入。</p>
+              <div class="location-readout">已选位置 <strong data-location-readout>请选择地图位置</strong></div><div class="form-row"><div><label for="portal-radius">交互范围（米）</label><input id="portal-radius" type="number" min="2" max="100" step="1" value="12" required></div></div>
+              <div class="form-row"><div><label for="portal-start">开放时间 <small>留空立即</small></label><input id="portal-start" type="datetime-local" step="1"></div><div><label for="portal-end">关闭时间 <small>留空持续开放</small></label><input id="portal-end" type="datetime-local" step="1"></div></div>
+              <label class="check-label"><input id="portal-enabled" type="checkbox">保存后开放入口</label><div class="form-actions"><button id="portal-submit" class="primary" type="submit">添加入口</button><button class="secondary" type="button" data-clear-form="portal">清空表单</button></div>
+            </form><div class="list-heading"><h3>体验入口</h3><small>最多 12 个</small></div><div id="portal-list" class="object-list"></div>
+          </section>
+          <section id="panel-audience" class="editor-panel" role="tabpanel" aria-labelledby="tab-audience" hidden>
+            <div class="section-heading"><div><h2>每个人的校园足迹</h2><p>同一身份的多个窗口合并统计；“已打开”不代表通关。</p></div><button id="refresh-audience" class="secondary small" type="button">刷新记录</button></div>
+            <div class="audience-aggregate"><section><h3>点位到访人数</h3><div id="point-statistics"></div></section><section><h3>作品体验人数</h3><div id="work-statistics"></div><p class="field-note">按独立观众去重；当前体验仅计已打开且在线的窗口。</p></section></div>
+            <form id="audience-search-form" class="audience-search"><label for="audience-search">查找观众</label><input id="audience-search" type="search" maxlength="100" placeholder="昵称或观众 ID"><button class="secondary small" type="submit">查找</button></form>
+            <div class="audience-grid"><div class="audience-table-scroll"><table class="audience-table"><thead><tr><th scope="col">观众</th><th scope="col">到访与作品</th><th scope="col">当前状态</th></tr></thead><tbody id="audience-list"></tbody></table><p id="audience-empty" class="empty-list">还没有参与记录。观众填写昵称后会出现在这里。</p></div><aside id="audience-detail" class="audience-detail" aria-label="观众个人记录" aria-live="polite"><p class="empty-list">选择一位观众，查看到访和体验时间线。</p></aside></div>
+          </section>
+        </section>
+        <aside class="map-workspace" aria-label="校园选点地图"><div class="section-heading"><div><h2>活动地点</h2><p id="map-instruction">选择地点，或直接在地图上点击。</p></div><span class="north-mark" aria-hidden="true">↑ N</span></div><label class="sr-only" for="location-preset">快捷地点</label><select id="location-preset"><option value="">加载地点…</option></select>
+          <div class="map-frame"><svg id="campus-picker" viewBox="-400 -1500 2200 2300" role="img" aria-label="东校区地图，点击选择光柱或入口位置"><g id="map-geography"></g><g id="map-pins"></g><g id="map-selection"></g></svg><div class="map-controls"><button id="map-zoom-in" aria-label="放大地图">＋</button><button id="map-zoom-out" aria-label="缩小地图">−</button><button id="map-reset" aria-label="恢复地图范围">⌂</button></div><p id="map-loading">正在读取校园地图…</p></div>
+          <div class="coordinate-row"><div><label for="location-x">东西坐标 X（米）</label><input id="location-x" type="number" min="-6000" max="6000" step=".1" value="58.2"></div><div><label for="location-z">南北坐标 Z（米）</label><input id="location-z" type="number" min="-6000" max="6000" step=".1" value="17.6"></div></div><p class="field-note">坐标与三维校园一致。保存前请确认地点在可到达区域。</p>
+          <div class="map-legend"><span><i class="legend-marker"></i>光柱</span><span><i class="legend-portal"></i>体验入口</span><span><i class="legend-selected"></i>当前选点</span></div><small class="map-attribution">© OpenStreetMap contributors · ODbL</small>
+        </aside>
+      </div>
+      <footer class="admin-footer"><span>先预览，再发布。已发布的活动会保留到设定的结束时间。</span><span id="last-sync">尚未同步</span></footer>
+    </main>
+  </div>
+  <script type="module" src="/src/admin-control.js"></script>
+</body>
+</html>

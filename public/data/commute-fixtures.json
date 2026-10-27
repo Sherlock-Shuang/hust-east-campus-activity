@@ -1,0 +1,766 @@
+{
+  "type": "FeatureCollection",
+  "name": "韵苑—东九通勤走廊：源地图交通设施记录",
+  "coordinateSystem": "EPSG:4326",
+  "attribution": "© OpenStreetMap contributors",
+  "license": "ODbL-1.0",
+  "sourceRawFile": "data/raw/east-campus-osm.xml",
+  "sourceRawSha256": "ed6c2f565b96d4640c8345e80fbfc61c91f50f2c1133477c7dde969d938d1c72",
+  "researchDate": "2026-10-23",
+  "scope": "Selected existing OSM control/crossing nodes near the dormitory-to-East-Nine corridor. Not an exhaustive traffic survey, not exact pole locations, and not a signal timing plan.",
+  "photographicSignalConfirmation": false,
+  "features": [
+    {
+      "type": "Feature",
+      "id": "node/11395860771",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.426862,
+          30.5163219
+        ]
+      },
+      "properties": {
+        "fixtureType": "traffic_signal_junction",
+        "osmId": "node/11395860771",
+        "sourceUrl": "https://www.openstreetmap.org/node/11395860771",
+        "sourceTimestamp": "2026-02-26T20:36:34Z",
+        "sourceVersion": 3,
+        "tags": {
+          "highway": "traffic_signals",
+          "traffic_signals": "signal"
+        },
+        "evidence": "osm-source-record",
+        "coordinateSystem": "EPSG:4326",
+        "photoVerified": false,
+        "currentOnsiteVerified": false,
+        "routeMembership": "corridor-context; not snapped to a chosen route",
+        "trafficControl": "mapped-signal-junction",
+        "polePositionKnown": false,
+        "signalOrientationKnown": false,
+        "signalTimingKnown": false,
+        "markingStyle": "unknown",
+        "memberWays": [
+          {
+            "osmId": "way/97057001",
+            "sourceUrl": "https://www.openstreetmap.org/way/97057001",
+            "tags": {
+              "highway": "residential",
+              "source": "GPS"
+            }
+          },
+          {
+            "osmId": "way/98831423",
+            "sourceUrl": "https://www.openstreetmap.org/way/98831423",
+            "tags": {
+              "highway": "unclassified",
+              "name": "启明路",
+              "source": "GPS"
+            }
+          },
+          {
+            "osmId": "way/99825367",
+            "sourceUrl": "https://www.openstreetmap.org/way/99825367",
+            "tags": {
+              "highway": "unclassified",
+              "name": "喻家路",
+              "source": "GPS"
+            }
+          },
+          {
+            "osmId": "way/1228820973",
+            "sourceUrl": "https://www.openstreetmap.org/way/1228820973",
+            "tags": {
+              "highway": "unclassified",
+              "name": "喻家路",
+              "source": "GPS"
+            }
+          },
+          {
+            "osmId": "way/1483567163",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483567163",
+            "tags": {
+              "highway": "service"
+            }
+          }
+        ],
+        "crossingAxes": [],
+        "name": "喻家路—启明路交会信号控制节点",
+        "positionMeaning": "OSM intersection-control node, not a surveyed signal pole position",
+        "unknowns": [
+          "pole count",
+          "pole positions",
+          "pole height",
+          "lamp shape",
+          "head orientation",
+          "cycle lengths",
+          "phase ordering"
+        ],
+        "caution": "Nearby crossings retain older uncontrolled tags; these may represent distinct control semantics or stale edits. Do not infer a current phase plan."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/11394553384",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.4266453,
+          30.5163415
+        ]
+      },
+      "properties": {
+        "fixtureType": "crossing",
+        "osmId": "node/11394553384",
+        "sourceUrl": "https://www.openstreetmap.org/node/11394553384",
+        "sourceTimestamp": "2023-12-05T11:03:15Z",
+        "sourceVersion": 2,
+        "tags": {
+          "crossing": "uncontrolled",
+          "highway": "crossing"
+        },
+        "evidence": "osm-source-record",
+        "coordinateSystem": "EPSG:4326",
+        "photoVerified": false,
+        "currentOnsiteVerified": false,
+        "routeMembership": "corridor-context; not snapped to a chosen route",
+        "trafficControl": "uncontrolled-in-source",
+        "polePositionKnown": false,
+        "signalOrientationKnown": false,
+        "signalTimingKnown": false,
+        "markingStyle": "unknown",
+        "memberWays": [
+          {
+            "osmId": "way/1228820973",
+            "sourceUrl": "https://www.openstreetmap.org/way/1228820973",
+            "tags": {
+              "highway": "unclassified",
+              "name": "喻家路",
+              "source": "GPS"
+            }
+          },
+          {
+            "osmId": "way/1483567160",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483567160",
+            "tags": {
+              "crossing": "uncontrolled",
+              "crossing:markings": "yes",
+              "footway": "crossing",
+              "highway": "footway"
+            }
+          }
+        ],
+        "crossingAxes": [
+          {
+            "osmId": "way/1483567160",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483567160",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  114.4266536,
+                  30.5164725
+                ],
+                [
+                  114.4266453,
+                  30.5163415
+                ],
+                [
+                  114.4266291,
+                  30.5162207
+                ]
+              ]
+            }
+          }
+        ],
+        "name": "源地图过街点",
+        "markingsKnown": true,
+        "caution": "Source crossing tags do not establish present-day signal operation or exact zebra-stripe width."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/11395851380",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.4268664,
+          30.5161783
+        ]
+      },
+      "properties": {
+        "fixtureType": "crossing",
+        "osmId": "node/11395851380",
+        "sourceUrl": "https://www.openstreetmap.org/node/11395851380",
+        "sourceTimestamp": "2024-01-29T06:13:44Z",
+        "sourceVersion": 2,
+        "tags": {
+          "crossing": "uncontrolled",
+          "crossing:markings": "yes",
+          "highway": "crossing"
+        },
+        "evidence": "osm-source-record",
+        "coordinateSystem": "EPSG:4326",
+        "photoVerified": false,
+        "currentOnsiteVerified": false,
+        "routeMembership": "corridor-context; not snapped to a chosen route",
+        "trafficControl": "uncontrolled-in-source",
+        "polePositionKnown": false,
+        "signalOrientationKnown": false,
+        "signalTimingKnown": false,
+        "markingStyle": "unknown",
+        "memberWays": [
+          {
+            "osmId": "way/98831423",
+            "sourceUrl": "https://www.openstreetmap.org/way/98831423",
+            "tags": {
+              "highway": "unclassified",
+              "name": "启明路",
+              "source": "GPS"
+            }
+          }
+        ],
+        "crossingAxes": [],
+        "name": "源地图过街点",
+        "markingsKnown": true,
+        "caution": "Source crossing tags do not establish present-day signal operation or exact zebra-stripe width."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/11563319725",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.4270816,
+          30.5163087
+        ]
+      },
+      "properties": {
+        "fixtureType": "crossing",
+        "osmId": "node/11563319725",
+        "sourceUrl": "https://www.openstreetmap.org/node/11563319725",
+        "sourceTimestamp": "2024-01-29T06:13:44Z",
+        "sourceVersion": 1,
+        "tags": {
+          "crossing": "uncontrolled",
+          "crossing:markings": "yes",
+          "highway": "crossing"
+        },
+        "evidence": "osm-source-record",
+        "coordinateSystem": "EPSG:4326",
+        "photoVerified": false,
+        "currentOnsiteVerified": false,
+        "routeMembership": "corridor-context; not snapped to a chosen route",
+        "trafficControl": "uncontrolled-in-source",
+        "polePositionKnown": false,
+        "signalOrientationKnown": false,
+        "signalTimingKnown": false,
+        "markingStyle": "unknown",
+        "memberWays": [
+          {
+            "osmId": "way/99825367",
+            "sourceUrl": "https://www.openstreetmap.org/way/99825367",
+            "tags": {
+              "highway": "unclassified",
+              "name": "喻家路",
+              "source": "GPS"
+            }
+          },
+          {
+            "osmId": "way/1483567162",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483567162",
+            "tags": {
+              "crossing": "uncontrolled",
+              "crossing:markings": "yes",
+              "footway": "crossing",
+              "highway": "footway"
+            }
+          }
+        ],
+        "crossingAxes": [
+          {
+            "osmId": "way/1483567162",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483567162",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  114.4270681,
+                  30.5161915
+                ],
+                [
+                  114.4270816,
+                  30.5163087
+                ],
+                [
+                  114.4270932,
+                  30.5163857
+                ]
+              ]
+            }
+          }
+        ],
+        "name": "源地图过街点",
+        "markingsKnown": true,
+        "caution": "Source crossing tags do not establish present-day signal operation or exact zebra-stripe width."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/11563319726",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.4288779,
+          30.5161576
+        ]
+      },
+      "properties": {
+        "fixtureType": "crossing",
+        "osmId": "node/11563319726",
+        "sourceUrl": "https://www.openstreetmap.org/node/11563319726",
+        "sourceTimestamp": "2024-01-29T06:13:44Z",
+        "sourceVersion": 1,
+        "tags": {
+          "crossing": "uncontrolled",
+          "crossing:markings": "yes",
+          "highway": "crossing"
+        },
+        "evidence": "osm-source-record",
+        "coordinateSystem": "EPSG:4326",
+        "photoVerified": false,
+        "currentOnsiteVerified": false,
+        "routeMembership": "corridor-context; not snapped to a chosen route",
+        "trafficControl": "uncontrolled-in-source",
+        "polePositionKnown": false,
+        "signalOrientationKnown": false,
+        "signalTimingKnown": false,
+        "markingStyle": "unknown",
+        "memberWays": [
+          {
+            "osmId": "way/99825367",
+            "sourceUrl": "https://www.openstreetmap.org/way/99825367",
+            "tags": {
+              "highway": "unclassified",
+              "name": "喻家路",
+              "source": "GPS"
+            }
+          },
+          {
+            "osmId": "way/1483567224",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483567224",
+            "tags": {
+              "crossing": "uncontrolled",
+              "crossing:markings": "yes",
+              "footway": "crossing",
+              "highway": "footway"
+            }
+          }
+        ],
+        "crossingAxes": [
+          {
+            "osmId": "way/1483567224",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483567224",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  114.4288818,
+                  30.5162118
+                ],
+                [
+                  114.4288779,
+                  30.5161576
+                ],
+                [
+                  114.428868,
+                  30.5160879
+                ]
+              ]
+            }
+          }
+        ],
+        "name": "源地图过街点",
+        "markingsKnown": true,
+        "caution": "Source crossing tags do not establish present-day signal operation or exact zebra-stripe width."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/6137791918",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.4241703,
+          30.5166215
+        ]
+      },
+      "properties": {
+        "fixtureType": "crossing",
+        "osmId": "node/6137791918",
+        "sourceUrl": "https://www.openstreetmap.org/node/6137791918",
+        "sourceTimestamp": "2026-02-26T20:44:32Z",
+        "sourceVersion": 8,
+        "tags": {
+          "crossing": "marked",
+          "crossing:island": "no",
+          "crossing:markings": "yes",
+          "highway": "crossing",
+          "tactile_paving": "no"
+        },
+        "evidence": "osm-source-record",
+        "coordinateSystem": "EPSG:4326",
+        "photoVerified": false,
+        "currentOnsiteVerified": false,
+        "routeMembership": "corridor-context; not snapped to a chosen route",
+        "trafficControl": "uncontrolled-in-source",
+        "polePositionKnown": false,
+        "signalOrientationKnown": false,
+        "signalTimingKnown": false,
+        "markingStyle": "unknown",
+        "memberWays": [
+          {
+            "osmId": "way/1228820956",
+            "sourceUrl": "https://www.openstreetmap.org/way/1228820956",
+            "tags": {
+              "highway": "unclassified",
+              "name": "喻家路",
+              "source": "GPS"
+            }
+          },
+          {
+            "osmId": "way/1483580766",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483580766",
+            "tags": {
+              "crossing": "uncontrolled",
+              "crossing:markings": "yes",
+              "footway": "crossing",
+              "highway": "footway"
+            }
+          }
+        ],
+        "crossingAxes": [
+          {
+            "osmId": "way/1483580766",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483580766",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  114.4241398,
+                  30.5165201
+                ],
+                [
+                  114.4241703,
+                  30.5166215
+                ],
+                [
+                  114.4241949,
+                  30.5167436
+                ]
+              ]
+            }
+          }
+        ],
+        "name": "源地图过街点",
+        "markingsKnown": true,
+        "caution": "Source crossing tags do not establish present-day signal operation or exact zebra-stripe width."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/9341257264",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.424042,
+          30.5166394
+        ]
+      },
+      "properties": {
+        "fixtureType": "crossing",
+        "osmId": "node/9341257264",
+        "sourceUrl": "https://www.openstreetmap.org/node/9341257264",
+        "sourceTimestamp": "2024-01-29T06:13:44Z",
+        "sourceVersion": 5,
+        "tags": {
+          "highway": "crossing"
+        },
+        "evidence": "osm-source-record",
+        "coordinateSystem": "EPSG:4326",
+        "photoVerified": false,
+        "currentOnsiteVerified": false,
+        "routeMembership": "corridor-context; not snapped to a chosen route",
+        "trafficControl": "unknown",
+        "polePositionKnown": false,
+        "signalOrientationKnown": false,
+        "signalTimingKnown": false,
+        "markingStyle": "unknown",
+        "memberWays": [
+          {
+            "osmId": "way/97080595",
+            "sourceUrl": "https://www.openstreetmap.org/way/97080595",
+            "tags": {
+              "highway": "unclassified",
+              "noname": "yes",
+              "source": "GPS"
+            }
+          },
+          {
+            "osmId": "way/1228820956",
+            "sourceUrl": "https://www.openstreetmap.org/way/1228820956",
+            "tags": {
+              "highway": "unclassified",
+              "name": "喻家路",
+              "source": "GPS"
+            }
+          }
+        ],
+        "crossingAxes": [],
+        "name": "源地图过街点",
+        "markingsKnown": false,
+        "caution": "Source crossing tags do not establish present-day signal operation or exact zebra-stripe width."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/9341257274",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.423934,
+          30.5166572
+        ]
+      },
+      "properties": {
+        "fixtureType": "crossing",
+        "osmId": "node/9341257274",
+        "sourceUrl": "https://www.openstreetmap.org/node/9341257274",
+        "sourceTimestamp": "2026-02-26T20:44:32Z",
+        "sourceVersion": 7,
+        "tags": {
+          "crossing": "marked",
+          "crossing:island": "no",
+          "crossing:markings": "yes",
+          "highway": "crossing",
+          "tactile_paving": "no"
+        },
+        "evidence": "osm-source-record",
+        "coordinateSystem": "EPSG:4326",
+        "photoVerified": false,
+        "currentOnsiteVerified": false,
+        "routeMembership": "corridor-context; not snapped to a chosen route",
+        "trafficControl": "uncontrolled-in-source",
+        "polePositionKnown": false,
+        "signalOrientationKnown": false,
+        "signalTimingKnown": false,
+        "markingStyle": "unknown",
+        "memberWays": [
+          {
+            "osmId": "way/1228820956",
+            "sourceUrl": "https://www.openstreetmap.org/way/1228820956",
+            "tags": {
+              "highway": "unclassified",
+              "name": "喻家路",
+              "source": "GPS"
+            }
+          },
+          {
+            "osmId": "way/1483580765",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483580765",
+            "tags": {
+              "crossing": "uncontrolled",
+              "crossing:markings": "yes",
+              "footway": "crossing",
+              "highway": "footway"
+            }
+          }
+        ],
+        "crossingAxes": [
+          {
+            "osmId": "way/1483580765",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483580765",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  114.4239591,
+                  30.5167852
+                ],
+                [
+                  114.423934,
+                  30.5166572
+                ],
+                [
+                  114.4239094,
+                  30.5165531
+                ]
+              ]
+            }
+          }
+        ],
+        "name": "源地图过街点",
+        "markingsKnown": true,
+        "caution": "Source crossing tags do not establish present-day signal operation or exact zebra-stripe width."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/9341257277",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.4216304,
+          30.5169494
+        ]
+      },
+      "properties": {
+        "fixtureType": "crossing",
+        "osmId": "node/9341257277",
+        "sourceUrl": "https://www.openstreetmap.org/node/9341257277",
+        "sourceTimestamp": "2024-01-29T06:13:44Z",
+        "sourceVersion": 6,
+        "tags": {
+          "crossing": "marked",
+          "crossing:island": "no",
+          "crossing:markings": "yes",
+          "highway": "crossing",
+          "tactile_paving": "no"
+        },
+        "evidence": "osm-source-record",
+        "coordinateSystem": "EPSG:4326",
+        "photoVerified": false,
+        "currentOnsiteVerified": false,
+        "routeMembership": "corridor-context; not snapped to a chosen route",
+        "trafficControl": "uncontrolled-in-source",
+        "polePositionKnown": false,
+        "signalOrientationKnown": false,
+        "signalTimingKnown": false,
+        "markingStyle": "unknown",
+        "memberWays": [
+          {
+            "osmId": "way/1012527776",
+            "sourceUrl": "https://www.openstreetmap.org/way/1012527776",
+            "tags": {
+              "crossing": "uncontrolled",
+              "crossing:markings": "yes",
+              "footway": "crossing",
+              "highway": "footway"
+            }
+          },
+          {
+            "osmId": "way/1228820956",
+            "sourceUrl": "https://www.openstreetmap.org/way/1228820956",
+            "tags": {
+              "highway": "unclassified",
+              "name": "喻家路",
+              "source": "GPS"
+            }
+          },
+          {
+            "osmId": "way/1483567153",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483567153",
+            "tags": {
+              "crossing": "uncontrolled",
+              "crossing:markings": "yes",
+              "footway": "crossing",
+              "highway": "footway"
+            }
+          }
+        ],
+        "crossingAxes": [
+          {
+            "osmId": "way/1012527776",
+            "sourceUrl": "https://www.openstreetmap.org/way/1012527776",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  114.4216113,
+                  30.5168431
+                ],
+                [
+                  114.421625,
+                  30.5169194
+                ],
+                [
+                  114.4216304,
+                  30.5169494
+                ]
+              ]
+            }
+          },
+          {
+            "osmId": "way/1483567153",
+            "sourceUrl": "https://www.openstreetmap.org/way/1483567153",
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  114.4216304,
+                  30.5169494
+                ],
+                [
+                  114.4216518,
+                  30.5170672
+                ]
+              ]
+            }
+          }
+        ],
+        "name": "源地图过街点",
+        "markingsKnown": true,
+        "caution": "Source crossing tags do not establish present-day signal operation or exact zebra-stripe width."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/11563319722",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.4208963,
+          30.5170213
+        ]
+      },
+      "properties": {
+        "fixtureType": "crossing",
+        "osmId": "node/11563319722",
+        "sourceUrl": "https://www.openstreetmap.org/node/11563319722",
+        "sourceTimestamp": "2024-01-29T06:13:44Z",
+        "sourceVersion": 1,
+        "tags": {
+          "crossing": "uncontrolled",
+          "crossing:markings": "yes",
+          "highway": "crossing"
+        },
+        "evidence": "osm-source-record",
+        "coordinateSystem": "EPSG:4326",
+        "photoVerified": false,
+        "currentOnsiteVerified": false,
+        "routeMembership": "corridor-context; not snapped to a chosen route",
+        "trafficControl": "uncontrolled-in-source",
+        "polePositionKnown": false,
+        "signalOrientationKnown": false,
+        "signalTimingKnown": false,
+        "markingStyle": "unknown",
+        "memberWays": [
+          {
+            "osmId": "way/1228820956",
+            "sourceUrl": "https://www.openstreetmap.org/way/1228820956",
+            "tags": {
+              "highway": "unclassified",
+              "name": "喻家路",
+              "source": "GPS"
+            }
+          }
+        ],
+        "crossingAxes": [],
+        "name": "源地图过街点",
+        "markingsKnown": true,
+        "caution": "Source crossing tags do not establish present-day signal operation or exact zebra-stripe width."
+      }
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+import test from 'node:test';
+import http from 'node:http';
+import assert from 'node:assert/strict';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {createClient} from '@libsql/client';
+import {adaptLibsql,createTursoDatabase} from '../serverless/database.mjs';
+import {createActivityHandler} from '../serverless/handler.mjs';
+import {createNodeActivityHandler} from '../serverless/node-handler.mjs';
+import * as api from '../serverless/activity-api.mjs';
+const PASSWORD='local-vercel-api-test-only';
+const settle=()=>new Promise(resolve=>setImmediate(resolve));
+const schema=await readFile(new URL('../serverless/schema.sql',import.meta.url),'utf8');
+function timerClock(){
+  let now=Date.now(),id=0;const tasks=new Map();
+  return {now:()=>now,setTimeout(fn,ms){const key=++id;tasks.set(key,{fn,at:now+ms});return key;},clearTimeout(key){tasks.delete(key);},get active(){return tasks.size;},
+    async advance(ms){const end=now+ms;for(;;){const next=[...tasks].filter(([,task])=>task.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;tasks.delete(next[0]);now=next[1].at;await next[1].fn();await settle();}now=end;await settle();}};
+}
+async function fixture(t,{clock}={}){
+  const dir=await mkdtemp(path.join(tmpdir(),'campus-vercel-test-'));
+  const url=pathToFileURL(path.join(dir,'activity.db')).href,clients=[createClient({url,intMode:'number'}),createClient({url,intMode:'number'})],dbs=clients.map(adaptLibsql),env={ADMIN_PASSWORD:PASSWORD};
+  await dbs[0].batch(schema.split(';').map(s=>s.trim()).filter(Boolean).map(s=>dbs[0].prepare(s)));
+  let handlers=dbs.map(db=>createActivityHandler({env,db,streamClock:clock}));
+  const readers=[];t.after(async()=>{await Promise.all(readers.map(r=>r.cancel().catch(()=>{})));clients.forEach(c=>c.close());await rm(dir,{recursive:true,force:true});});
+  const origin='https://campus.example.test';
+  const request=(url,init={},server=0)=>handlers[server](new Request(origin+url,{...init,headers:{Origin:origin,'Content-Type':'application/json','x-vercel-forwarded-for':'192.0.2.1',...init.headers}}));
+  const login=async()=>{const r=await request('/api/admin/login',{method:'POST',body:JSON.stringify({password:PASSWORD})});assert.equal(r.status,200);return {cookie:r.headers.get('set-cookie').split(';')[0],csrf:(await r.json()).csrfToken};};
+  const join=async(name,tabId,cookie,server=0)=>{const r=await request('/api/audience/join',{method:'POST',headers:cookie?{Cookie:cookie}:{},body:JSON.stringify({nickname:name,tabId})},server);assert.equal(r.status,200,await r.clone().text());return {cookie:r.headers.get('set-cookie').split(';')[0],...await r.json()};};
+  const post=(a,event,server=0)=>request('/api/audience/events',{method:'POST',headers:{Cookie:a.cookie,'X-CSRF-Token':a.csrfToken},body:JSON.stringify(event)},server);
+  const admin=await login(),stats=()=>request('/api/admin/audience',{headers:{Cookie:admin.cookie}},1).then(r=>r.json());
+  return {request,join,post,stats,admin,dbs,api,env,origin,nodeHandler:()=>createNodeActivityHandler({activity:handlers[0]}),async stream(server=0){const response=await request('/api/live/events',{},server);assert.equal(response.status,200);const reader=response.body.getReader();readers.push(reader);return reader;},async restart(){handlers=dbs.map(db=>createActivityHandler({env,db,streamClock:clock}));}};
+}
+
+test('Turso configuration rejects local filesystem production URLs and missing credentials',()=>{
+  assert.throws(()=>createTursoDatabase({}),/configuration/);
+  assert.throws(()=>createTursoDatabase({TURSO_DATABASE_URL:'file:/tmp/private.db',TURSO_AUTH_TOKEN:'test'}),/remote/);
+});
+test('two independent libSQL clients preserve identity, admin sessions, revision CAS and origin protection',async t=>{
+  const f=await fixture(t),initial=await (await f.request('/api/live/state')).json();
+  assert.deepEqual(initial.state.portals.map(p=>p.workId),['library','wanyan','tasay']);
+  assert.equal((await f.request('/api/admin/audience')).status,401);
+  const a=await f.join('同名','one'),b=await f.join('同名','one',undefined,1),again=await f.join('同名','two',a.cookie,1);
+  assert.notEqual(a.audience.id,b.audience.id);assert.equal(a.audience.id,again.audience.id);
+  assert.equal((await f.request('/api/audience/heartbeat',{method:'POST',headers:{Cookie:a.cookie},body:'{"tabId":"one"}'})).status,403);
+  assert.equal((await f.request('/api/audience/heartbeat',{method:'POST',headers:{Origin:'https://other.test',Cookie:a.cookie,'X-CSRF-Token':a.csrfToken},body:'{"tabId":"one"}'})).status,403);
+  const save=server=>f.request('/api/admin/state',{method:'PUT',headers:{Cookie:f.admin.cookie,'X-CSRF-Token':f.admin.csrf},body:JSON.stringify({state:{...initial.state,paused:true},expectedRevision:0})},server);
+  assert.deepEqual((await Promise.all([save(0),save(1)])).map(r=>r.status).sort(),[200,409]);
+  await f.restart();const stats=await f.stats();assert.equal(stats.summary.totalParticipants,2);assert.equal(stats.summary.onlineParticipants,2);assert.ok(!JSON.stringify(stats).includes('identityHash'));
+  const me=await (await f.request('/api/audience/me',{headers:{Cookie:a.cookie}},1)).json();assert.equal(me.audience.id,a.audience.id);
+  const quota=await f.request('/api/works/tasay/default/chat/completions',{method:'POST',body:'{}'});assert.equal(quota.status,401);
+  const config=await f.request('/api/works/tasay/default/chat/completions',{method:'POST',headers:{Cookie:a.cookie},body:'{}'});assert.equal(config.status,503);
+});
+test('simultaneous tabs retain every attempt and do not turn failed loads into opened works',async t=>{
+  const f=await fixture(t),viewer=await f.join('多窗口','one'),point=(await (await f.request('/api/live/state')).json()).state.portals[0];
+  const base={pointId:point.id,workId:point.workId,position:{x:point.x,y:0,z:point.z}};
+  await Promise.all(Array.from({length:6},async(_,i)=>{for(const [j,type] of ['visit','opening',i===5?'open_failed':'opened'].entries()){
+    const r=await f.post(viewer,{...base,type,eventId:`event-${i}-${j}`,tabId:`tab-${i}`,attemptId:`attempt-${i}`},i%2);assert.equal(r.status,200,await r.text());
+  }}));
+  const result=await f.stats();assert.equal(result.summary.totalParticipants,1);assert.equal(result.summary.currentParticipants,1);assert.equal(result.summary.points[0].visitors,1);assert.equal(result.participants[0].currentExperiences.length,5);
+  const duplicate=await f.post(viewer,{...base,type:'opened',eventId:'event-0-2',tabId:'tab-0',attemptId:'attempt-0'},1);assert.equal((await duplicate.json()).duplicate,true);
+});
+test('100 audiences, 100 SSE connections and 340 events aggregate correctly across two handlers',async t=>{
+  const f=await fixture(t),start=performance.now(),latencies=[],points=(await (await f.request('/api/live/state')).json()).state.portals;
+  const viewers=await Promise.all(Array.from({length:100},(_,i)=>f.join(`观众${i}`,`tab-${i}`,undefined,i%2)));
+  const readers=await Promise.all(viewers.map((_,i)=>f.stream(i%2)));await Promise.all(readers.map(r=>r.read()));
+  const live=await (await f.request('/api/live/state')).json();assert.equal(live.onlineAudienceCount,100);assert.equal(live.onlineCount,100);
+  await Promise.all(viewers.map(async(viewer,i)=>{const point=points[i%3],base={pointId:point.id,workId:point.workId,position:{x:point.x,y:0,z:point.z},tabId:`tab-${i}`,attemptId:`attempt-${i}`};
+    for(const [j,type] of ['visit','opening',i%5===0?'open_failed':'opened',...(i%5!==0&&i%2===0?['returned']:[])].entries()){
+      const before=performance.now(),response=await f.post(viewer,{...base,type,eventId:`event-${i}-${j}`},i%2);latencies.push(performance.now()-before);assert.equal(response.status,200,await response.text());
+    }
+  }));
+  const stats=await f.stats();assert.equal(stats.summary.totalParticipants,100);assert.deepEqual(stats.summary.points.map(p=>p.visitors),[34,33,33]);assert.equal(stats.summary.works.reduce((n,w)=>n+w.openedParticipants,0),80);assert.equal(stats.summary.currentParticipants,40);
+  await Promise.all(readers.map(r=>r.cancel()));assert.equal((await f.dbs[0].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count,0);
+  latencies.sort((a,b)=>a-b);t.diagnostic(JSON.stringify({environment:'local libSQL SQLite with two clients/handlers; not Turso network or WebGL',audiences:100,sseConnections:100,eventRequests:latencies.length,totalMs:Math.round(performance.now()-start),eventP95Ms:Math.round(latencies[Math.floor(latencies.length*.95)])}));
+});
+test('SSE reaches its real 240-second lifecycle, removes both timers/lease and reconnects with a snapshot',async t=>{
+  const clock=timerClock(),f=await fixture(t,{clock}),reader=await f.stream();assert.equal(f.api.STREAM_LIFETIME_MS,240000);
+  assert.match(new TextDecoder().decode((await reader.read()).value),/event: snapshot/);await settle();
+  assert.equal(clock.active,2);
+  await clock.advance(239999);assert.equal((await f.dbs[0].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count,1);
+  await clock.advance(1);for(let i=0;i<30;i++){const result=await reader.read();if(result.done)break;if(i===29)throw Error('SSE did not close');}
+  await settle();assert.equal(clock.active,0);assert.equal((await f.dbs[1].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count,0);
+  const again=await f.stream(1);assert.match(new TextDecoder().decode((await again.read()).value),/event: snapshot/);await again.cancel();assert.equal(clock.active,0);
+});
+test('model quota conditional INSERT stays atomic across clients, caps day totals and never charges rejected requests',async t=>{
+  const f=await fixture(t),day=86400000,now=Math.floor(2000000000000/day)*day+12*3600000;
+  const quota=(id,time=now,i=0)=>f.api.consumeModelQuota(id,{DB:f.dbs[i%2]},{now:time});
+  const results=await Promise.all(Array.from({length:30},(_,i)=>quota('one',now,i)));assert.equal(results.filter(Boolean).length,6);
+  for(let minute=1;minute<=6;minute++){const values=await Promise.all(Array.from({length:6},(_,i)=>quota('one',now+minute*61000,i)));assert.equal(values.filter(Boolean).length,minute===6?4:6);}
+  assert.equal(await quota('one',now+600000),false);
+  await f.dbs[0].batch(Array.from({length:459},(_,i)=>f.dbs[0].prepare('INSERT INTO activity_login_attempts (ip_hash,count,until) VALUES (?,1,?)').bind(`model:seed:${i}`,now+day)));
+  const final=await Promise.all(Array.from({length:30},(_,i)=>quota(`other-${i}`,now+600000,i)));assert.equal(final.filter(Boolean).length,1);
+  assert.equal((await f.dbs[1].prepare("SELECT COUNT(*) AS count FROM activity_login_attempts WHERE ip_hash LIKE 'model:%'").first()).count,500);
+  assert.equal(await quota('one',now+day),true);
+});
+
+
+test('real Node wrapper preserves rewritten API paths, JSON bodies, cookies, filters and SSE disconnect cleanup',async t=>{
+  const f=await fixture(t),server=http.createServer(f.nodeHandler());
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
+  const origin=`http://127.0.0.1:${server.address().port}`;
+  const call=(route,init={})=>fetch(origin+'/api/activity?__activity_path='+route,{...init,headers:{Origin:origin,'x-forwarded-proto':'http','Content-Type':'application/json',...init.headers}});
+  const initial=await (await call('live/state')).json();assert.equal(initial.state.portals.length,3);
+  const login=await call('admin/login',{method:'POST',body:JSON.stringify({password:PASSWORD})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0];
+  const join=await call('audience/join',{method:'POST',body:JSON.stringify({nickname:'Wrapper viewer',tabId:'wrapper-tab'})});assert.equal(join.status,200);assert.match(join.headers.get('set-cookie'),/HttpOnly/);
+  const found=await (await call('admin/audience&q=Wrapper',{headers:{Cookie:cookie}})).json();assert.equal(found.participants.length,1);
+  const excluded=await (await call('admin/audience&q=absent',{headers:{Cookie:cookie}})).json();assert.equal(excluded.participants.length,0);
+  const stream=await call('live/events'),reader=stream.body.getReader();assert.match(new TextDecoder().decode((await reader.read()).value),/event: snapshot/);await reader.cancel();
+  for(let i=0;i<20;i++){if((await f.dbs[0].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count===0)break;await new Promise(resolve=>setTimeout(resolve,10));}
+  assert.equal((await f.dbs[0].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count,0);
+});
