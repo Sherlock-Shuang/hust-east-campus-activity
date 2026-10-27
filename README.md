@@ -2,6 +2,8 @@
 
 现有华科东校区 3D 校园、主持人控制台及三个真实作品的活动运行版本。观众填写昵称，在校园点位进入作品并返回；主持人控制公告、暂停、光柱、入口和活动阶段，查看个人记录与全场统计。默认出生位置是韵苑食堂。没有积分、钥匙、排行榜或玩家互相可见的多人同步。
 
+已发布试用站点：[观众入口](https://hust-east-campus-activity.vercel.app/) · [主持人控制端](https://hust-east-campus-activity.vercel.app/admin)。本机直连 Vercel 存在超时，通过现有代理的公网接口和资源检查已通过；完整公网浏览器游玩与现场网络尚未验收，具体边界见 [部署验收记录](docs/VERCEL-ACCEPTANCE.md)。
+
 ## 本地运行
 
 使用 Node.js 24 与 npm：
@@ -56,6 +58,6 @@ npm test
 npm run build:vercel
 ```
 
-`tests/` 验证 Node HTTP、认证、同人去重、记录一致性、100 观众连接与事件以及 SSE 轮换；使用临时本地 SQLite，不是 100 台设备同时渲染 3D 的性能测试。实际部署验收记录以 `docs/VERCEL-ACCEPTANCE.md` 为准（部署验证后生成）。`docs/ACTIVITY-RUNBOOK.md` 与 `docs/ACTIVITY-ACCEPTANCE.md` 保留原整合阶段说明，涉及完整工程的重新制作命令仅适用于持有原素材者。
+`tests/` 验证 Node HTTP、认证、同人去重、记录一致性、100 观众连接与事件以及 SSE 轮换；使用临时本地 SQLite，不是 100 台设备同时渲染 3D 的性能测试。实际部署验收记录以 `docs/VERCEL-ACCEPTANCE.md` 为准。`docs/ACTIVITY-RUNBOOK.md` 与 `docs/ACTIVITY-ACCEPTANCE.md` 保留原整合阶段说明，涉及完整工程的重新制作命令仅适用于持有原素材者。
 
 保留了校园地图、碰撞、镜头、步行、电动车、跑车、直升机、滑板及蜘蛛侠玩法。作品按进入时加载，退出销毁 iframe。这里只发布运行所需源码及资源，不包含建模参考图库、原制作目录、私人资料、密钥或观众数据。
