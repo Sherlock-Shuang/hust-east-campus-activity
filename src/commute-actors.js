@@ -206,21 +206,21 @@ export function createActorLibrary(THREE,{registerGeometry=()=>{},registerMateri
   }
   const vehicle=buildVehicle(true),person=buildHuman(true),lowVehicle=buildLowVehicle(),lowPerson=buildLowPerson();
   const sharedMatrix=new THREE.Matrix4(),rotation=new THREE.Quaternion(),direction=new THREE.Vector3(),position=new THREE.Vector3(),scale=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
-  const staticIdentity=new THREE.Matrix4();
+  const staticIdentity=new THREE.Matrix4(),jointRotation=new THREE.Matrix4(),jointTranslation=new THREE.Matrix4();
   function partApplies(part,appearance){return(part.family===undefined||part.family===appearance.family)&&(part.outfit===undefined||part.outfit===appearance.outfit)&&(!part.accessory||(part.accessory==='bag'?appearance.bag:appearance.hair===part.accessory));}
   function partMatrix(part,agent,pose,target=sharedMatrix){
     target.identity();
-    if(part.joint==='steering')return target.makeTranslation(0,.81,-.49).multiply(new THREE.Matrix4().makeRotationY(pose.steering)).multiply(new THREE.Matrix4().makeTranslation(0,-.81,.49));
+    if(part.joint==='steering')return target.makeTranslation(0,.81,-.49).multiply(jointRotation.makeRotationY(pose.steering)).multiply(jointTranslation.makeTranslation(0,-.81,.49));
     if(part.joint==='frontWheel'||part.joint==='rearWheel'){
       const front=part.joint==='frontWheel',p=front?rotateY([0,.255,-.59],pose.steering):[0,.255,.56];
-      return target.makeTranslation(...p).multiply(new THREE.Matrix4().makeRotationY(front?pose.steering:0)).multiply(new THREE.Matrix4().makeRotationX(-(agent.progress??0)/.254));
+      return target.makeTranslation(...p).multiply(jointRotation.makeRotationY(front?pose.steering:0)).multiply(jointRotation.makeRotationX(-(agent.progress??0)/.254));
     }
-    if(part.joint==='torso')return target.makeTranslation(0,.87,.20).multiply(new THREE.Matrix4().makeRotationX(pose.pitch)).multiply(new THREE.Matrix4().makeTranslation(0,-.87,-.20));
+    if(part.joint==='torso')return target.makeTranslation(0,.87,.20).multiply(jointRotation.makeRotationX(pose.pitch)).multiply(jointTranslation.makeTranslation(0,-.87,-.20));
     if(part.joint==='limb'){
       const a=pose.points[part.segment[0]],b=pose.points[part.segment[1]];
       position.fromArray(a);direction.fromArray(b).sub(position);scale.set(1,direction.length(),1);rotation.setFromUnitVectors(up,direction.normalize());return target.compose(position,rotation,scale);
     }
-    if(part.joint==='hand'||part.joint==='shoe'||part.joint==='jointCover')return target.makeTranslation(...pose.points[part.anchor]).multiply(new THREE.Matrix4().makeRotationY(part.joint==='hand'?pose.steering:0));
+    if(part.joint==='hand'||part.joint==='shoe'||part.joint==='jointCover')return target.makeTranslation(...pose.points[part.anchor]).multiply(jointRotation.makeRotationY(part.joint==='hand'?pose.steering:0));
     return target.copy(staticIdentity);
   }
   return{palette,colors,vehicle,person,scooter:[...vehicle,...person],walker:person,parked:vehicle,lowScooter:[...lowVehicle,...lowPerson],lowWalker:lowPerson,lowParked:lowVehicle,partApplies,partMatrix,samplePose:sampleActorPose,appearance:actorAppearance};

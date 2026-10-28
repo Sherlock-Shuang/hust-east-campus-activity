@@ -1,6 +1,7 @@
 import { createCommuteRoute, COMMUTE_DORMS } from './commute-route.js';
 import { createCommuteSimulation } from './commute-simulation.js';
 import { createCommuteScene } from './commute-scene.js';
+import { createTrafficVisualCadence } from './traffic-visual-cadence.js';
 import { mountPhotoReferences } from './photo-references.js';
 import { EXPANDED_PHOTO_REFERENCES } from './photo-expanded-references.js';
 import { createPlayerExperience, getCampusPlayerSpawn } from './player-experience.js';
@@ -23,6 +24,8 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
   onRouteChange(route);
   let player, suspended = false, running = true, visible = true, timeScale = 1, followId = null,
     lastFollow = null, followStartedAt = 0, followWaitedAt = 0, uiElapsed = 0, disposed = false, observationProgress = 0, observationMode = 'route';
+  const visualCadence=createTrafficVisualCadence();
+  let detailDistanceScale=1;
   const previousCamera = new THREE.Vector3(Infinity, Infinity, Infinity);
   const previousDirection = new THREE.Quaternion();
   const listeners = [];
@@ -217,7 +220,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
     let next;try{next=createCommuteRoute(fc,{frame,geoToLocal,dormId:$('route-dorm')?.value ?? route.options.dormId,startAccess:$('route-access')?.value ?? route.options.startAccess,destination:$('route-destination')?.value ?? route.options.destination});}catch(error){notify(error.message);updateRouteLabels();return;}
     const settings={...simulation.state.settings,startMinutes:simulation.state.clockMinutes,seed:943108};
     stopFollow();player.dispose();visual.dispose();route=next;
-    simulation=createCommuteSimulation(route,settings);visual=createCommuteScene(THREE,scene,route,simulation,{model});onRouteChange(route);player=createPlayer();
+    simulation=createCommuteSimulation(route,settings);visual=createCommuteScene(THREE,scene,route,simulation,{model});visual.setDetailDistanceScale(detailDistanceScale);visualCadence.invalidate();onRouteChange(route);player=createPlayer();
     observationProgress=0;observationMode='route';previousCamera.set(Infinity,Infinity,Infinity);
     updateElement('route-position-slider', { value: 0 });updateElement('route-position', { textContent: route.start.name });
     updateRouteLabels();visual.setVisible(visible);updateUI();routeView();
@@ -263,6 +266,10 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
     get route(){return route;},get simulation(){return simulation;},get visual(){return visual;},get player(){return player;}, junctionView, spawnView, routeView, stopFollow,
     get running() { return running; },
     get suspended() { return suspended; },
+    setPerformanceBudget({trafficHz=60,detailDistanceScale:scale=1}={}) {
+      visualCadence.setHz(trafficHz);
+      if(scale!==detailDistanceScale){detailDistanceScale=scale;visual.setDetailDistanceScale(scale);visualCadence.invalidate();}
+    },
     setSuspended(value) { suspended=!!value;player.setSuspended(suspended);invalidate(); },
     setVisible(threeD) { visual.setVisible(visible && threeD); visual.staticGroup.visible=threeD; if (!threeD) stopFollow(); },
     tick(dt) {
@@ -275,6 +282,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
         if(moved){visual.updateStatic(camera);previousCamera.copy(camera.position);previousDirection.copy(camera.quaternion);}
         return moved || playerChanged;
       }
+      visualCadence.advance(dt);
       let changed = playerChanged;
       if (running) { simulation.step(dt * timeScale); changed = true; }
       if (followId !== null) {
@@ -304,8 +312,8 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
       }
       uiElapsed += dt;
       if (uiElapsed > .25) { updateUI(); uiElapsed = 0; }
-      if (running || camera.position.distanceToSquared(previousCamera) > .0001 ||
-        camera.quaternion.angleTo(previousDirection) > .001) {
+      if ((running || camera.position.distanceToSquared(previousCamera) > .0001 ||
+        camera.quaternion.angleTo(previousDirection) > .001) && visualCadence.take()) {
         visual.update(camera);
         previousCamera.copy(camera.position); previousDirection.copy(camera.quaternion);
         changed = true;

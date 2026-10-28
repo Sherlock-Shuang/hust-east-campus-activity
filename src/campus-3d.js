@@ -1,3 +1,4 @@
+import {createStaticInstanceSelection,createStaticXZIndex} from './static-instance-lod.js';
 import {createYunyuanForecourt} from './yunyuan-forecourt.js';
 import {createCampusLawnLandmarks} from './campus-lawn-landmarks.js';
 import {createLakesideDetails} from './lakeside-details.js';
@@ -399,39 +400,35 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     mesh.castShadow = /coping|plinth|strip|pier|rail|tree|balcony|canop|jamb|sill|conditioner|tower|edge-stones/.test(key); mesh.receiveShadow = true;
     mesh.userData = { category: b.category, reconstruction: true, instanceFeatureIds: b.ids, decorative: true };
     if(key==='estimated-road-edge-stones')mesh.userData.detailEvidence='estimated 0.24 m edge stones along unmodified source-road widths; mapped intersections and footpath access left open';
-    if(b.category==='building'||key==='estimated-road-edge-stones'){
-      const distant=key==='distant-window-panes',maxDistance=key==='estimated-road-edge-stones'?120:distant?1500:/roof|canteen|entrance|plinth/.test(key)?450:/balcony/.test(key)?240:180;
+    if(b.category==='building'||key==='estimated-road-edge-stones'||/avenue-|road-dashes/.test(key)){
+      const distant=key==='distant-window-panes',roadEdges=key==='estimated-road-edge-stones';
+      // Fine slats and bars are already below one pixel at these distances;
+      // retain glass, roof lines and broad structural silhouettes farther away.
+      const maxDistance=roadEdges?120:distant?1500:b.category==='road'?600:/roof|canteen|entrance|plinth/.test(key)?450:/balcony/.test(key)?240:/fins|guards|clamps|curtains|handles/.test(key)?60:/jambs|sills|mullions|transoms/.test(key)?100:/conditioner/.test(key)?120:180;
       const positions=b.matrices.map(m=>new THREE.Vector3().setFromMatrixPosition(m));
-      let spatialCells=null;
-      if(key==='estimated-road-edge-stones'){
-        // Only nearby cells are considered during camera updates. The complete
-        // campus has tens of thousands of kerb stones, but a walking camera
-        // should never scan or upload all of them just because it turned.
-        spatialCells=new Map();positions.forEach((p,i)=>{const cell=`${Math.floor(p.x/64)}/${Math.floor(p.z/64)}`;if(!spatialCells.has(cell))spatialCells.set(cell,[]);spatialCells.get(cell).push(i);});
-      }
-      facadeLods.push({mesh,b,positions,maxDistance,distant,spatialCells});mesh.frustumCulled=false;if(distant)mesh.count=0;
+      const spatialCells=createStaticXZIndex(positions),selection=createStaticInstanceSelection(mesh,{matrices:b.matrices,colors:b.colors,ids:b.ids});
+      facadeLods.push({mesh,b,positions,maxDistance,distant,spatialCells,selection,roadEdges,candidates:[],visible:[]});mesh.frustumCulled=false;if(distant)mesh.count=0;
     } if(b.category==='environment'){mesh.raycast=()=>{};mesh.userData.individualPositions='procedural; not surveyed';} layer(b.category).add(mesh);
   }
   function setVisible(visible) { group.visible = !!visible; }
   function setLayerVisible(name, visible) { const key = ({ buildings: 'building', roads: 'road' })[name] || name; if (layers.has(key)) layers.get(key).visible = !!visible; }
   const facadeFrustum=new THREE.Frustum(),facadeMatrix=new THREE.Matrix4(),facadeSphere=new THREE.Sphere(),lastPosition=new THREE.Vector3(Infinity,Infinity,Infinity),lastQuaternion=new THREE.Quaternion();
-  let fullDetail=false,detailedRoadIds=new Set();
+  let fullDetail=false,detailedRoadIds=new Set(),lastDetailScale=-1;
   function setDetailedRoadIds(ids=[]){detailedRoadIds=new Set(ids);group.userData.detailedRoadIds=[...detailedRoadIds];counts.reservedRoadEdgeStones=roadEdgePlan.filter(e=>detailedRoadIds.has(e.featureId)).length;fullDetail=true;}
-  function update(camera,{viewportHeight=800}={}){
-    forestLayer?.update?.(camera);
-    yunyuanForecourt.update(camera);
+  function update(camera,{viewportHeight=800,detailDistanceScale=1}={}){
+    const detailScale=Number.isFinite(detailDistanceScale)?Math.max(.35,Math.min(1.5,detailDistanceScale)):1;
+    forestLayer?.update?.(camera,{detailDistanceScale:detailScale});
+    yunyuanForecourt.update(camera,{detailDistanceScale:detailScale});
     aquaticPlants.update?.(camera,{viewportHeight});
-    if(!camera){for(const {mesh,b,distant,spatialCells}of facadeLods){let count=0;const visibleIds=[];if(!distant)b.matrices.forEach((m,i)=>{if(spatialCells&&detailedRoadIds.has(b.ids[i]))return;mesh.setMatrixAt(count,m);if(b.colors[i])mesh.setColorAt(count,b.colors[i]);visibleIds.push(b.ids[i]);count++;});mesh.count=count;mesh.userData.instanceFeatureIds=visibleIds;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}fullDetail=true;return;}
-    if(!fullDetail&&lastPosition.distanceToSquared(camera.position)<1&&Math.abs(lastQuaternion.dot(camera.quaternion))>.99997)return;
-    fullDetail=false;lastPosition.copy(camera.position);lastQuaternion.copy(camera.quaternion);camera.updateMatrixWorld();
+    if(!camera){for(const {b,distant,selection,roadEdges,visible}of facadeLods){visible.length=0;if(!distant)for(let i=0;i<b.matrices.length;i++)if(!roadEdges||!detailedRoadIds.has(b.ids[i]))visible.push(i);selection.update(visible);}fullDetail=true;return;}
+    if(!fullDetail&&lastDetailScale===detailScale&&lastPosition.distanceToSquared(camera.position)<1&&Math.abs(lastQuaternion.dot(camera.quaternion))>.99997)return;
+    fullDetail=false;lastDetailScale=detailScale;lastPosition.copy(camera.position);lastQuaternion.copy(camera.quaternion);camera.updateMatrixWorld();
     facadeMatrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);facadeFrustum.setFromProjectionMatrix(facadeMatrix);
-    for(const {mesh,b,positions,maxDistance,distant,spatialCells}of facadeLods){let count=0;const visibleIds=[];
-      let candidates=null;
-      if(spatialCells){candidates=[];if(Math.abs(camera.position.y-.13)<=maxDistance){const cellX=Math.floor(camera.position.x/64),cellZ=Math.floor(camera.position.z/64),reach=Math.ceil(maxDistance/64);for(let x=cellX-reach;x<=cellX+reach;x++)for(let z=cellZ-reach;z<=cellZ+reach;z++)candidates.push(...(spatialCells.get(`${x}/${z}`)||[]));}}
-      const candidateCount=candidates?candidates.length:positions.length;
-      if(spatialCells)mesh.userData.lastCandidateCount=candidateCount;
-      for(let index=0;index<candidateCount;index++){const i=candidates?candidates[index]:index;if(spatialCells&&detailedRoadIds.has(b.ids[i]))continue;const p=positions[i],distanceSq=p.distanceToSquared(camera.position);if(distanceSq>maxDistance*maxDistance||distant&&distanceSq<180*180)continue;facadeSphere.center.copy(p);facadeSphere.radius=distant?3:8;if(!facadeFrustum.intersectsSphere(facadeSphere))continue;mesh.setMatrixAt(count,b.matrices[i]);if(b.colors[i])mesh.setColorAt(count,b.colors[i]);visibleIds.push(b.ids[i]);count++;}
-      mesh.count=count;mesh.userData.instanceFeatureIds=visibleIds;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+    for(const {mesh,b,positions,maxDistance,distant,spatialCells,selection,roadEdges,candidates,visible}of facadeLods){
+      const range=maxDistance*detailScale;visible.length=0;
+      spatialCells.query(camera.position,range,candidates);mesh.userData.lastCandidateCount=candidates.length;
+      for(const i of candidates){if(roadEdges&&detailedRoadIds.has(b.ids[i]))continue;const p=positions[i],distanceSq=p.distanceToSquared(camera.position);if(distanceSq>range*range||distant&&distanceSq<(180*detailScale)**2)continue;facadeSphere.center.copy(p);facadeSphere.radius=distant?3:8;if(!facadeFrustum.intersectsSphere(facadeSphere))continue;visible.push(i);}
+      selection.update(visible);
     }
   }
   function dispose() {

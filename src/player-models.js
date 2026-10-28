@@ -160,21 +160,30 @@ export function createPlayerModels(THREE){
   rod(helicopter,[0,2.28,-.20],[0,2.72,-.40],.012,dark,'helicopter-roof-antenna');
   rod(helicopter,[0,.70,1.07],[0,.36,1.34],.013,dark,'helicopter-belly-antenna');
   helicopter.userData={representative:true,lengthMetres:6.5,rotorDiameterMetres:7.72,skidWidthMetres:2.17};
+  const modeGroups={walk:walker,scooter,helicopter,roadster:roadster.group,hoverboard:hoverboard.group,spider:spider.group,boat:boat.group};
+  // All templates remain attached for parked-prop extraction and mode changes.
+  // Object3D normally walks hidden subtrees too; a dormant rig need not compose
+  // hundreds of wheel/panel/bone matrices in every main, shadow and water pass.
+  // Clones keep standard Group behavior, so parked templates are unaffected.
+  for(const root of Object.values(modeGroups)){
+    const updateWorld=root.updateMatrixWorld;
+    root.updateMatrixWorld=function(force){if(this.visible)return updateWorld.call(this,force);};
+  }
   let rotorAngle=0,disposed=false;
   function update(state={},dt=0){
     if(disposed)return;
     const mode=state.mode??'walk';
     group.position.set(finite(state.x),finite(state.y),finite(state.z));
     group.rotation.set(finite(state.pitch),finite(state.yaw),finite(state.lean),'YXZ');
-    group.updateMatrixWorld(true);
-    spider.group.visible=mode==='spider';
+    for(const[key,root]of Object.entries(modeGroups))root.visible=key===mode;
+    // Update the common world origin before the active rig computes world-space
+    // wrists/anchors; no hidden rig is traversed by either of these calls.
+    group.updateWorldMatrix(true,false);
+    modeGroups[mode]?.updateMatrixWorld(true);
     if(mode==='spider')spider.update(state,dt);
-    hoverboard.group.visible=mode==='hoverboard';
     if(mode==='hoverboard')hoverboard.update(state,dt);
-    roadster.group.visible=mode==='roadster';
     if(mode==='roadster')roadster.update(state,dt);
-    boat.group.visible=mode==='boat';if(mode==='boat')boat.update(state,dt);
-    walker.visible=mode==='walk';scooter.visible=mode==='scooter';helicopter.visible=mode==='helicopter';
+    if(mode==='boat')boat.update(state,dt);
     const speed=Math.abs(finite(state.speed));
     if(mode==='walk'||mode==='scooter'){
       const agent={...character,speed,progress:finite(state.distance),steeringAngle:finite(state.steeringAngle),lean:finite(state.lean),footDown:clamp(1-speed/.75,0,1)};
@@ -185,7 +194,7 @@ export function createPlayerModels(THREE){
     rotorAngle=(rotorAngle+clamp(finite(dt),0,.10)*power*36)%(Math.PI*2);
     mainRotor.rotation.y=rotorAngle;tailRotor.rotation.x=-rotorAngle*5;
     rotorBlur.visible=mode==='helicopter'&&power>.55;
-    group.updateMatrixWorld(true);
+    modeGroups[mode]?.updateMatrixWorld(true);
   }
   function dispose(){
     if(disposed)return;disposed=true;group.removeFromParent();roadster.dispose();hoverboard.dispose();spider.dispose();boat.dispose();

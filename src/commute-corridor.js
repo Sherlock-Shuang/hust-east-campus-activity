@@ -3,6 +3,8 @@
 export function createTrafficCorridor(surfaces,centerPose,length){
   if(!Array.isArray(surfaces)||!surfaces.length)return{limit:(_s,offset)=>offset,walkHeight:(_x,_z,y)=>y,walkFits:()=>true};
   const grid=new Map(),cell=24,cache=new Map(),margin=.52;
+  const ring=Array.from({length:8},(_,i)=>[Math.cos(i*Math.PI/4),Math.sin(i*Math.PI/4)]);
+  const rideRing=ring.map(([x,z])=>[x*margin,z*margin]);
   for(const surface of surfaces){
     if(!surface.polygon?.length)continue;
     const b=surface.bounds??{minX:Math.min(...surface.polygon.map(p=>p.x)),maxX:Math.max(...surface.polygon.map(p=>p.x)),minZ:Math.min(...surface.polygon.map(p=>p.z)),maxZ:Math.max(...surface.polygon.map(p=>p.z))};
@@ -17,14 +19,15 @@ export function createTrafficCorridor(surfaces,centerPose,length){
     }return false;
   }
   function walkFits(x,z,y,radius=.275){
-    for(let n=-1;n<8;n++){const angle=n*Math.PI/4,px=x+(n<0?0:Math.cos(angle)*radius),pz=z+(n<0?0:Math.sin(angle)*radius);
-      if(!(grid.get(`${Math.floor(px/cell)},${Math.floor(pz/cell)}`)||[]).some(s=>s.walkAllowed!==false&&Math.abs(y-(s.surfaceY??s.elevation??0))<.8&&polygonContains(s.polygon,px,pz)))return false;
+    for(let n=-1;n<8;n++){const px=x+(n<0?0:ring[n][0]*radius),pz=z+(n<0?0:ring[n][1]*radius);
+      let found=false;for(const s of grid.get(`${Math.floor(px/cell)},${Math.floor(pz/cell)}`)||[]){if(s.walkAllowed!==false&&Math.abs(y-(s.surfaceY??s.elevation??0))<.8&&polygonContains(s.polygon,px,pz)){found=true;break;}}
+      if(!found)return false;
     }return true;
   }
   function fits(p,offset){
     const x=p.x+p.offsetX*offset,z=p.z+p.offsetZ*offset;
     if(!inside(x,z,p.y))return false;
-    for(let i=0;i<8;i++){const a=i*Math.PI/4;if(!inside(x+Math.cos(a)*margin,z+Math.sin(a)*margin,p.y))return false;}
+    for(const [dx,dz] of rideRing)if(!inside(x+dx,z+dz,p.y))return false;
     return true;
   }
   function envelope(index,direction){

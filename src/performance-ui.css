@@ -1,0 +1,7 @@
+.performance-choice { display:block; margin-top:7px; text-align:right; pointer-events:auto; }
+#performance-mode { max-width:160px; min-height:30px; padding:4px 9px; border:1px solid #ffffff48; border-radius:16px; color:#f5fffa; background:#15392f66; font:inherit; font-size:11px; cursor:pointer; text-shadow:0 1px 2px #152e29; }
+#performance-mode option { color:#143a2f; background:#f3f7f4; text-shadow:none; }
+#performance-mode:focus-visible { outline:2px solid #b8ffe4; outline-offset:2px; }
+.touch-controls #performance-mode { min-height:44px; max-width:145px; font-size:11px; }
+.touch-controls .performance-choice { margin-top:3px; }
+@media (max-height:440px) and (orientation:landscape) { .touch-controls .performance-choice { margin-top:1px; } }

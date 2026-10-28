@@ -117,5 +117,5 @@ export function createCampusLandcover(THREE,model,options={}){
   }
   const shrubs=createShrubLayer(THREE,plan.shrubs);group.add(shrubs.group);
   let disposed=false;
-  return{group,plan,counts:{...plan.counts,drawCalls:trees.counts.drawCalls+coverBatches.size+shrubs.counts.drawCalls},update(camera){trees.update(camera);shrubs.update(camera);},dispose(){if(disposed)return;disposed=true;trees.dispose();shrubs.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());group.removeFromParent();group.clear();}};
+  return{group,plan,counts:{...plan.counts,drawCalls:trees.counts.drawCalls+coverBatches.size+shrubs.counts.drawCalls},update(camera,options){trees.update(camera,options);shrubs.update(camera,options);},dispose(){if(disposed)return;disposed=true;trees.dispose();shrubs.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());group.removeFromParent();group.clear();}};
 }

@@ -75,6 +75,7 @@ export function createWaterDetails(THREE, { records = [], shoreline = true, text
   const cameraRotation = new THREE.Matrix4(), frustumMatrix = new THREE.Matrix4(), frustum = new THREE.Frustum();
   const waterBounds = new THREE.Box3(), savedViewport = new THREE.Vector4(), savedScissor = new THREE.Vector4();
   let reflecting = false, lastReflectionAt = -Infinity, reflectionFrames = 0;
+  let reflectionEnabled=!!reflection, reflectionInterval=125;
   if (reflectionTarget) {
     reflectionTarget.texture.name = '东九湖 · 真实场景平面倒影';
     reflectionTarget.texture.colorSpace = THREE.LinearSRGBColorSpace;
@@ -260,7 +261,7 @@ if (uLakeReflectionAvailable > 0.5) {
    * callback, so calling this cannot recursively render additional lake passes.
    */
   function renderReflection(renderer, scene, camera, nowMilliseconds = performance.now()) {
-    if (disposed || reflecting || !reflectionTarget || !reflectedFootprint) return false;
+    if (disposed || reflecting || !reflectionEnabled || !reflectionTarget || !reflectedFootprint) return false;
     let waterVisible = group.visible;
     for (let node = reflectedRecord.mesh; node; node = node.parent) waterVisible = waterVisible && node.visible;
     const bounds = reflectedFootprint.bounds, level = reflectedRecord.mesh.position.y;
@@ -276,7 +277,7 @@ if (uLakeReflectionAvailable > 0.5) {
       reflectionAvailable.value = 0;
       return false;
     }
-    if (nowMilliseconds - lastReflectionAt < 125 && reflectionAvailable.value > 0) return false;
+    if (nowMilliseconds - lastReflectionAt < reflectionInterval && reflectionAvailable.value > 0) return false;
 
     reflectedPosition.copy(worldPosition);
     reflectedPosition.y = 2 * level - worldPosition.y;
@@ -349,6 +350,11 @@ if (uLakeReflectionAvailable > 0.5) {
 
   return {
     group, counts, renderReflection,
+    setReflectionBudget({enabled=true,intervalMs=125}={}) {
+      const next=!!enabled;
+      if(next!==reflectionEnabled){reflectionEnabled=next;reflectionAvailable.value=0;lastReflectionAt=-Infinity;}
+      if(Number.isFinite(intervalMs))reflectionInterval=Math.max(125,Math.min(2000,intervalMs));
+    },
     materialFor: record => materials.get(typeof record === 'string' ? record : record.id),
     update(dt, { paused = false, enabled = true } = {}) {
       if (disposed || paused || !enabled || !group.visible || !materials.size || !Number.isFinite(dt) || dt <= 0) return false;

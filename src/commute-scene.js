@@ -35,29 +35,66 @@ export function createCommuteScene(THREE,scene,route,simulation,{model}={}){
   const parking=sourceParking.filter(p=>{const footprint=streetFootprint(p.x,p.z,1.05,2.24,p.yaw||0);return(!boundary||!footprintIntersectsRing(footprint,boundary))&&!reserved.some(r=>footprintIntersectsRing(footprint,r));});
   const scooterTransport=createScooterTransport({parking,simulation,onChange:()=>update()});
   group.userData.parkingRefinedBoundaryAvoidance=sourceParking.length-parking.length;
-  const dummy=new THREE.Object3D(),color=new THREE.Color(),localMatrix=new THREE.Matrix4();
+  const dummy=new THREE.Object3D();
   const brakeMaterial=actors.palette.tail.clone();brakeMaterial.emissive.set('#ee321c');brakeMaterial.emissiveIntensity=1.1;materials.add(brakeMaterial);
   function batches(parts,capacity,label){const expanded=label.startsWith('electric-scooter')?parts.flatMap(part=>part.name==='tail'?[{...part,condition:'braking',material:brakeMaterial},{...part,condition:'released'}]:[part]):parts;return expanded.map(part=>{const mesh=new THREE.InstancedMesh(part.geometry,part.material,capacity);mesh.count=0;mesh.name=`${label}-${part.name}`;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;mesh.renderOrder=205;mesh.userData={component:label,part:part.name,joint:part.joint||'fixed',family:part.family??null,geometryEvidence:'photo-informed procedural model',agentIds:[]};group.add(mesh);return{...part,mesh};});}
   const vehicles=batches(scooter,1200,'electric-scooter'),walkers=batches(walker,1200,'pedestrian'),parkedBatches=batches(parked,Math.max(1,parking.length),'parked-scooter');
   const distantVehicles=batches(lowScooter,1200,'electric-scooter-distant'),distantWalkers=batches(lowWalker,1200,'pedestrian-distant'),distantParked=batches(lowParked,Math.max(1,parking.length),'parked-scooter-distant');
   for(const part of[...distantVehicles,...distantWalkers,...distantParked])part.mesh.castShadow=false;
+  // Simulation advances at 20 Hz while cameras can render at 60–120 Hz. Keep
+  // the last rig per actor and do not rebuild/upload identical instance data.
+  // Weak keys release completed/borrowed actors naturally; no history grows.
+  let poseCache=new WeakMap();
+  const poseFields=['x','y','z','yaw','progress','speed','steeringAngle','footDown','lean','id','colorIndex','braking','pathScale','direction'];
+  const colorPalette=Object.fromEntries(Object.entries(actors.colors).map(([key,values])=>[key,values.map(value=>new THREE.Color(value))]));
+  const contactPitch=new THREE.Matrix4(),contactLean=new THREE.Matrix4();
+  function actorRecord(agent,kind,staticBatch){
+    let record=poseCache.get(agent),changed=!record||record.kind!==kind||record.staticBatch!==staticBatch;
+    if(!record){record={agent,kind,staticBatch,values:[],version:0,world:new THREE.Matrix4(),joints:new Map()};poseCache.set(agent,record);}
+    for(let i=0;i<poseFields.length;i++)if(!Object.is(record.values[i],agent[poseFields[i]])){record.values[i]=agent[poseFields[i]];changed=true;}
+    if(changed){
+      record.kind=kind;record.staticBatch=staticBatch;record.version++;
+      const pose=record.pose=actors.samplePose(agent,kind);record.appearance=pose.appearance;
+      const contact=kind==='scooter'&&!staticBatch&&Number.isFinite(agent.progress)?sampleVehicleContact(route,agent):{y:(agent.y??.16)-(kind==='scooter'?.021:0),pitch:0};
+      dummy.position.set(agent.x,contact.y,agent.z);dummy.rotation.set(0,agent.yaw||0,0);dummy.scale.setScalar(1);dummy.updateMatrix();record.world.copy(dummy.matrix);
+      if(kind==='scooter')record.world.multiply(contactPitch.makeRotationX(contact.pitch)).multiply(contactLean.makeRotationZ(pose.lean));
+    }
+    return record;
+  }
+  function jointMatrix(part,record){
+    if(!part.matrixKey)part.matrixKey=[part.joint||'fixed',part.anchor||'',...(part.segment||[])].join(':');
+    let joint=record.joints.get(part.matrixKey);
+    if(!joint){joint={matrix:new THREE.Matrix4(),version:-1};record.joints.set(part.matrixKey,joint);}
+    if(joint.version!==record.version){actors.partMatrix(part,record.agent,record.pose,joint.matrix);joint.version=record.version;}
+    return joint.matrix;
+  }
   function writeBatch(batch,items,staticBatch=false){
     // Borrowed traffic scooters can be left parked anywhere; grow only when a
     // returned vehicle actually exceeds the original instance capacity.
     for(const part of batch)if(items.length>part.mesh.instanceMatrix.count){
       const previous=part.mesh,next=new THREE.InstancedMesh(previous.geometry,previous.material,2**Math.ceil(Math.log2(items.length)));
       Object.assign(next,{name:previous.name,castShadow:previous.castShadow,receiveShadow:previous.receiveShadow,frustumCulled:false,renderOrder:previous.renderOrder,userData:previous.userData});
-      next.instanceMatrix.setUsage(THREE.DynamicDrawUsage);group.remove(previous);previous.dispose();group.add(next);part.mesh=next;
+      next.instanceMatrix.setUsage(THREE.DynamicDrawUsage);group.remove(previous);previous.dispose();group.add(next);part.mesh=next;part.previousItems=null;
     }
     const kind=batch===walkers||batch===distantWalkers?'walk':'scooter';
-    const posed=items.map(a=>{const pose=actors.samplePose(a,kind);const contact=kind==='scooter'&&!staticBatch&&Number.isFinite(a.progress)?sampleVehicleContact(route,a):{y:(a.y??.16)-(kind==='scooter'?.021:0),pitch:0};dummy.position.set(a.x,contact.y,a.z);dummy.rotation.set(0,a.yaw||0,0);dummy.scale.setScalar(1);dummy.updateMatrix();const world=dummy.matrix.clone();if(kind==='scooter')world.multiply(new THREE.Matrix4().makeRotationX(contact.pitch)).multiply(new THREE.Matrix4().makeRotationZ(pose.lean));return{agent:a,pose,world,appearance:actors.appearance(a)};});
+    const posed=items.map(agent=>actorRecord(agent,kind,staticBatch));
     for(const part of batch){
-      const selected=posed.filter(item=>actors.partApplies(part,item.appearance)&&(!part.condition||(part.condition==='braking')===!!item.agent.braking));part.mesh.count=selected.length;part.mesh.userData.agentIds=selected.map(item=>item.agent.id??null);
-      selected.forEach(({agent:a,pose,world,appearance},i)=>{
-        dummy.matrix.copy(world).multiply(actors.partMatrix(part,a,pose,localMatrix));part.mesh.setMatrixAt(i,dummy.matrix);
-        if(part.colorKey){const colors=actors.colors[part.colorKey],index=part.colorKey==='skin'?appearance.skinIndex:part.colorKey==='paint'?appearance.colorIndex:appearance.colorIndex+(part.colorKey==='coat'?3:part.colorKey==='pants'?1:part.colorKey==='bag'?2:0);color.set(colors[index%colors.length]);part.mesh.setColorAt(i,color);}
+      const selected=posed.filter(item=>actors.partApplies(part,item.appearance)&&(!part.condition||(part.condition==='braking')===!!item.agent.braking));
+      if(part.previousItems?.length===selected.length&&selected.every((item,i)=>part.previousItems[i]===item&&part.previousVersions[i]===item.version))continue;
+      part.mesh.count=selected.length;part.mesh.userData.agentIds=selected.map(item=>item.agent.id??null);
+      selected.forEach((record,i)=>{
+        const {appearance}=record;
+        dummy.matrix.copy(record.world).multiply(jointMatrix(part,record));part.mesh.setMatrixAt(i,dummy.matrix);
+        if(part.colorKey){const colors=colorPalette[part.colorKey],index=part.colorKey==='skin'?appearance.skinIndex:part.colorKey==='paint'?appearance.colorIndex:appearance.colorIndex+(part.colorKey==='coat'?3:part.colorKey==='pants'?1:part.colorKey==='bag'?2:0);part.mesh.setColorAt(i,colors[index%colors.length]);}
       });
-      part.mesh.instanceMatrix.needsUpdate=true;if(part.mesh.instanceColor)part.mesh.instanceColor.needsUpdate=true;if(staticBatch)part.mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+      part.previousItems=selected;part.previousVersions=selected.map(item=>item.version);
+      // Capacities reserve room for peak traffic, but a nearby view uses only
+      // a short prefix. Upload that prefix, not 1200 matrices for every part.
+      if(selected.length){
+        part.mesh.instanceMatrix.clearUpdateRanges();part.mesh.instanceMatrix.addUpdateRange(0,selected.length*16);part.mesh.instanceMatrix.needsUpdate=true;
+        if(part.mesh.instanceColor){part.mesh.instanceColor.clearUpdateRanges();part.mesh.instanceColor.addUpdateRange(0,selected.length*3);part.mesh.instanceColor.needsUpdate=true;}
+      }
+      if(staticBatch)part.mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     }
   }
   writeBatch(parkedBatches,scooterTransport.parkedAgents,true);
@@ -109,14 +146,15 @@ export function createCommuteScene(THREE,scene,route,simulation,{model}={}){
       signalLamps.push({id:source.id,direction,lamps});
     }
   }
-  let disposed=false,lastCamera=null;const frustum=new THREE.Frustum(),projection=new THREE.Matrix4(),sphere=new THREE.Sphere(new THREE.Vector3(),2),cameraPosition=new THREE.Vector3();
+  let disposed=false,lastCamera=null,detailDistance=34;const frustum=new THREE.Frustum(),projection=new THREE.Matrix4(),sphere=new THREE.Sphere(new THREE.Vector3(),2),cameraPosition=new THREE.Vector3();
   function update(camera){if(disposed)return;if(camera)lastCamera=camera;vegetation.update(lastCamera);
     if(lastCamera){lastCamera.updateMatrixWorld();projection.multiplyMatrices(lastCamera.projectionMatrix,lastCamera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);lastCamera.getWorldPosition(cameraPosition);}
-    function partition(items){const near=[],far=[];for(const item of items){if(!lastCamera){near.push(item);continue;}sphere.center.set(item.x,(item.y||.16)+.9,item.z);if(!frustum.intersectsSphere(sphere))continue;(sphere.center.distanceToSquared(cameraPosition)<34*34?near:far).push(item);}return[near,far];}
+    function partition(items){const near=[],far=[];for(const item of items){if(!lastCamera){near.push(item);continue;}sphere.center.set(item.x,(item.y||.16)+.9,item.z);if(!frustum.intersectsSphere(sphere))continue;(sphere.center.distanceToSquared(cameraPosition)<detailDistance*detailDistance?near:far).push(item);}return[near,far];}
     const agents=simulation.agents.filter(a=>a.active!==false&&a.phase!=='arrived'),[nearScooters,farScooters]=partition(agents.filter(a=>(a.kind||a.type)==='scooter')),[nearPeople,farPeople]=partition(agents.filter(a=>(a.kind||a.type)==='walk')),[nearParking,farParking]=partition(scooterTransport.parkedAgents);
-    writeBatch(vehicles,nearScooters.slice(0,1200));writeBatch(distantVehicles,farScooters.slice(0,1200));writeBatch(walkers,nearPeople.slice(0,1200));writeBatch(distantWalkers,farPeople.slice(0,1200));writeBatch(parkedBatches,nearParking);writeBatch(distantParked,farParking);
+    writeBatch(vehicles,nearScooters.slice(0,1200));writeBatch(distantVehicles,farScooters.slice(0,1200));writeBatch(walkers,nearPeople.slice(0,1200));writeBatch(distantWalkers,farPeople.slice(0,1200));writeBatch(parkedBatches,nearParking,true);writeBatch(distantParked,farParking,true);
     for(const entry of signalLamps){const state=simulation.signals.find(s=>s.id===entry.id)?.state||'off';for(const[name,m]of Object.entries(entry.lamps)){m.emissiveIntensity=name===state?2:.015;m.color.set(name===state?name==='red'?'#ff3b28':name==='green'?'#50ed93':'#ffc637':'#263b35');}}}
+  function setDetailDistanceScale(scale=1){detailDistance=34*Math.max(.35,Math.min(1.5,Number.isFinite(scale)?scale:1));}
   function setVisible(visible){group.visible=!!visible;}
-  function dispose(){if(disposed)return;disposed=true;scooterTransport.dispose();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});vegetation.dispose();streetDetails.dispose();crossingDetails.dispose();eastNineParking.dispose();if(model?.parkingInfrastructure===eastNineParking.infrastructure)delete model.parkingInfrastructure;surfaces.dispose();scene.remove(group);scene.remove(staticGroup);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();group.clear();staticGroup.clear();}
-  update();return{group,staticGroup,scooterTransport,update,updateStatic:camera=>vegetation.update(camera),setVisible,dispose,counts:{parked:parking.length,photoInferredParked:parking.filter(p=>p.buildingSourceId==='way/103814566').length,trees:trees.length,streetDetails:streetDetails.counts,signals:(route.trafficSignals||[]).length,signalHeads:signalLamps.length,crossings:(route.crossings||[]).filter(c=>c.tags?.['crossing:markings']==='yes'||c.tags?.crossing==='marked').length},vehicleGeometry:scooter};
+  function dispose(){if(disposed)return;disposed=true;poseCache=new WeakMap();for(const part of[...vehicles,...walkers,...parkedBatches,...distantVehicles,...distantWalkers,...distantParked]){part.previousItems=null;part.previousVersions=null;}scooterTransport.dispose();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});vegetation.dispose();streetDetails.dispose();crossingDetails.dispose();eastNineParking.dispose();if(model?.parkingInfrastructure===eastNineParking.infrastructure)delete model.parkingInfrastructure;surfaces.dispose();scene.remove(group);scene.remove(staticGroup);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();group.clear();staticGroup.clear();}
+  update();return{group,staticGroup,scooterTransport,update,setDetailDistanceScale,updateStatic:camera=>vegetation.update(camera),setVisible,dispose,counts:{parked:parking.length,photoInferredParked:parking.filter(p=>p.buildingSourceId==='way/103814566').length,trees:trees.length,streetDetails:streetDetails.counts,signals:(route.trafficSignals||[]).length,signalHeads:signalLamps.length,crossings:(route.crossings||[]).filter(c=>c.tags?.['crossing:markings']==='yes'||c.tags?.crossing==='marked').length},vehicleGeometry:scooter};
 }

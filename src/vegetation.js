@@ -1,3 +1,4 @@
+import {createStaticInstanceSelection} from './static-instance-lod.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 
 function randomFrom(seed) {
@@ -7,22 +8,30 @@ function randomFrom(seed) {
 
 /** A cutout branch spray shared by tree and shrub batches. The mask is generated
  * from overlapping oval leaves; it is not a photo texture or an opaque ball. */
+const sprayPixelCache=new Map();
 function createSprayTexture(THREE,seed=915719) {
-  const size=128,pixels=new Uint8Array(size*size*4),random=randomFrom(seed),leaves=[];
+  const size=128;
+  function textureFor(pixels){const texture=new THREE.DataTexture(pixels,size,size,THREE.RGBAFormat);texture.magFilter=THREE.LinearFilter;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.generateMipmaps=true;texture.needsUpdate=true;return texture;}
+  // Each layer still owns its texture and data; only deterministic CPU mask
+  // generation is reused. Disposal or edits cannot affect another layer.
+  if(sprayPixelCache.has(seed))return textureFor(sprayPixelCache.get(seed).slice());
+  const pixels=new Uint8Array(size*size*4),random=randomFrom(seed),leaves=[];
   // More, smaller leaves keep the spray's covered area while fixing oversized
   // near-camera leaves seen in the local lake photographs. 144 × .8² ≈ 92.
   for(let i=0;i<144;i++){
     const angle=random()*Math.PI*2,r=Math.sqrt(random())*.415;
     leaves.push({x:.5+Math.cos(angle)*r,y:.5+Math.sin(angle)*r,rx:(.035+random()*.047)*.8,ry:(.025+random()*.036)*.8,angle:random()*Math.PI,shade:.74+random()*.26});
   }
+  for(const leaf of leaves){leaf.cos=Math.cos(leaf.angle);leaf.sin=Math.sin(leaf.angle);}
   for(let y=0;y<size;y++)for(let x=0;x<size;x++){
     let alpha=0,shade=1;const u=(x+.5)/size,v=(y+.5)/size;
-    for(const leaf of leaves){const dx=u-leaf.x,dy=v-leaf.y,c=Math.cos(leaf.angle),s=Math.sin(leaf.angle),a=(dx*c+dy*s)/leaf.rx,b=(-dx*s+dy*c)/leaf.ry,d=a*a+b*b;if(d<1){alpha=255;shade=leaf.shade*(.88+.12*Math.sqrt(1-d));}}
+    for(const leaf of leaves){const dx=u-leaf.x,dy=v-leaf.y,c=leaf.cos,s=leaf.sin,a=(dx*c+dy*s)/leaf.rx,b=(-dx*s+dy*c)/leaf.ry,d=a*a+b*b;if(d<1){alpha=255;shade=leaf.shade*(.88+.12*Math.sqrt(1-d));}}
     // Solid centre is also a UV swatch for individually modelled silhouette leaves.
     if(Math.abs(u-.5)<.025&&Math.abs(v-.5)<.025){alpha=255;shade=1;}
     const value=Math.round(255*shade);pixels.set([value,value,value,alpha],(y*size+x)*4);
   }
-  const texture=new THREE.DataTexture(pixels,size,size,THREE.RGBAFormat);texture.magFilter=THREE.LinearFilter;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.generateMipmaps=true;texture.needsUpdate=true;return texture;
+  if(sprayPixelCache.size>=4)sprayPixelCache.delete(sprayPixelCache.keys().next().value);
+  sprayPixelCache.set(seed,pixels.slice());return textureFor(pixels);
 }
 function sprayGeometry(THREE,clumps,{random,count,folded=false,scale=1}={}){
   const positions=[],colors=[],uvs=[],tint=new THREE.Color(),matrix=new THREE.Matrix4(),rotation=new THREE.Quaternion();
@@ -48,7 +57,7 @@ function sprayGeometry(THREE,clumps,{random,count,folded=false,scale=1}={}){
 export function createTreeLayer(THREE, trees, {name='photo-informed-trees',detail='street',whitewash=true,barkMaterial,foliageMaterial}={}) {
   const group=new THREE.Group();group.name=name;
   group.userData={component:name,geometryEvidence:'photo-informed forked broadleaf trees; species, individual form and dimensions inferred',individualPositions:'supplied source coverage or inferred roadside planting, not surveyed'};
-  const geometries=new Set(),ownedMaterials=new Set(),textures=new Set(),models=[],farModels=[],modelBounds=[];
+  const geometries=new Set(),ownedMaterials=new Set(),textures=new Set(),models=[],farModels=[],horizonModels=[],modelBounds=[];
   const own=m=>{ownedMaterials.add(m);return m;};
   const bark=barkMaterial||own(new THREE.MeshStandardMaterial({color:'#706c56',roughness:.98}));
   const canopyTexture=createSprayTexture(THREE);textures.add(canopyTexture);
@@ -101,10 +110,14 @@ export function createTreeLayer(THREE, trees, {name='photo-informed-trees',detai
     const leaves=mergeGeometries([edgeLeaves,sprays],false);edgeLeaves.dispose();sprays.dispose();leaves.computeBoundingSphere();geometries.add(leaves);
     function merged(parts){if(!parts.length)return null;const g=mergeGeometries(parts,false);parts.forEach(p=>p.dispose());g.computeBoundingSphere();geometries.add(g);return g;}
     const distantLeaves=sprayGeometry(THREE,clumps,{random:randomFrom(17339+variant*7717+991),count:farLeafCount,scale:1.15});geometries.add(distantLeaves);
+    // Beyond a few hundred metres twigs/trunks are subpixel. Twelve volumetric
+    // sprays retain each tree crown and its original placement at 24 triangles.
+    const horizonLeaves=sprayGeometry(THREE,clumps,{random:randomFrom(17339+variant*7717+991),count:12,scale:1.15});geometries.add(horizonLeaves);
+    horizonModels.push([{geometry:horizonLeaves,material:distantFoliage,part:'horizon-canopy'}]);
     // Normalise all LODs together so declared height/radius are real geometry
     // bounds, rather than an approximate divide-by-ten scale that varies by form.
     const extent=new THREE.Box3();let radius=0;
-    for(const g of [leaves,distantLeaves]){g.computeBoundingBox();extent.union(g.boundingBox);const p=g.attributes.position;for(let i=0;i<p.count;i++)radius=Math.max(radius,Math.hypot(p.getX(i),p.getZ(i)));}
+    for(const g of [leaves,distantLeaves,horizonLeaves]){g.computeBoundingBox();extent.union(g.boundingBox);const p=g.attributes.position;for(let i=0;i<p.count;i++)radius=Math.max(radius,Math.hypot(p.getX(i),p.getZ(i)));}
     modelBounds.push({height:extent.max.y,radius});
     const distantTrunk=merged(branches.slice(0,3).map(g=>g.clone()));
     farModels.push([{geometry:distantTrunk,material:bark,part:'branches-distant'},{geometry:distantLeaves,material:distantFoliage,part:'leaves-distant'}]);
@@ -113,36 +126,38 @@ export function createTreeLayer(THREE, trees, {name='photo-informed-trees',detai
   const transform=new THREE.Object3D(),color=new THREE.Color(),batches=[];
   for(let v=0;v<variantCount;v++) {
     const samples=trees.map((p,i)=>({...p,index:i})).filter(p=>{const formIndex={spreading:0,oval:1,upright:2}[p.form];return (formIndex===undefined?p.index%variantCount:formIndex+(p.index%2)*3)===v;});if(!samples.length)continue;
-    for(const part of [...models[v],...farModels[v]]) {
-      const mesh=new THREE.InstancedMesh(part.geometry,part.material,samples.length);mesh.name=`${name}-${part.part}-${v}`;mesh.castShadow=!part.part.endsWith('distant');mesh.receiveShadow=true;mesh.renderOrder=205;
+    for(const part of [...models[v],...farModels[v],...horizonModels[v]]) {
+      const mesh=new THREE.InstancedMesh(part.geometry,part.material,samples.length);mesh.name=`${name}-${part.part}-${v}`;mesh.castShadow=!part.part.endsWith('distant')&&part.part!=='horizon-canopy';mesh.receiveShadow=true;mesh.renderOrder=205;
       mesh.userData={...group.userData,part:part.part,variant:v,instanceFeatureIds:samples.map(p=>p.featureId||p.sourceRoadId||null)};mesh.raycast=()=>{};
       const matrices=[],tints=[];samples.forEach((tree,i)=>{const seed=Number.isFinite(tree.seed)?tree.seed:(tree.index*.6180339)%1,h=tree.height||9,shape=modelBounds[v],spread=(tree.radius||h*.36)/shape.radius;
         transform.position.set(tree.x,tree.y||.1,tree.z);transform.rotation.set(0,seed*Math.PI*2,0);transform.scale.set(spread,h/shape.height,spread);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);matrices.push(transform.matrix.clone());
         color.setHSL(.08,.015,.83+(seed-.5)*.16);mesh.setColorAt(i,color);tints.push(color.clone());
-      });mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;mesh.computeBoundingSphere();group.add(mesh);batches.push({mesh,samples,matrices,tints,variant:v,distant:part.part.endsWith('distant')});
+      });mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;mesh.computeBoundingSphere();group.add(mesh);batches.push({mesh,samples,matrices,tints,variant:v,lod:part.part==='horizon-canopy'?'horizon':part.part.endsWith('distant')?'far':'near',selection:createStaticInstanceSelection(mesh,{matrices,colors:tints,ids:samples.map(p=>p.featureId||p.sourceRoadId||null)})});
     }
   }
-  let disposed=false,lastView=null;
-  const frustum=new THREE.Frustum(),view=new THREE.Matrix4(),sphere=new THREE.Sphere(),cameraPosition=new THREE.Vector3(),visibleByVariant=Array.from({length:variantCount},()=>({near:[],far:[]}));
-  function update(camera) {
+  let disposed=false,lastView=null,lastDetailScale=-1;
+  const frustum=new THREE.Frustum(),view=new THREE.Matrix4(),sphere=new THREE.Sphere(),cameraPosition=new THREE.Vector3(),visibleByVariant=Array.from({length:variantCount},()=>({near:[],far:[],horizon:[]}));
+  const variantBatches=[...new Map(batches.map(batch=>[batch.variant,batch])).values()];
+  function update(camera,{detailDistanceScale=1}={}) {
+    const detailScale=Number.isFinite(detailDistanceScale)?Math.max(.35,Math.min(1.5,detailDistanceScale)):1;
     if(disposed)return;
     if(camera) {
       camera.updateMatrixWorld();camera.getWorldPosition(cameraPosition);
       const stamp=[...cameraPosition.toArray(),...camera.quaternion.toArray(),camera.projectionMatrix.elements[0],camera.projectionMatrix.elements[5]];
-      if(lastView&&stamp.every((v,i)=>Math.abs(v-lastView[i])<(i<3?.25:.0005)))return;
-      lastView=stamp;view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(view);
+      if(lastView&&lastDetailScale===detailScale&&stamp.every((v,i)=>Math.abs(v-lastView[i])<(i<3?.25:.0005)))return;
+      lastView=stamp;lastDetailScale=detailScale;view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(view);
     } else lastView=null;
     // Visibility is classified once per tree and reused by its trunk, leaf and
     // paint batches. This avoids 4–5 repeated spatial checks per moving frame.
-    const visited=new Set();
-    for(const batch of batches){if(visited.has(batch.variant))continue;visited.add(batch.variant);const visible=visibleByVariant[batch.variant];visible.near.length=0;visible.far.length=0;
-      batch.samples.forEach((tree,i)=>{const height=tree.height||9;sphere.center.set(tree.x,(tree.y||.1)+height*.5,tree.z);sphere.radius=Math.max(height*.65,(tree.radius||3.3)*1.6);if(camera&&!frustum.intersectsSphere(sphere))return;const distant=camera&&sphere.center.distanceToSquared(cameraPosition)>(detail==='forest'?70:100)**2;visible[distant?'far':'near'].push(i);});
+    for(const batch of variantBatches){const visible=visibleByVariant[batch.variant];visible.near.length=0;visible.far.length=0;visible.horizon.length=0;
+      batch.samples.forEach((tree,i)=>{const height=tree.height||9;sphere.center.set(tree.x,(tree.y||.1)+height*.5,tree.z);sphere.radius=Math.max(height*.65,(tree.radius||3.3)*1.6);if(camera&&!frustum.intersectsSphere(sphere))return;const distanceSq=camera?sphere.center.distanceToSquared(cameraPosition):0;const lod=distanceSq>(280*detailScale)**2?'horizon':distanceSq>((detail==='forest'?70:100)*detailScale)**2?'far':'near';visible[lod].push(i);});
     }
-    for(const batch of batches){const indices=visibleByVariant[batch.variant][batch.distant?'far':'near'],visibleIds=[];indices.forEach((i,count)=>{const tree=batch.samples[i];batch.mesh.setMatrixAt(count,batch.matrices[i]);batch.mesh.setColorAt(count,batch.tints[i]);visibleIds.push(tree.featureId||tree.sourceRoadId||null);});batch.mesh.userData.instanceFeatureIds=visibleIds;batch.mesh.count=indices.length;batch.mesh.instanceMatrix.needsUpdate=true;batch.mesh.instanceColor.needsUpdate=true;batch.mesh.frustumCulled=false;}
+    for(const batch of batches){batch.selection.update(visibleByVariant[batch.variant][batch.lod]);batch.mesh.frustumCulled=false;}
+
 
   }
   update(null);
-  return{group,update,counts:{trees:trees.length,leavesPerTree:leafCount,spraysPerTree:sprayCount,variants:variantCount,nearCanopyTrianglesPerTree:leafCount*4+sprayCount*4,distantCanopyTrianglesPerTree:farLeafCount*2,drawCalls:group.children.length},dispose(){if(disposed)return;disposed=true;group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});group.removeFromParent();geometries.forEach(g=>g.dispose());ownedMaterials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.clear();}};
+  return{group,update,counts:{trees:trees.length,leavesPerTree:leafCount,spraysPerTree:sprayCount,variants:variantCount,nearCanopyTrianglesPerTree:leafCount*4+sprayCount*4,distantCanopyTrianglesPerTree:farLeafCount*2,horizonCanopyTrianglesPerTree:24,drawCalls:group.children.length},dispose(){if(disposed)return;disposed=true;group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});group.removeFromParent();geometries.forEach(g=>g.dispose());ownedMaterials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.clear();}};
 }
 
 /** Low leafy shrubs use intersecting cutout branch sprays, never solid rock-like
@@ -157,10 +172,14 @@ export function createShrubLayer(THREE,shrubs,{name='source-low-shrub-clusters'}
   const dummy=new THREE.Object3D(),color=new THREE.Color(),matrices=[],tints=[];
   shrubs.forEach(s=>{dummy.position.set(s.x,s.y||.035,s.z);dummy.scale.set(s.radius,s.height,s.radius);dummy.rotation.set(0,s.seed*Math.PI*2,0);dummy.updateMatrix();matrices.push(dummy.matrix.clone());color.setHSL(.08,.03,.84+s.seed*.12);tints.push(color.clone());});
   const meshes=[near,far].map((geometry,i)=>{const mesh=new THREE.InstancedMesh(geometry,material,shrubs.length);mesh.name=`${name}-${i?'distant':'near'}`;mesh.castShadow=!i;mesh.receiveShadow=true;mesh.renderOrder=204;mesh.raycast=()=>{};mesh.userData={component:name,dimensionsStatus:'photo-informed estimate',positionsStatus:'sampled within explicit planting sources',foliage:'alpha-cutout leaf sprays'};matrices.forEach((matrix,n)=>{mesh.setMatrixAt(n,matrix);mesh.setColorAt(n,tints[n]);});group.add(mesh);return mesh;});
-  const cameraPosition=new THREE.Vector3(),frustum=new THREE.Frustum(),view=new THREE.Matrix4(),sphere=new THREE.Sphere();let disposed=false,lastView=null;
-  function update(camera){
-    if(disposed)return;if(camera){camera.updateMatrixWorld();camera.getWorldPosition(cameraPosition);const stamp=[...cameraPosition.toArray(),...camera.quaternion.toArray(),camera.projectionMatrix.elements[0],camera.projectionMatrix.elements[5]];if(lastView&&stamp.every((v,i)=>Math.abs(v-lastView[i])<(i<3?.25:.0005)))return;lastView=stamp;view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(view);}else lastView=null;
-    meshes.forEach((mesh,lod)=>{let n=0;const ids=[];if(!camera||cameraPosition.y<420)shrubs.forEach((s,i)=>{sphere.center.set(s.x,(s.y||.035)+s.height*.5,s.z);sphere.radius=Math.max(s.radius,s.height);if(camera&&!frustum.intersectsSphere(sphere))return;const distant=camera&&sphere.center.distanceToSquared(cameraPosition)>65**2;if(!!distant!==!!lod)return;mesh.setMatrixAt(n,matrices[i]);mesh.setColorAt(n,tints[i]);ids.push(s.featureId);n++;});mesh.count=n;mesh.userData.instanceFeatureIds=ids;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;mesh.frustumCulled=false;});
+  const selections=meshes.map(mesh=>createStaticInstanceSelection(mesh,{matrices,colors:tints,ids:shrubs.map(s=>s.featureId)})),visible=[[],[]];
+  const cameraPosition=new THREE.Vector3(),frustum=new THREE.Frustum(),view=new THREE.Matrix4(),sphere=new THREE.Sphere();let disposed=false,lastView=null,lastDetailScale=-1;
+  function update(camera,{detailDistanceScale=1}={}){
+    const detailScale=Number.isFinite(detailDistanceScale)?Math.max(.35,Math.min(1.5,detailDistanceScale)):1;
+    if(disposed)return;if(camera){camera.updateMatrixWorld();camera.getWorldPosition(cameraPosition);const stamp=[...cameraPosition.toArray(),...camera.quaternion.toArray(),camera.projectionMatrix.elements[0],camera.projectionMatrix.elements[5]];if(lastView&&lastDetailScale===detailScale&&stamp.every((v,i)=>Math.abs(v-lastView[i])<(i<3?.25:.0005)))return;lastView=stamp;lastDetailScale=detailScale;view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(view);}else lastView=null;
+    visible[0].length=0;visible[1].length=0;
+    if(!camera||cameraPosition.y<420)shrubs.forEach((s,i)=>{sphere.center.set(s.x,(s.y||.035)+s.height*.5,s.z);sphere.radius=Math.max(s.radius,s.height);if(camera&&!frustum.intersectsSphere(sphere))return;const distanceSq=camera?sphere.center.distanceToSquared(cameraPosition):0;if(camera&&distanceSq>(260*detailScale)**2)return;visible[distanceSq>(65*detailScale)**2?1:0].push(i);});
+    meshes.forEach((mesh,lod)=>{selections[lod].update(visible[lod]);mesh.frustumCulled=false;});
   }
   update(null);
   return{group,update,counts:{shrubs:shrubs.length,nearTrianglesPerShrub:256,distantTrianglesPerShrub:48,drawCalls:2},dispose(){if(disposed)return;disposed=true;meshes.forEach(m=>m.dispose());near.dispose();far.dispose();material.dispose();texture.dispose();group.removeFromParent();group.clear();}};

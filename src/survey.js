@@ -13,18 +13,25 @@ import { createCampus3D } from "./campus-3d.js";
 import { createCommuteExperience } from "./commute-experience.js";
 import { mountCampusReferenceAtlas } from './campus-reference-atlas.js';
 import { createCampusSports } from './campus-sports.js';
-import { cacheStaticTransforms, createTraversalResolution } from './render-performance.js';
+import { cacheStaticTransforms } from './render-performance.js';
 import { createSurfaceMaterials, createMorningEnvironment, applyWorldUV } from "./surface-materials.js";
 import "./survey.css";
 import "./transport-ui.css";
 import { createLiveExperience } from './live-experience.js';
 import { createMobileRenderProfile } from './mobile-render-profile.js';
+import { createPerformanceQuality } from './performance-quality.js';
+import { mountPerformanceUI,readQualityPreference,getQualityStorage } from './performance-ui.js';
+import {preloadSpiderGeometry} from './spider-model.js';
 import './mobile-controls.css';
+import './performance-ui.css';
 // Rendering no longer depends on the removed sidebar controls.
 const layerSettings = { symbolic: true, building: true, road: true, water: true };
 const $ = (id) => document.getElementById(id),
   canvas = $("map-canvas"),
   container = $("viewport");
+// Prepare the authored skin off the UI thread while map data and static campus
+// geometry load. No extra multi-megabyte model download or first-pickup build.
+const spiderGeometryReady=preloadSpiderGeometry();
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
@@ -32,13 +39,17 @@ const renderer = new THREE.WebGLRenderer({
   powerPreference: "high-performance",
 });
 const renderProfile=createMobileRenderProfile({coarsePointer:window.matchMedia('(any-pointer: coarse)').matches,maxTouchPoints:navigator.maxTouchPoints,width:innerWidth,height:innerHeight,devicePixelRatio});
-let renderPixelRatio = renderProfile.deviceRatio;
-const traversalResolution = createTraversalResolution({deviceRatio:renderProfile.deviceRatio});
+const performanceQuality=createPerformanceQuality({deviceRatio:devicePixelRatio,handheld:renderProfile.handheld,hardwareConcurrency:navigator.hardwareConcurrency,deviceMemory:navigator.deviceMemory,mode:readQualityPreference()});
+performanceQuality.setViewport(innerWidth,innerHeight);
+let qualityBudget=performanceQuality.budget, appliedBudget=null, lastShadowAt=-Infinity;
+let renderPixelRatio = qualityBudget.pixelRatio;
 renderer.setPixelRatio(renderPixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = qualityBudget.shadowEnabled;
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const surfaces = createSurfaceMaterials(THREE);
@@ -66,8 +77,8 @@ const shadowRight=new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0),shad
 const shadowUp=new THREE.Vector3().crossVectors(shadowDirection,shadowRight).normalize();
 const shadowTarget=new THREE.Vector3();
 sun.position.copy(sunOffset);
-sun.castShadow = true;
-sun.shadow.mapSize.set(renderProfile.shadowMapSize, renderProfile.shadowMapSize);
+sun.castShadow = qualityBudget.shadowEnabled;
+sun.shadow.mapSize.set(qualityBudget.shadowMapSize,qualityBudget.shadowMapSize);
 Object.assign(sun.shadow.camera, {
   left: -1800,
   right: 1800,
@@ -118,6 +129,24 @@ let fc,
   needsRender = true,
   viewMode = "oblique";
 let liveControl, liveFrozen = false;
+const qualityUI=mountPerformanceUI({document,storage:getQualityStorage(),mode:qualityBudget.mode,onChange(mode){performanceQuality.setMode(mode);applyPerformanceBudget();canvas.focus({preventScroll:true});}});
+function applyPerformanceBudget(){
+  qualityBudget=performanceQuality.budget;
+  if(qualityBudget===appliedBudget)return;
+  appliedBudget=qualityBudget;
+  if(renderPixelRatio!==qualityBudget.pixelRatio){renderPixelRatio=qualityBudget.pixelRatio;renderer.setPixelRatio(renderPixelRatio);}
+  if(sun.shadow.mapSize.x!==qualityBudget.shadowMapSize){
+    sun.shadow.map?.dispose();sun.shadow.map=null;sun.shadow.mapPass?.dispose();sun.shadow.mapPass=null;
+    sun.shadow.mapSize.set(qualityBudget.shadowMapSize,qualityBudget.shadowMapSize);
+  }
+  renderer.shadowMap.enabled=qualityBudget.shadowEnabled;
+  sun.castShadow=qualityBudget.shadowEnabled;
+  renderer.shadowMap.needsUpdate=true;lastShadowAt=-Infinity;
+  waterDetails?.setReflectionBudget({enabled:qualityBudget.reflectionEnabled,intervalMs:qualityBudget.reflectionIntervalMs});
+  commute?.setPerformanceBudget?.({trafficHz:qualityBudget.trafficHz,detailDistanceScale:qualityBudget.detailDistanceScale});
+  qualityUI.update(qualityBudget);canvas.dataset.qualityMode=qualityBudget.mode;canvas.dataset.qualityLevel=qualityBudget.name;
+  needsRender=true;
+}
 scene.add(measureGroup);
 const raycaster = new THREE.Raycaster();
 raycaster.params.Line.threshold = 2;
@@ -135,6 +164,8 @@ function resize() {
   const r = container.getBoundingClientRect();
   viewportHeight = Math.max(1,r.height);
   viewportWidth = Math.max(1,r.width);
+  performanceQuality.setViewport(viewportWidth,viewportHeight);
+  applyPerformanceBudget();
   renderer.setSize(viewportWidth, viewportHeight);
   camera.aspect = viewportWidth / viewportHeight;
   camera.updateProjectionMatrix();
@@ -544,7 +575,7 @@ function normalizeImport(data) {
   data.coordinateSystem = "EPSG:4326";
   return data;
 }
-function loadDataset(data, manifest = {}) {
+async function loadDataset(data, manifest = {}) {
   fc = normalizeImport(data);
   sourceManifest = manifest;
   const focus = fc.features.find((f) =>
@@ -584,7 +615,8 @@ function loadDataset(data, manifest = {}) {
   scene.add(campus.group);
   riverTerrain=applyRiverTerrain(THREE,{model,datum,surfaces});
   scene.add(riverTerrain.group);
-  waterDetails=createWaterDetails(THREE,{records:model.water,reflection:renderProfile.reflection});
+  waterDetails=createWaterDetails(THREE,{records:model.water,reflection:true});
+  waterDetails.setReflectionBudget({enabled:qualityBudget.reflectionEnabled,intervalMs:qualityBudget.reflectionIntervalMs});
   scene.add(waterDetails.group);
   applyLayers();
   canvas.dataset.staticTransformCount = String([campus.group,campusSports.group,riverTerrain.group]
@@ -594,6 +626,7 @@ function loadDataset(data, manifest = {}) {
   clearMeasurements();
   createLabels();
   homeView();
+  canvas.dataset.spiderPreparation=await spiderGeometryReady?'prepared':'fallback';
   try {
     commute = createCommuteExperience({
       THREE, scene, camera, controls, canvas, model, fc, frame, geoToLocal,
@@ -613,6 +646,7 @@ function loadDataset(data, manifest = {}) {
     const selector = document.querySelector('.transport-selector');
     if (selector) selector.hidden = false;
     commute.player.enter('walk');
+    commute.setPerformanceBudget?.({trafficHz:qualityBudget.trafficHz,detailDistanceScale:qualityBudget.detailDistanceScale});
   } catch (error) {
     const selector = document.querySelector('.transport-selector') || $("commute-panel");
     if (selector) selector.hidden = true;
@@ -774,7 +808,7 @@ $("import").onchange = async (e) => {
   try {
     const data = JSON.parse(await file.text());
     normalizeImport(data);
-    loadDataset(data);
+    await loadDataset(data);
     toast("已导入坐标数据；推定尺寸仅用于三维显示，不写回源数据。");
   } catch (error) {
     toast(error.message);
@@ -898,6 +932,8 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 controls.addEventListener("change", () => {
   needsRender = true;
   viewMetricsDirty = true;
+});
+function updateShadowCamera(){
   const span = commute?.player.active ? 80 : Math.max(
     48,
     Math.min(1200, camera.position.distanceTo(controls.target) * 0.7),
@@ -914,24 +950,20 @@ controls.addEventListener("change", () => {
     });
     sun.shadow.camera.updateProjectionMatrix();
   }
-});
+}
 let previous = performance.now();
 let frameWindow=0,frameSamples=0,renderWork=0,tickWork=0,sceneWork=0,drawWork=0;
-let drawCalls=0,triangles=0;
+let drawCalls=0,triangles=0,lastFrameCpu=0,lastFrameRendered=false,wasHidden=false,lastLabelAt=-Infinity;
 function render(now) {
   requestAnimationFrame(render);
   const frameStart=performance.now(),elapsed=Math.max(0,now-previous);
-  const dt = Math.min((now - previous) / 1000, 0.1);
+  const dt = wasHidden?0:Math.min(elapsed/1000,0.1);
   previous = now;
-  // Fast traversal benefits more from responsive frames than oversampling.
-  // Restore the original detail resolution for inspection and campus viewing.
-  const traversing = commute?.player.active && (commute.player.state.mode === 'spider' && $('player-hud').dataset.inspect !== 'true' || Math.abs(commute.player.state.speed)>3 || Math.abs(commute.player.state.verticalSpeed)>.5);
-  const nextPixelRatio = traversalResolution.update({elapsedMs:elapsed,traversing,visible:!document.hidden});
-  if (renderPixelRatio !== nextPixelRatio) {
-    renderPixelRatio = nextPixelRatio;
-    renderer.setPixelRatio(renderPixelRatio);
-    needsRender = true;
-  }
+  performanceQuality.update({elapsedMs:elapsed,cpuMs:lastFrameCpu,visible:!document.hidden,active:!liveFrozen,rendered:lastFrameRendered&&!wasHidden});
+  if(document.hidden){wasHidden=true;lastFrameRendered=false;frameWindow=frameSamples=renderWork=tickWork=sceneWork=drawWork=0;return;}
+  if(wasHidden){needsRender=true;lastShadowAt=-Infinity;}wasHidden=false;
+  if(!$('load-screen').hidden){lastFrameRendered=false;return;}
+  applyPerformanceBudget();lastFrameRendered=false;
   if (animation && !liveFrozen) {
     needsRender = true;
     animation.time += dt;
@@ -963,20 +995,25 @@ function render(now) {
     // Keep normal street haze while retaining spatial context at aerial scale.
     const overviewLift=Math.max(0,camera.position.y-120);
     scene.fog.near=480+overviewLift*.9;scene.fog.far=2900+overviewLift*1.3;
-    campus?.update?.(camera, { viewportHeight });
-    updateLabels();
-    waterDetails?.renderReflection(renderer,scene,camera,now);
+    campus?.update?.(camera, { viewportHeight,detailDistanceScale:qualityBudget.detailDistanceScale });
+    if(now-lastLabelAt>=100){updateLabels();lastLabelAt=now;}
+    if(!liveFrozen)waterDetails?.renderReflection(renderer,scene,camera,now);
     sceneWork+=performance.now()-sceneStart;
     const drawStart=performance.now();
+    if(renderer.shadowMap.enabled&&(renderer.shadowMap.needsUpdate||now-lastShadowAt>=qualityBudget.shadowIntervalMs)){
+      updateShadowCamera();renderer.shadowMap.needsUpdate=true;lastShadowAt=now;
+    }
     renderer.render(scene, camera);
     drawWork+=performance.now()-drawStart;
     drawCalls=renderer.info.render.calls;
     triangles=renderer.info.render.triangles;
+    lastFrameRendered=true;
     needsRender = false;
   }
+  lastFrameCpu=performance.now()-frameStart;
   if(!document.hidden){
     frameWindow+=elapsed;frameSamples++;renderWork+=performance.now()-frameStart;
-    if(frameWindow>=1200){canvas.dataset.frameRate=(frameSamples*1000/frameWindow).toFixed(1);canvas.dataset.frameCpuMs=(renderWork/frameSamples).toFixed(1);canvas.dataset.tickMs=(tickWork/frameSamples).toFixed(1);canvas.dataset.sceneMs=(sceneWork/frameSamples).toFixed(1);canvas.dataset.drawMs=(drawWork/frameSamples).toFixed(1);canvas.dataset.drawCalls=String(drawCalls);canvas.dataset.triangles=String(triangles);canvas.dataset.renderPixelRatio=String(renderPixelRatio);frameWindow=frameSamples=renderWork=tickWork=sceneWork=drawWork=0;}
+    if(frameWindow>=1200){canvas.dataset.frameRate=(frameSamples*1000/frameWindow).toFixed(1);canvas.dataset.frameCpuMs=(renderWork/frameSamples).toFixed(1);canvas.dataset.tickMs=(tickWork/frameSamples).toFixed(1);canvas.dataset.sceneMs=(sceneWork/frameSamples).toFixed(1);canvas.dataset.drawMs=(drawWork/frameSamples).toFixed(1);canvas.dataset.drawCalls=String(drawCalls);canvas.dataset.triangles=String(triangles);canvas.dataset.renderPixelRatio=String(renderPixelRatio);canvas.dataset.gpuGeometries=String(renderer.info.memory.geometries);canvas.dataset.gpuTextures=String(renderer.info.memory.textures);frameWindow=frameSamples=renderWork=tickWork=sceneWork=drawWork=0;}
   }else{frameWindow=frameSamples=renderWork=tickWork=sceneWork=drawWork=0;}
 }
 camera.position.set(500, 1600, 900);
@@ -994,7 +1031,7 @@ try {
     }),
     fetch("./data/source-manifest.json").then((r) => (r.ok ? r.json() : {})),
   ]);
-  loadDataset(data, manifest);
+  await loadDataset(data, manifest);
 } catch (error) {
   $("load-screen").querySelector("span").textContent = "数据尚未加载";
   $("load-screen").querySelector("small").textContent = error.message;

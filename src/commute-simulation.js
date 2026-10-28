@@ -138,7 +138,13 @@ export function createCommuteSimulation(route,options={}){
     const normalA=offsetNormals[index-1],normalB=offsetNormals[index],rawDx=(b.x-a.x)/segmentLength,rawDz=(b.z-a.z)/segmentLength;
     return{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,z:a.z+(b.z-a.z)*t,dx,dz,offsetX:normalA.x+(normalB.x-normalA.x)*t,offsetZ:normalA.z+(normalB.z-normalA.z)*t,normalDx:(normalB.x-normalA.x)/segmentLength,normalDz:(normalB.z-normalA.z)/segmentLength,rawDx,rawDz,yaw:Math.atan2(-dx,-dz),progress:s};
   }
-  function poseWithOffset(progress,offset){const p=centerPose(progress);return{...p,x:p.x+p.offsetX*offset,z:p.z+p.offsetZ*offset,pathDx:p.rawDx+p.normalDx*offset,pathDz:p.rawDz+p.normalDz*offset,pathScale:Math.hypot(p.rawDx+p.normalDx*offset,p.rawDz+p.normalDz*offset),offsetAlong:p.offsetX*p.rawDx+p.offsetZ*p.rawDz};}
+  function poseWithOffset(progress,offset){
+    // centerPose returns a fresh sample; enrich it in place instead of making
+    // a second object for every collision sweep and lane-clearance probe.
+    const p=centerPose(progress);p.x+=p.offsetX*offset;p.z+=p.offsetZ*offset;
+    p.pathDx=p.rawDx+p.normalDx*offset;p.pathDz=p.rawDz+p.normalDz*offset;
+    p.pathScale=Math.hypot(p.pathDx,p.pathDz);p.offsetAlong=p.offsetX*p.rawDx+p.offsetZ*p.rawDz;return p;
+  }
   const pavementCorridor=createTrafficCorridor(route.roadSurfaces,centerPose,length);
   const mapPedestrianPath=createPedestrianPathMapper(route.pedestrianPaths,(progress,direction,sideShift)=>{const agent={originalKind:'walk',lane:1,direction};return poseWithOffset(progress,unconstrainedOffset(agent,progress)+sideShift);});
   function poseForAgent(agent,progress,lateral){const base=poseWithOffset(progress,lateral);return nominalKind(agent,progress)==='walk'?mapPedestrianPath(progress,base,directionOf(agent),lateral-unconstrainedOffset(agent,progress)):base;}
