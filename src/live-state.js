@@ -1,6 +1,6 @@
 // Shared, dependency-free schema for the activity console and campus clients.
 export function createDefaultLiveState() {
-  return {schemaVersion:1,revision:0,paused:false,pauseMessage:'请稍候，活动即将继续',phase:{id:'explore',label:'自由探索',guidance:'自由探索校园，靠近光柱进入作品。'},announcement:null,markers:[],portals:[]};
+  return {schemaVersion:1,revision:0,paused:false,pauseMessage:'请稍候，活动即将继续',phase:{id:'explore',label:'自由探索',guidance:'自由探索校园；作品开放与集合安排以主持人通知为准。'},announcement:null,markers:[],portals:[]};
 }
 export function isEventActive(item, now = Date.now()) {
   return !!item && item.enabled !== false && (item.startAt == null || now >= item.startAt) && (item.endAt == null || now < item.endAt);

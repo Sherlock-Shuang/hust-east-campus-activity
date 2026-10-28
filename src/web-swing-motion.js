@@ -26,10 +26,10 @@ function segmentEntersBuilding(a,b,building){
 export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],guideAt}={}){
   if(!state||typeof groundAt!=='function')throw new TypeError('Swing motion needs shared player state and ground sampling.');
   const buildings=compileBuildings(world.buildings),bounds=world.bounds;
-  let candidateClock=0,attachedAge=0,releaseDelay=0,lastAnchor=null,jumpHeld=false,swingHeld=false,autoWas=false,lastSafe=null,landingCooldown=0,ropeRate=0,jumpBuffer=0,coyote=0,wallAge=0,wallBudget=1.1,wallGrace=0,chainHeld=false;
+  let candidateClock=0,attachedAge=0,swingLowY=Infinity,releaseDelay=0,lastAnchor=null,jumpHeld=false,swingHeld=false,autoWas=false,lastSafe=null,landingCooldown=0,ropeRate=0,jumpBuffer=0,coyote=0,wallAge=0,wallBudget=1.1,wallGrace=0,chainHeld=false;
   let zipHeld=false,zipBuffer=0,zipAge=0,zipImpulse=0,zipBoostTime=0,zipDirection=null;
   let pointHeld=false,pointBuffer=0,pointPath=null,pointDistance=0,pointSpeed=0,pointPerchTime=0,pointBoostTime=0,pointAimYaw=null,pointFeedback='',pointFeedbackTime=0;
-  let trickAge=0;
+  let trickAge=0,recoveryDirection=null,recoveryTime=0;
   const hand=p=>({x:p.x,y:p.y+HAND,z:p.z});
   const lineClear=(a,b)=>!buildings.some(building=>segmentEntersBuilding(a,b,building));
   function clearBody(p){if(bounds&&(p.x-R<bounds.minX||p.x+R>bounds.maxX||p.z-R<bounds.minZ||p.z+R>bounds.maxZ))return false;
@@ -58,7 +58,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
           const y=b.height<=origin.y+42?b.height:Math.min(b.height-.25,origin.y+24),rise=y-origin.y,distance=Math.hypot(horizontal,rise);if(rise<(state.grounded&&state.roofIndex===null?2:-7)||distance>82||rise>42)continue;
           const repeated=exclude&&Math.hypot(x-exclude.x,y-exclude.y,z-exclude.z)<9;if(repeated)continue;
           const radial=((origin.x-x)*(state.vx??0)+(origin.z-z)*(state.vz??0))/Math.max(1,horizontal);
-          const score=Math.abs(horizontal-28)*.22+(1-ahead/horizontal)*18+Math.abs(rise-15)*.10+Math.max(0,radial)*.7+(b.index===exclude?.buildingIndex?5:0);
+          const score=Math.abs(horizontal-28)*.22+(1-ahead/horizontal)*18+Math.abs(rise-15)*.10+Math.max(0,5-rise)*1.4+Math.max(0,radial)*.7+(b.index===exclude?.buildingIndex?5:0);
           candidates.push({x,y,z,buildingIndex:b.index,edgeIndex,kind:y===b.height?'roof-edge':'facade',score});
         }
       }
@@ -76,8 +76,8 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     }
     return 0;
   }
-  function findAnchor(exclude=lastAnchor){const origin=hand(state),visible=[];
-    for(const c of anchorCandidates(exclude).slice(0,32))if(lineClear(origin,c)){
+  function findAnchor(exclude=lastAnchor,heading=state.yaw){const origin=hand(state),visible=[];
+    for(const c of anchorCandidates(exclude,false,heading).slice(0,32))if(lineClear(origin,c)){
       const previous=state.candidateAnchor&&Math.hypot(c.x-state.candidateAnchor.x,c.y-state.candidateAnchor.y,c.z-state.candidateAnchor.z)<2;
       visible.push({...c,score:c.score+approachPenalty(c)-(previous?.7:0)});if(visible.length===10)break;
     }
@@ -204,20 +204,20 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     if(state.grounded)state.trickCombo=0;
     if(state.trickActive)state.traversalPhase='trick';
   }
-  function clearActionInputs(){jumpHeld=false;swingHeld=false;zipHeld=false;pointHeld=false;autoWas=false;jumpBuffer=0;zipBuffer=0;pointBuffer=0;chainHeld=false;stopTrick();}
-  function detach(reason=''){if(state.anchor)lastAnchor={...state.anchor};state.anchor=null;state.swingPivot=null;state.ropeLength=0;state.webTension=0;attachedAge=0;ropeRate=0;releaseDelay=.18;state.releaseTime=0;state.candidateAnchor=null;candidateClock=0;if(reason)state.blockedReason=reason;}
+  function clearActionInputs(){recoveryDirection=null;recoveryTime=0;jumpHeld=false;swingHeld=false;zipHeld=false;pointHeld=false;autoWas=false;jumpBuffer=0;zipBuffer=0;pointBuffer=0;chainHeld=false;stopTrick();}
+  function detach(reason=''){if(state.anchor)lastAnchor={...state.anchor};state.anchor=null;state.swingPivot=null;state.ropeLength=0;state.webTension=0;state.webSlack=0;attachedAge=0;ropeRate=0;releaseDelay=.18;state.releaseTime=0;state.candidateAnchor=null;candidateClock=0;if(reason)state.blockedReason=reason;}
   function attach(anchor){if(!anchor||!lineClear(hand(state),anchor))return false;
     state.anchor={...anchor};const fx=-Math.sin(state.yaw),fz=-Math.cos(state.yaw),dx=state.x-anchor.x,dz=state.z-anchor.z,along=dx*fx+dz*fz,lx=dx-fx*along,lz=dz-fz*along,lateral=Math.hypot(lx,lz)||1,shift=Math.min(5,lateral*.55),lift=clamp(28+groundAt(state.x,state.z).height-anchor.y,0,12);
     // The visible endpoint and occlusion use the real building. A disclosed
     // gameplay pivot shifts low-roof pendulums into the street and raises their
     // clearance, following the separation used in action-game traversal.
     state.swingPivot={x:anchor.x+lx/lateral*shift,y:anchor.y+lift,z:anchor.z+lz/lateral*shift};const p=state.swingPivot;
-    state.ropeLength=Math.hypot(p.x-state.x,p.y-state.y-HAND,p.z-state.z)+.15;ropeRate=0;state.swingHand=state.swingCount%2?-1:1;state.swingCount++;attachedAge=0;state.webTension=0;wallBudget=Math.min(1.1,wallBudget+.35);return true;
+    state.ropeLength=Math.hypot(p.x-state.x,p.y-state.y-HAND,p.z-state.z)+.15;ropeRate=0;state.swingHand=state.swingCount%2?-1:1;state.swingCount++;attachedAge=0;swingLowY=state.y;state.webTension=0;wallBudget=Math.min(1.1,wallBudget+.35);return true;
   }
-  function reset(){Object.assign(state,{anchor:null,swingPivot:null,candidateAnchor:null,ropeLength:0,vx:0,vz:0,verticalSpeed:0,swingCount:0,airTime:0,webTension:0,swingHand:1,roofIndex:null,traversalPhase:'ground',wallContact:null,releaseTime:0,landingImpact:0,inputBuffered:false,attachAge:0,swingPhase:'entry',bottomKick:0,zipActive:false,zipAnchors:[],zipCandidateAnchors:[],zipProgress:0,zipCooldown:0,zipCount:0,zipStrength:0,zipAvailable:false,zipReady:false,zipUnavailableReason:'请先起跳',diving:false,diveBlend:0,
+  function reset(){Object.assign(state,{anchor:null,swingPivot:null,candidateAnchor:null,ropeLength:0,vx:0,vz:0,verticalSpeed:0,swingCount:0,airTime:0,webTension:0,webSlack:0,swingHand:1,roofIndex:null,traversalPhase:'ground',wallContact:null,releaseTime:0,landingImpact:0,inputBuffered:false,attachAge:0,swingPhase:'entry',bottomKick:0,zipActive:false,zipAnchors:[],zipCandidateAnchors:[],zipProgress:0,zipCooldown:0,zipCount:0,zipStrength:0,zipAvailable:false,zipReady:false,zipUnavailableReason:'请先起跳',diving:false,diveBlend:0,
     pointPhase:'idle',pointTarget:null,candidatePoint:null,pointProgress:0,pointLaunchWindow:0,pointLaunchQuality:0,pointLaunchReady:false,pointTimeToArrival:null,pointLaunchTime:0,pointLaunchProgress:0,pointCount:0,pointLaunchCount:0,pointReady:false,pointUnavailableReason:'前方没有安全屋顶落点',
     trickActive:false,trickType:'frontflip',trickProgress:0,trickPhase:'idle',trickBlend:0,trickRotation:{x:0,y:0,z:0},trickCount:0,trickCombo:0});
-    candidateClock=0;attachedAge=0;releaseDelay=0;lastAnchor=null;jumpHeld=false;swingHeld=false;autoWas=false;landingCooldown=0;ropeRate=0;jumpBuffer=0;coyote=0;wallAge=0;wallBudget=1.1;wallGrace=0;chainHeld=false;zipHeld=false;zipBuffer=0;zipAge=0;zipImpulse=0;zipBoostTime=0;zipDirection=null;pointHeld=false;pointBuffer=0;pointPath=null;pointDistance=0;pointSpeed=0;pointPerchTime=0;pointBoostTime=0;pointAimYaw=null;pointFeedback='';pointFeedbackTime=0;trickAge=0;lastSafe={x:state.x,y:state.y,z:state.z,yaw:state.yaw};
+    recoveryDirection=null;recoveryTime=0;candidateClock=0;attachedAge=0;releaseDelay=0;lastAnchor=null;jumpHeld=false;swingHeld=false;autoWas=false;landingCooldown=0;ropeRate=0;jumpBuffer=0;coyote=0;wallAge=0;wallBudget=1.1;wallGrace=0;chainHeld=false;zipHeld=false;zipBuffer=0;zipAge=0;zipImpulse=0;zipBoostTime=0;zipDirection=null;pointHeld=false;pointBuffer=0;pointPath=null;pointDistance=0;pointSpeed=0;pointPerchTime=0;pointBoostTime=0;pointAimYaw=null;pointFeedback='';pointFeedbackTime=0;trickAge=0;lastSafe={x:state.x,y:state.y,z:state.z,yaw:state.yaw};
     if(state.mode==='spider'){state.candidateAnchor=findAnchor(null);state.candidatePoint=findPoint();state.pointReady=!!state.candidatePoint;}
   }
   function suspend(){detach();stopZip();stopPoint();stopTrick(true);clearActionInputs();state.vx=0;state.vz=0;state.verticalSpeed=0;state.speed=0;candidateClock=0;releaseDelay=0;lastAnchor=null;coyote=0;wallGrace=0;state.wallContact=null;zipBoostTime=0;pointBoostTime=0;pointFeedback='';pointFeedbackTime=0;state.diving=false;state.diveBlend=0;state.zipCandidateAnchors=[];state.zipAvailable=false;state.zipReady=false;state.candidatePoint=null;state.pointReady=false;}
@@ -231,6 +231,9 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     const worldIntent=finite(input.moveX)||finite(input.moveZ);let x=0,z=0,magnitude=0;
     if(worldIntent){x=Number(input.moveX)||0;z=Number(input.moveZ)||0;magnitude=Math.hypot(x,z);if(magnitude>1){x/=magnitude;z/=magnitude;magnitude=1;}}
     else{const turn=clamp(Number(input.turn)||0,-1,1);state.yaw+=turn*(state.grounded?2.7:2.1)*dt;const f=clamp(Number(input.forward)||0,-1,1);x=-Math.sin(state.yaw)*f;z=-Math.cos(state.yaw)*f;magnitude=Math.abs(f);}
+    if(recoveryTime>0&&chainHeld&&!automatic&&magnitude<.05&&recoveryDirection){
+      x=recoveryDirection.x;z=recoveryDirection.z;magnitude=1;
+    }
     if(automatic&&magnitude<.05&&typeof guideAt==='function'){
       const near=groundAt(state.x,state.z),lookAhead=clamp(12+state.speed*.35,14,23),point=guideAt((near.progress??0)+lookAhead);x=point.x-state.x;z=point.z-state.z;const d=Math.hypot(x,z)||1;x/=d;z/=d;magnitude=1;
       // Probe complete bodies along several short headings, choosing a visible
@@ -282,6 +285,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
   }
   function step(dt,input={}){
     state.rotorPower=0;state.jetPower=0;state.flightEnabled=false;state.steeringAngle=0;state.blockedReason='';
+    recoveryTime=Math.max(0,recoveryTime-dt);
     releaseDelay=Math.max(0,releaseDelay-dt);landingCooldown=Math.max(0,landingCooldown-dt);candidateClock-=dt;wallGrace=Math.max(0,wallGrace-dt);state.releaseTime+=dt;state.landingImpact*=Math.exp(-5*dt);state.bottomKick*=Math.exp(-10*dt);
     state.zipCooldown=Math.max(0,state.zipCooldown-dt);zipBoostTime=Math.max(0,zipBoostTime-dt);pointBoostTime=Math.max(0,pointBoostTime-dt);
     pointFeedbackTime=Math.max(0,pointFeedbackTime-dt);
@@ -317,7 +321,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
       const canVaultActor=moving&&[.35,.7,1.05,1.4].some(ahead=>actorHit({x:state.x+dx*ahead,y:state.y,z:state.z+dz*ahead}))&&groundAt(state.x+dx*5,state.z+dz*5,R).allowed;
       const canChain=state.candidateAnchor||state.roofIndex!==null||canVault||canVaultActor;
       if((jumpBuffer>0||wantsWeb&&canChain&&landingCooldown===0)&&!input.brake){
-        state.verticalSpeed=state.roofIndex===null?(wantsWeb?(canVaultActor&&!state.candidateAnchor&&!canVault?8:12.8):10):wantsWeb?7.5:10;state.grounded=false;jumpBuffer=0;coyote=0;landingCooldown=.55;
+        state.verticalSpeed=state.roofIndex===null?(wantsWeb?(canVaultActor&&!state.candidateAnchor&&!canVault?8:15.5):10):wantsWeb?7.5:10;state.grounded=false;jumpBuffer=0;coyote=0;landingCooldown=.55;
         if(wantsWeb&&Math.hypot(state.vx,state.vz)<8){state.vx=dx*8;state.vz=dz*8;}state.traversalPhase='launch';
       }
     }else if(jumpBuffer>0&&(state.anchor||state.wallContact||coyote>0)){
@@ -326,9 +330,31 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
       else state.verticalSpeed=10;
       jumpBuffer=0;coyote=0;state.traversalPhase='launch';
     }
-    if(state.anchor){attachedAge+=dt;const a=state.anchor,dx=a.x-state.x,dz=a.z-state.z,ahead=dx*fx+dz*fz,near=Math.hypot(dx,dz),turnAway=(state.vx*dx+state.vz*dz)<-10;
-      const rising=state.verticalSpeed>.6||state.y>groundAt(state.x,state.z).height+12;
-      if(wantsWeb&&attachedAge>.55&&(ahead<-1.5||(near<4.5||turnAway)&&rising||attachedAge>3.0)){detach();releaseDelay=.12;}
+    if(state.anchor){
+      attachedAge+=dt;swingLowY=Math.min(swingLowY,state.y);
+      const a=state.anchor,dx=a.x-state.x,dz=a.z-state.z,ahead=dx*fx+dz*fz,turnAway=state.vx*dx+state.vz*dz< -10;
+      const clearance=state.y-groundAt(state.x,state.z).height;
+      // Passing the anchor or a timer is not a reason to drop a low player.
+      // Keep supporting the arc until a real upswing has gained clearance, and
+      // use another visible attachment; above 12 m an upswing may also coast
+      // ballistically while searching. A stalled recovery always needs a point.
+      const safeUpswing=clearance>=8&&state.verticalSpeed>1.8&&state.y-swingLowY>=2;
+      const safeRecovery=clearance>=7&&attachedAge>2&&state.speed<5&&state.verticalSpeed> -2;
+      if(wantsWeb&&attachedAge>.6&&(safeUpswing&&(ahead< -1.5||turnAway)||safeRecovery)){
+        let nextAnchor=findAnchor(a);
+        // A facade directly ahead can hide every point in the narrow forward
+        // cone. Look along its sides before giving up; all candidates still
+        // use building edges and the same line-of-sight test.
+        if(safeRecovery&&!nextAnchor)for(const turn of[.4,-.4,.8,-.8,1.2,-1.2]){nextAnchor=findAnchor(a,state.yaw+turn);if(nextAnchor)break;}
+        if(nextAnchor||safeUpswing&&clearance>=12){
+          if(safeRecovery&&nextAnchor&&intent.magnitude<.05){
+            let x=nextAnchor.x-state.x,z=nextAnchor.z-state.z,length=Math.hypot(x,z)||1;x/=length;z/=length;
+            if(state.wallContact){const n=state.wallContact,dot=x*n.nx+z*n.nz;if(dot<.3){x+=n.nx*(.3-dot);z+=n.nz*(.3-dot);}}
+            length=Math.hypot(x,z)||1;recoveryDirection={x:x/length,z:z/length};recoveryTime=.85;
+          }
+          detach();state.candidateAnchor=nextAnchor;candidateClock=.18;releaseDelay=.10;
+        }
+      }
     }
     if(zipBuffer>0&&startZip())zipBuffer=0;
     if(!state.anchor&&!state.grounded&&!state.zipActive&&releaseDelay<=0&&wantsWeb&&state.candidateAnchor)attach(state.candidateAnchor);
@@ -357,19 +383,25 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     const next={x:state.x+state.vx*dt,y:state.y+state.verticalSpeed*dt,z:state.z+state.vz*dt};let tension=0;
     if(state.anchor){
       const a=state.swingPivot??state.anchor,h=hand(next),nx=h.x-a.x,ny=h.y-a.y,nz=h.z-a.z,distance=Math.hypot(nx,ny,nz)||1,ux=nx/distance,uy=ny/distance,uz=nz/distance;
-      const terrain=groundAt(state.x,state.z).height,target=Math.max(6,a.y-terrain-HAND-3),predictedFeet=state.y+state.verticalSpeed*.65-.5*G*.65*.65,needsLift=state.ropeLength>target&&predictedFeet<terrain+3.5;
-      const request=input.reel?(input.fast?10:7):needsLift?clamp((terrain+3.5-predictedFeet)*2,0,7):0;
-      ropeRate=approach(ropeRate,-request,16*dt);state.ropeLength=Math.min(state.ropeLength,distance+.15);const oldLength=state.ropeLength;state.ropeLength=Math.max(6,state.ropeLength+ropeRate*dt);
+      const terrain=Math.max(groundAt(state.x,state.z).height,groundAt(next.x,next.z).height);
+      const target=Math.max(6,a.y-terrain-HAND-6),predictedFeet=state.y+Math.min(0,state.verticalSpeed)*.85-.5*G*.85*.85;
+      // Shorten before the pendulum reaches road level, with bounded reel
+      // acceleration. This assist changes rope length, not player position or
+      // gravity, and still goes through the full body collision sweep.
+      const needsLift=state.ropeLength>target&&predictedFeet<terrain+7.5;
+      const request=input.reel?(input.fast?14:10):needsLift?clamp((terrain+7.5-predictedFeet)*2.5,0,16):0;
+      ropeRate=approach(ropeRate,-request,28*dt);state.ropeLength=Math.min(state.ropeLength,distance+.05);const oldLength=state.ropeLength;state.ropeLength=Math.max(input.reel?6:Math.min(oldLength,target),state.ropeLength+ropeRate*dt);
       let radial=state.vx*ux+state.verticalSpeed*uy+state.vz*uz;
       // A new web pays out briefly while its catch engages. This prevents an
       // abrupt velocity cut when changing sides and never moves the player.
-      if((attachedAge<.30||attachedAge<.85&&radial>.5)&&radial>0){const catchStep=40*dt*clamp(attachedAge/.30,0,1),removed=Math.min(radial,catchStep);state.vx-=ux*removed;state.verticalSpeed-=uy*removed;state.vz-=uz*removed;state.ropeLength=Math.max(state.ropeLength,distance);}
+      if(attachedAge<.22&&radial>0&&state.y>terrain+5){const catchStep=55*dt*clamp(attachedAge/.22,0,1),removed=Math.min(radial,catchStep);state.vx-=ux*removed;state.verticalSpeed-=uy*removed;state.vz-=uz*removed;state.ropeLength=Math.max(state.ropeLength,distance);}
       else if(distance>state.ropeLength){const excess=distance-state.ropeLength;next.x-=ux*excess;next.y-=uy*excess;next.z-=uz*excess;const lengthRate=(state.ropeLength-oldLength)/dt;if(radial>lengthRate){state.vx-=ux*(radial-lengthRate);state.verticalSpeed-=uy*(radial-lengthRate);state.vz-=uz*(radial-lengthRate);}tension=clamp((state.speed**2/state.ropeLength+G*Math.abs(uy))/40,.08,1);}
     }else ropeRate=0;
-    state.webTension=approach(state.webTension,tension,dt*5);
+    state.webTension=approach(state.webTension,tension,dt*8);
     const wasGrounded=state.grounded;if(!move(next,dt))return;
     if(state.anchor){const d=Math.hypot(state.x-(state.swingPivot??state.anchor).x,state.y+HAND-(state.swingPivot??state.anchor).y,state.z-(state.swingPivot??state.anchor).z);if(d>state.ropeLength+.12||!lineClear(hand(state),state.anchor))detach('蛛丝被障碍挡住');}
     if(!wasGrounded&&state.grounded){if(state.anchor)detach();stopZip();state.diving=false;landingCooldown=.16;}
+    state.webSlack=state.anchor?Math.max(0,state.ropeLength-Math.hypot(state.x-state.swingPivot.x,state.y+HAND-state.swingPivot.y,state.z-state.swingPivot.z)):0;
     const phase=attachedAge<.3?'entry':state.verticalSpeed<-.8?'downswing':state.verticalSpeed>.8?'upswing':'bottom';if(state.anchor&&state.swingPhase==='downswing'&&phase!=='downswing')state.bottomKick=1;state.swingPhase=phase;state.attachAge=state.anchor?attachedAge:0;
     state.speed=Math.hypot(state.vx,state.vz);state.progress=groundAt(state.x,state.z).progress??state.progress;state.inputBuffered=jumpBuffer>0;
     state.zipAvailable=!state.grounded&&state.zipCandidateAnchors.length>0;

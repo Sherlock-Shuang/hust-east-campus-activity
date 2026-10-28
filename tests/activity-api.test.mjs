@@ -30,7 +30,9 @@ async function fixture(t,{clock}={}){
   const join=async(name,tabId,cookie,server=0)=>{const r=await request('/api/audience/join',{method:'POST',headers:cookie?{Cookie:cookie}:{},body:JSON.stringify({nickname:name,tabId})},server);assert.equal(r.status,200,await r.clone().text());return {cookie:r.headers.get('set-cookie').split(';')[0],...await r.json()};};
   const post=(a,event,server=0)=>request('/api/audience/events',{method:'POST',headers:{Cookie:a.cookie,'X-CSRF-Token':a.csrfToken},body:JSON.stringify(event)},server);
   const admin=await login(),stats=()=>request('/api/admin/audience',{headers:{Cookie:admin.cookie}},1).then(r=>r.json());
-  return {request,join,post,stats,admin,dbs,api,env,origin,nodeHandler:()=>createNodeActivityHandler({activity:handlers[0]}),async stream(server=0){const response=await request('/api/live/events',{},server);assert.equal(response.status,200);const reader=response.body.getReader();readers.push(reader);return reader;},async restart(){handlers=dbs.map(db=>createActivityHandler({env,db,streamClock:clock}));}};
+  const save=async state=>{const response=await request('/api/admin/state',{method:'PUT',headers:{Cookie:admin.cookie,'X-CSRF-Token':admin.csrf},body:JSON.stringify({state,expectedRevision:state.revision})});assert.equal(response.status,200,await response.clone().text());return (await response.json()).state;};
+  const enableAll=async()=>{const {state}=await (await request('/api/live/state')).json();return save({...state,portals:state.portals.map(p=>({...p,enabled:true}))});};
+  return {request,join,post,stats,save,enableAll,admin,dbs,api,env,origin,nodeHandler:()=>createNodeActivityHandler({activity:handlers[0]}),async stream(server=0){const response=await request('/api/live/events',{},server);assert.equal(response.status,200);const reader=response.body.getReader();readers.push(reader);return reader;},async restart(){handlers=dbs.map(db=>createActivityHandler({env,db,streamClock:clock}));}};
 }
 
 test('Turso configuration rejects local filesystem production URLs and missing credentials',()=>{
@@ -40,6 +42,7 @@ test('Turso configuration rejects local filesystem production URLs and missing c
 test('two independent libSQL clients preserve identity, admin sessions, revision CAS and origin protection',async t=>{
   const f=await fixture(t),initial=await (await f.request('/api/live/state')).json();
   assert.deepEqual(initial.state.portals.map(p=>p.workId),['library','wanyan','tasay']);
+  assert.ok(initial.state.portals.every(p=>p.enabled===false));
   assert.equal((await f.request('/api/admin/audience')).status,401);
   const a=await f.join('同名','one'),b=await f.join('同名','one',undefined,1),again=await f.join('同名','two',a.cookie,1);
   assert.notEqual(a.audience.id,b.audience.id);assert.equal(a.audience.id,again.audience.id);
@@ -53,7 +56,7 @@ test('two independent libSQL clients preserve identity, admin sessions, revision
   const config=await f.request('/api/works/tasay/default/chat/completions',{method:'POST',headers:{Cookie:a.cookie},body:'{}'});assert.equal(config.status,503);
 });
 test('simultaneous tabs retain every attempt and do not turn failed loads into opened works',async t=>{
-  const f=await fixture(t),viewer=await f.join('多窗口','one'),point=(await (await f.request('/api/live/state')).json()).state.portals[0];
+  const f=await fixture(t),viewer=await f.join('多窗口','one'),point=(await f.enableAll()).portals[0];
   const base={pointId:point.id,workId:point.workId,position:{x:point.x,y:0,z:point.z}};
   await Promise.all(Array.from({length:6},async(_,i)=>{for(const [j,type] of ['visit','opening',i===5?'open_failed':'opened'].entries()){
     const r=await f.post(viewer,{...base,type,eventId:`event-${i}-${j}`,tabId:`tab-${i}`,attemptId:`attempt-${i}`},i%2);assert.equal(r.status,200,await r.text());
@@ -62,7 +65,7 @@ test('simultaneous tabs retain every attempt and do not turn failed loads into o
   const duplicate=await f.post(viewer,{...base,type:'opened',eventId:'event-0-2',tabId:'tab-0',attemptId:'attempt-0'},1);assert.equal((await duplicate.json()).duplicate,true);
 });
 test('100 audiences, 100 SSE connections and 340 events aggregate correctly across two handlers',async t=>{
-  const f=await fixture(t),start=performance.now(),latencies=[],points=(await (await f.request('/api/live/state')).json()).state.portals;
+  const f=await fixture(t),start=performance.now(),latencies=[],points=(await f.enableAll()).portals;
   const viewers=await Promise.all(Array.from({length:100},(_,i)=>f.join(`观众${i}`,`tab-${i}`,undefined,i%2)));
   const readers=await Promise.all(viewers.map((_,i)=>f.stream(i%2)));await Promise.all(readers.map(r=>r.read()));
   const live=await (await f.request('/api/live/state')).json();assert.equal(live.onlineAudienceCount,100);assert.equal(live.onlineCount,100);
@@ -111,4 +114,21 @@ test('real Node wrapper preserves rewritten API paths, JSON bodies, cookies, fil
   const stream=await call('live/events'),reader=stream.body.getReader();assert.match(new TextDecoder().decode((await reader.read()).value),/event: snapshot/);await reader.cancel();
   for(let i=0;i<20;i++){if((await f.dbs[0].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count===0)break;await new Promise(resolve=>setTimeout(resolve,10));}
   assert.equal((await f.dbs[0].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count,0);
+});
+
+
+test('host admission survives handler restart and closed activities reject new visits/openings without deleting past records',async t=>{
+  const f=await fixture(t),viewer=await f.join('主持人开关测试','one');
+  let state=(await (await f.request('/api/live/state')).json()).state;
+  const point=state.portals[0],base={pointId:point.id,workId:point.workId,tabId:'one',attemptId:'first',position:{x:point.x,y:0,z:point.z}};let n=0;
+  const event=(type,extra={})=>f.post(viewer,{...base,type,eventId:`gate-${++n}`,...extra},n%2);
+  assert.equal((await event('visit')).status,409);assert.equal((await f.stats()).summary.points[0].visitors,0);
+  state=await f.save({...state,portals:state.portals.map(p=>({...p,enabled:p.id===point.id}))});
+  await f.restart();assert.equal((await (await f.request('/api/live/state',{},1)).json()).state.portals[0].enabled,true);
+  for(const type of ['visit','opening','opened'])assert.equal((await event(type)).status,200);
+  state=await f.save({...state,portals:state.portals.map(p=>({...p,enabled:false}))});
+  assert.equal((await event('visit')).status,409);assert.equal((await event('opening',{attemptId:'second'})).status,409);
+  assert.equal((await event('returned')).status,200);
+  await f.restart();const stats=await f.stats();assert.equal(stats.summary.points[0].visitors,1);assert.equal(stats.summary.works[0].openedParticipants,1);assert.equal(stats.summary.currentParticipants,0);
+  assert.ok((await (await f.request('/api/live/state',{},1)).json()).state.portals.every(p=>!p.enabled));
 });

@@ -69,11 +69,19 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       if(opened?.attemptId!==attemptId)return;
       opened.openingStarted=true;
       await record('opening',{pointId:current.id,workId:current.workId||current.id,attemptId,position:position()},{required:true});
-      if(opened?.attemptId!==attemptId)return;
+      if(opened?.attemptId!==attemptId){
+        // A close can race the server's opening response. Settle the accepted
+        // attempt even if the earlier return arrived before it existed.
+        record('returned',{pointId:current.id,workId:current.workId||current.id,attemptId});return;
+      }
       opened.registeredAttempt=true;
       if(url.origin===location.origin){const response=await fetch(url,{method:'HEAD',cache:'no-store'});if(!response.ok)throw new Error(`作品服务暂不可用（${response.status}）`);}
     }catch(error){if(opened?.attemptId===attemptId){opened.failed=true;attemptEvent('open_failed');loading(error.message,'error');}return;}
     if(opened?.attemptId!==attemptId)return;
+    // The host may close admission while the entry requests are in flight.
+    // Once a frame has been admitted, closing its portal does not evict it.
+    const admitted=client.state.portals.find(p=>p.id===current.id);
+    if(!admitted||!isEventActive(admitted,client.now())||admitted.url!==current.url){closePortal('活动入口已关闭，请留意主持人通知');return;}
     url.searchParams.set('campusParentOrigin',location.origin);url.searchParams.set('campusAttempt',attemptId);
     frame=document.createElement('iframe');frame.title=current.label;frame.referrerPolicy='same-origin';
     frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-pointer-lock');
@@ -134,7 +142,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     const markers=state.markers.filter(m=>isEventActive(m,now)),portals=state.portals.filter(p=>isEventActive(p,now));
     const signature=JSON.stringify([markers,portals]);
     if(signature!==visualSignature){visualSignature=signature;rebuild(markers,portals);}
-    if(opened){const current=portals.find(p=>p.id===opened.id);if(!current||current.url!==opened.url)closePortal('入口已关闭，已返回校园');}
+    if(opened&&!frame){const current=portals.find(p=>p.id===opened.id);if(!current||current.url!==opened.url)closePortal('活动入口已关闭，请留意主持人通知');}
     const nextUI=JSON.stringify([state.paused,state.pauseMessage,activeAnnouncement,state.phase]);
     if(nextUI!==uiSignature||force){
       uiSignature=nextUI;pause.hidden=!state.paused;pause.querySelector('p').textContent=state.pauseMessage||'请稍候，活动即将继续';

@@ -282,8 +282,12 @@ export function createSpiderModel(THREE){
   function updateWeb(state,key,zipCount,pointApproach){
     const active=!state.inspection&&!!state.anchor&&!zipCount&&!pointApproach;webMesh.visible=active;fibres.forEach(f=>{f.visible=active;});
     if(active){
-      const span=wristInRoot(key).distanceTo(anchorLocal),tension=clamp(num(state.webTension,1),0,1),length=Math.max(span,num(state.ropeLength,span));
-      const sag=clamp((1-tension)*(.12+Math.sqrt(Math.max(0,length*length-span*span))*.30),0,Math.min(4,span*.3));
+      const span=wristInRoot(key).distanceTo(anchorLocal),tension=clamp(num(state.webTension,1),0,1);
+      // The assisted pendulum pivot differs from the visible building anchor.
+      // Its absolute length cannot be used as visible excess rope: that used
+      // to draw metre-deep loops even while the web was carrying the player.
+      const slack=Math.max(0,num(state.webSlack,0));
+      const sag=clamp(slack*.35*(1-tension),0,Math.min(.18,span*.008));
       writeWebSurface(webMesh,wristInRoot(key),anchorLocal,sag,fibres);
     }
     for(let i=0;i<2;i++){

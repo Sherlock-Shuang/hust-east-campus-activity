@@ -3,12 +3,14 @@ import { geoToLocal } from './geospatial.js';
 import { createLiveMapFrame, getLiveLocationPresets } from './live-locations.js';
 import { ACTIVITY_PHASES, ACTIVITY_WORKS, activityPortals } from './activity-catalog.js';
 import { readAdminCoordinates, bindAdminCoordinateInputs } from './admin-coordinates.js';
+import { activitySelectionSignature, selectActivitiesNow } from './activity-launch.js';
 
 const $ = id => document.getElementById(id);
 let csrfToken = '', snapshot = null, busy = false, loggedIn = false, serverOffset = 0;
 let presets = [], mapReady = false, mapView = null, defaultMapView = null, pollInFlight = false;
 let pauseMessageDirty = false, pauseMessageBase = '';
 let phaseDirty=false, phaseBase='', audienceData=null, audiencePending=false, selectedAudienceId=null, selectedAudience=null, detailLimit=100, searchTimer, detailRequest=0;
+let launchDirty=false, launchBase='', launchSelection=new Set();
 const defaultPauseMessage = '请稍候，活动即将继续';
 let selection = { x: 58.2, z: 17.6, label: '东九 B/C 前场' };
 const NS = 'http://www.w3.org/2000/svg';
@@ -71,6 +73,7 @@ async function request(path, options = {}) {
 }
 function showLogin(message = '') {
   loggedIn = false; csrfToken = ''; $('dashboard').hidden = true; $('login-screen').hidden = false;
+  launchDirty=false;launchBase='';launchSelection.clear();delete $('activity-choices').dataset.signature;
   audienceData=null;selectedAudienceId=null;selectedAudience=null;detailRequest++;$('audience-list').replaceChildren();$('audience-detail').replaceChildren();delete $('audience-list').dataset.signature;delete $('audience-detail').dataset.signature;
   $('login-error').textContent = message;
 }
@@ -120,12 +123,49 @@ function renderState() {
   $('toggle-pause').textContent = state.paused ? '恢复全体玩家' : '暂停全体玩家';
   $('toggle-pause').dataset.paused = String(state.paused);
   $('marker-count').textContent = String(state.markers.length);
-  $('portal-count').textContent = String(state.portals.length);
+  $('portal-count').textContent = String(state.portals.filter(portal=>eventStatus(portal).type==='active').length);
   const status = state.announcement ? eventStatus(state.announcement) : { text: '暂无公告', type: 'off' };
   $('announcement-status').textContent = status.text; $('announcement-status').dataset.status = status.type;
   const announcement = state.announcement;
   $('announcement-timing').textContent = announcement ? `${announcement.startAt ? dateLabel(announcement.startAt) : '立即'} → ${announcement.endAt ? dateLabel(announcement.endAt) : '持续显示'}` : '';
-  renderObjects('marker', state.markers); renderObjects('portal', state.portals); renderPins();
+  renderActivityChoices();renderObjects('marker', state.markers); renderObjects('portal', state.portals); renderPins();
+}
+function renderActivityChoices() {
+  if (!snapshot) return;
+  const portals=snapshot.state.portals,host=$('activity-choices');
+  if (!launchDirty) {
+    launchBase=activitySelectionSignature(portals);
+    launchSelection=new Set(portals.filter(portal=>portal.enabled).map(portal=>portal.id));
+  }
+  const active=portals.filter(portal=>eventStatus(portal).type==='active');
+  $('activity-launch-status').textContent=active.length?`${active.length} 个活动开放中`:'等待主持人开启';
+  $('activity-launch-status').dataset.status=active.length?'active':'off';
+  const signature=JSON.stringify([portals.map(portal=>[portal.id,portal.label,portal.description,eventStatus(portal).type]),[...launchSelection]]);
+  if (host.dataset.signature!==signature) {
+    host.dataset.signature=signature;host.replaceChildren();
+    if (!portals.length) host.append(element('p','尚无活动点位，请先载入下方的三个作品点位，或添加自定义作品。','empty-list'));
+    for (const portal of portals) {
+      const row=element('label',null,'activity-choice'),input=document.createElement('input');
+      input.type='checkbox';input.value=portal.id;input.checked=launchSelection.has(portal.id);input.disabled=busy;
+      input.setAttribute('aria-label',`选择${portal.label}`);
+      const info=element('span',null,'activity-choice-copy');
+      info.append(element('strong',portal.label),element('small',portal.description||'靠近地图光柱后进入体验'));
+      const status=eventStatus(portal),pill=element('span',status.type==='active'?'光柱已亮 · 可进入':status.text,'status-pill');pill.dataset.status=status.type;
+      input.addEventListener('change',()=>{
+        launchDirty=true;if(input.checked)launchSelection.add(portal.id);else launchSelection.delete(portal.id);
+        renderActivityChoices();
+      });
+      row.append(input,info,pill);host.append(row);
+    }
+  }
+  $('activity-selection-note').textContent=launchDirty?'选择尚未发布。点击“开启所选活动”后，所选光柱与入口一起开启，其余活动关闭。':'可多选。勾选只编辑草稿，发布后才影响观众；开启立即生效。';
+}
+function launchActivities(selectedIds, message) {
+  const baseline=launchBase;
+  return mutate(state=>{
+    if(activitySelectionSignature(state.portals)!==baseline)throw new Error('活动开放状态或地点已被其他管理员更新。请点击“同步当前选择”后重新选择。');
+    state.portals=selectActivitiesNow(state.portals,selectedIds);
+  },message).then(ok=>{if(ok){launchDirty=false;renderActivityChoices();}});
 }
 function renderObjects(type, items) {
   const list = $(`${type}-list`);
@@ -166,6 +206,7 @@ async function objectAction(type, itemId, action) {
   }, action === 'delete' ? '已删除，玩家界面将同步更新。' : '开放状态已更新。');
 }
 function fillObjectForm(type, item) {
+  if(type==='portal')document.querySelector('.activity-configuration').open=true;
   $(`${type}-id`).value = item.id; $(`${type}-label`).value = item.label;
   $(`${type}-enabled`).checked = item.enabled; $(`${type}-radius`).value = item.radius;
   $(`${type}-start`).value = toLocalInput(item.startAt); $(`${type}-end`).value = toLocalInput(item.endAt);
@@ -441,6 +482,13 @@ $('activity-phase').addEventListener('change', () => {
   phaseDirty=true;
 });
 $('phase-guidance').addEventListener('input',()=>{phaseDirty=true;});
+$('activity-launch-form').addEventListener('submit',event=>{
+  event.preventDefault();
+  if(!launchSelection.size)return showNotice('请先选择要开启的活动；如需关闭所有入口，请使用“全部关闭”。',true);
+  launchActivities([...launchSelection],'所选活动已开启：对应光柱已点亮，观众靠近后可进入；未选活动已关闭。');
+});
+$('close-all-activities').addEventListener('click',()=>launchActivities([],'全部活动入口与召集光柱已关闭；已进入作品的观众可继续体验并自行返回。'));
+$('reset-activity-selection').addEventListener('click',()=>{launchDirty=false;renderActivityChoices();});
 $('phase-form').addEventListener('submit',event=>{
   event.preventDefault();
   const selected=ACTIVITY_PHASES.find(item=>item.id===$('activity-phase').value)||snapshot?.state.phase;
@@ -460,7 +508,7 @@ $('load-activity-portals').addEventListener('click',()=>mutate(state=>{
   const missing=activityPortals().filter(portal=>!state.portals.some(existing=>existing.id===portal.id));
   if(state.portals.length+missing.length>12)throw new Error('入口数量将超过 12 个。请先删除不再使用的入口，再载入作品点位。');
   state.portals.push(...missing);
-},'三个作品点位已检查并补齐，已有点位配置保持不变。'));
+},'三个作品点位已检查并补齐，新点位保持关闭；请在上方选择活动后开启。已有配置保持不变。'));
 $('audience-search-form').addEventListener('submit',event=>{event.preventDefault();clearTimeout(searchTimer);refreshAudience();});
 $('audience-search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(refreshAudience,250);});
 $('refresh-audience').addEventListener('click',refreshAudience);
