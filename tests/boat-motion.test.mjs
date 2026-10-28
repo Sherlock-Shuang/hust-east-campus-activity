@@ -44,8 +44,8 @@ test('mounting any transport checks destination clearance and only ignores the s
  const previous={...m.state};assert.equal(m.placeMode({x:8,z:0,yaw:0},'roadster').ok,false);assert.deepEqual(m.state,previous);
 });
 test('walk is faster but still ramps and stops under control',()=>{
- const m=createPlayerMotion({route});m.step(1/120,{forward:1});assert.ok(m.state.speed<.01);tick(m,1,{forward:1});assert.equal(m.state.speed,2.2);tick(m,1,{forward:1,fast:true});assert.equal(m.state.speed,3.8);
- const d=m.state.distance;tick(m,.8,{});assert.equal(m.state.speed,0);assert.ok(m.state.distance-d<1);
+ const m=createPlayerMotion({route});m.step(1/120,{forward:1});assert.ok(m.state.speed<.01);tick(m,1,{forward:1});assert.equal(m.state.speed,3.2);tick(m,1,{forward:1,fast:true});assert.equal(m.state.speed,5.2);
+ const d=m.state.distance;tick(m,.8,{});assert.equal(m.state.speed,0);assert.ok(m.state.distance-d<1.8,'5.2 m/s running releases within two short strides');
 });
 test('boat model has real waterline draft, separate driver and finite released resources',()=>{
  const model=createBoatModel(THREE),bounds=new THREE.Box3().setFromObject(model.group);assert.ok(bounds.min.y<-.3&&bounds.min.y>-.5);assert.ok(bounds.max.z-bounds.min.z>6.5);assert.equal(model.group.getObjectByName('yacht-driver').visible,false);
