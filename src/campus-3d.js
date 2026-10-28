@@ -7,7 +7,7 @@ import {createBridgeDetails} from './bridge-details.js';
 import { getBuildingProfile, getRoadProfile, getBuildingPartGroups } from './building-profiles.js';
 import { createEastNineDetails } from './east-nine.js';
 import { createArchitecturalMaterials, applyBuildingUV } from './architectural-materials.js';
-import { createSurfaceMaterials, applyWorldUV } from './surface-materials.js';
+import { createSurfaceMaterials, applyWorldUV, applySurfaceDepthBias } from './surface-materials.js';
 import { createCampusLandcover } from './campus-landcover.js';
 import { createCampusLandmarkDetails } from './campus-landmarks.js';
 import { getReconstructionBuildings } from './campus-feature-selection.js';
@@ -288,7 +288,12 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     m.castShadow = false; m.renderOrder = 200; holder.add(m); return m;
   }
   const roadMaterial = surfaces.asphalt, pathMaterial = surfaces.paving, bridgeMaterial = surfaces.concrete, markingMaterial = surfaces.paint, railMaterial = solid('#b7c3bf', .55, .3);
+  // The lakeside pavers and the main asphalt ribbon meet at the same datum.
+  // Keep asphalt continuous through that junction, with crossing paint (four
+  // depth steps) still in front of this two-step surface separation.
+  applySurfaceDepthBias(roadMaterial,2);
   const centreMaterial=solid('#c6ad67',.91);
+  applySurfaceDepthBias(markingMaterial,4);applySurfaceDepthBias(centreMaterial,4);
   // Shared source vertices determine junction clearance. Separate ways that
   // merely continue one another do not create an intersection.
   const roadNodes=new Map(),roadKey=c=>`${c[0].toFixed(7)},${c[1].toFixed(7)}`;

@@ -1,5 +1,5 @@
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {applyWorldUV} from './surface-materials.js';
+import {applyWorldUV,applySurfaceDepthBias} from './surface-materials.js';
 import {createRoadClearance} from './street-clearance.js';
 
 /** Baked metre-scale street fittings. Source roads/crossings determine the
@@ -136,17 +136,11 @@ export function createCrossingDetails(THREE,route,surfaces) {
   const layer=bakedLayer(THREE,'源地图人行横道 · 薄漆与路缘',{
     component:'source-crossing-details',locationEvidence:'source crossing nodes',dimensionsEvidence:'estimated',units:'metres',
   });
-  const paint=layer.own(surfaces.paint.clone());paint.polygonOffset=true;paint.polygonOffsetFactor=-1;paint.polygonOffsetUnits=-1;
+  const paint=layer.own(surfaces.paint.clone());
   // Shader-written logarithmic depth overrides hardware polygon offset. Give
   // the paint four 24-bit depth steps of separation, while retaining depth
   // testing/writing so shoes, wheels and vehicles still occlude the stripes.
-  paint.onBeforeCompile=shader=>{
-    shader.fragmentShader=shader.fragmentShader.replace('#include <logdepthbuf_fragment>',`#include <logdepthbuf_fragment>
-      #if defined( USE_LOGARITHMIC_DEPTH_BUFFER )
-        gl_FragDepth = max(0.0, gl_FragDepth - 0.0000002384185791015625);
-      #endif`);
-  };
-  paint.customProgramCacheKey=()=>'crossing-paint-log-depth-v1';
+  applySurfaceDepthBias(paint,4);
   const stone=layer.own(surfaces.concrete.clone());stone.color.set('#a6a99d');
   const tactile=layer.own(new THREE.MeshStandardMaterial({color:'#b6a16c',roughness:.96}));
   const dummy=new THREE.Object3D(),matrix=new THREE.Matrix4(),local=new THREE.Object3D();

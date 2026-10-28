@@ -15,6 +15,21 @@ function noise(x,y,period=16) {
   return (h(ix,iy)*(1-u)+h(ix+1,iy)*u)*(1-v)+(h(ix,iy+1)*(1-u)+h(ix+1,iy+1)*u)*v;
 }
 const clamp = x => Math.max(0,Math.min(255,Math.round(x)));
+/** Resolve nearly coplanar road layers under both ordinary and shader-written
+ * logarithmic depth. Keep actual geometry and normal depth occlusion intact. */
+export function applySurfaceDepthBias(material,steps) {
+  const bias=(steps/2**24).toFixed(24);
+  material.polygonOffset=true;material.polygonOffsetFactor=-1;material.polygonOffsetUnits=-1;
+  material.onBeforeCompile=shader=>{
+    shader.fragmentShader=shader.fragmentShader.replace('#include <logdepthbuf_fragment>',`#include <logdepthbuf_fragment>
+      #if defined( USE_LOGARITHMIC_DEPTH_BUFFER )
+        gl_FragDepth = max(0.0, gl_FragDepth - ${bias});
+      #endif`);
+  };
+  material.customProgramCacheKey=()=>`road-surface-depth-v1-${steps}`;
+  return material;
+}
+
 export function createSurfaceMaterials(THREE) {
   const textures=[],materials=[],size=256;
   function texture(data,metres,color=false){

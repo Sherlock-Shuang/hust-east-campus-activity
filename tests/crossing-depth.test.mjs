@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import {readFileSync} from 'node:fs';
+import {createCampus3D} from '../src/campus-3d.js';
+import {createLocalFrame,geoToLocal} from '../src/geospatial.js';
 import {createCrossingDetails} from '../src/street-furniture.js';
 import {createSurfaceMaterials} from '../src/surface-materials.js';
 
@@ -44,4 +47,25 @@ test('log-depth paint retains ordinary occlusion and uses a bounded fragment-dep
   assert.ok(shift>0&&shift<.003);
   assert.equal(material.polygonOffsetFactor,-1);assert.equal(material.polygonOffsetUnits,-1);
   details.dispose();surfaces.dispose();
+});
+
+test('bridge junction asphalt wins over coplanar pavers while all road paint keeps priority',()=>{
+  const source=JSON.parse(readFileSync(new URL('../public/data/east-campus.geojson',import.meta.url),'utf8'));
+  const ids=['way/1228820956','way/97080595'];
+  const roads=source.features.filter(f=>ids.includes(f.id)).map(feature=>({id:feature.id,feature,category:'road',shapes:[]}));
+  assert.equal(roads.length,2);
+  const before=JSON.stringify(roads),frame=createLocalFrame({longitude:114.42123985,latitude:30.51575845,coordinateSystem:'EPSG:4326'});
+  const campus=createCampus3D(THREE,{records:roads,roads,buildings:[],water:[]},{frame,geoToLocal});
+  const biasOf=m=>{const s={fragmentShader:THREE.ShaderLib.standard.fragmentShader};m.onBeforeCompile(s);return Number(s.fragmentShader.match(/gl_FragDepth - ([\d.]+)/)?.[1]??0);};
+  for(const id of ids){
+    const deck=campus.records.get(id).group.children.find(o=>o.isMesh);
+    deck.geometry.computeBoundingBox();assert.ok(Math.abs(deck.geometry.boundingBox.max.y-.142)<1e-6);
+    assert.equal(biasOf(deck.material),id===ids[0]?2/2**24:0);
+    assert.equal(deck.material.depthTest,true);assert.equal(deck.material.depthWrite,true);
+  }
+  const lines=[];campus.group.traverse(o=>{if(/avenue-centre-lines|avenue-cycle-boundaries|avenue-motor-lane-dashes/.test(o.name))lines.push(o);});
+  assert.ok(lines.length>=2);
+  for(const line of lines)assert.equal(biasOf(line.material),4/2**24,'lane paint stays ahead of biased asphalt');
+  assert.equal(JSON.stringify(roads),before,'source widths, coordinates and datums stay intact');
+  campus.dispose();
 });
