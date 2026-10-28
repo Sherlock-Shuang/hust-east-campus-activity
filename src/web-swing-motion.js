@@ -26,10 +26,10 @@ function segmentEntersBuilding(a,b,building){
 export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],guideAt}={}){
   if(!state||typeof groundAt!=='function')throw new TypeError('Swing motion needs shared player state and ground sampling.');
   const buildings=compileBuildings(world.buildings),bounds=world.bounds;
-  let candidateClock=0,attachedAge=0,swingLowY=Infinity,releaseDelay=0,lastAnchor=null,jumpHeld=false,swingHeld=false,autoWas=false,lastSafe=null,landingCooldown=0,ropeRate=0,jumpBuffer=0,coyote=0,wallAge=0,wallBudget=1.1,wallGrace=0,chainHeld=false;
+  let candidateClock=0,attachedAge=0,releaseDelay=0,jumpHeld=false,swingHeld=false,swingNeedsRelease=false,swingRequest=null,swingRequestTime=0,lastSafe=null,landingCooldown=0,ropeRate=0,jumpBuffer=0,coyote=0,wallAge=0,wallBudget=1.1,wallGrace=0,chainHeld=false;
   let zipHeld=false,zipBuffer=0,zipAge=0,zipImpulse=0,zipBoostTime=0,zipDirection=null;
   let pointHeld=false,pointBuffer=0,pointPath=null,pointDistance=0,pointSpeed=0,pointPerchTime=0,pointBoostTime=0,pointAimYaw=null,pointFeedback='',pointFeedbackTime=0;
-  let trickAge=0,recoveryDirection=null,recoveryTime=0;
+  let trickAge=0;
   const hand=p=>({x:p.x,y:p.y+HAND,z:p.z});
   const lineClear=(a,b)=>!buildings.some(building=>segmentEntersBuilding(a,b,building));
   function clearBody(p){if(bounds&&(p.x-R<bounds.minX||p.x+R>bounds.maxX||p.z-R<bounds.minZ||p.z+R>bounds.maxZ))return false;
@@ -51,7 +51,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     // must stay outside thin walls while retreating out of the landing overlap.
     for(let i=1;i<=count;i++){const t=i/count,p={x:from.x+(to.x-from.x)*t,y:from.y,z:from.z+(to.z-from.z)*t};if(!clearBody(p)||!groundAt(p.x,p.z,R).allowed||actorHit(p,previous))return false;previous=p;}return!actorHit(to);
   }
-  function anchorCandidates(exclude=lastAnchor,zip=false,heading=state.yaw){const origin=hand(state),fx=-Math.sin(heading),fz=-Math.cos(heading),candidates=[];
+  function anchorCandidates(exclude=null,zip=false,heading=state.yaw){const origin=hand(state),fx=-Math.sin(heading),fz=-Math.cos(heading),candidates=[];
     for(const b of buildings){const bx=clamp(origin.x,b.minX,b.maxX),bz=clamp(origin.z,b.minZ,b.maxZ);if(Math.hypot(origin.x-bx,origin.z-bz)>72||b.height<origin.y-7)continue;
       for(let edgeIndex=0;edgeIndex<b.edges.length;edgeIndex++){const edge=b.edges[edgeIndex],dx=edge.b.x-edge.a.x,dz=edge.b.z-edge.a.z,l2=dx*dx+dz*dz,projection=clamp(((origin.x+fx*24-edge.a.x)*dx+(origin.z+fz*24-edge.a.z)*dz)/l2,.02,.98);
         for(const t of[.08,projection,.5,.92]){const x=edge.a.x+dx*t,z=edge.a.z+dz*t,horizontal=Math.hypot(x-origin.x,z-origin.z),ahead=(x-origin.x)*fx+(z-origin.z)*fz;if(horizontal<(zip?8:4)||horizontal>(zip?55:72)||ahead<(zip?.3:-.10)*horizontal)continue;
@@ -76,7 +76,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     }
     return 0;
   }
-  function findAnchor(exclude=lastAnchor,heading=state.yaw){const origin=hand(state),visible=[];
+  function findAnchor(exclude=null,heading=state.yaw){const origin=hand(state),visible=[];
     for(const c of anchorCandidates(exclude,false,heading).slice(0,32))if(lineClear(origin,c)){
       const previous=state.candidateAnchor&&Math.hypot(c.x-state.candidateAnchor.x,c.y-state.candidateAnchor.y,c.z-state.candidateAnchor.z)<2;
       visible.push({...c,score:c.score+approachPenalty(c)-(previous?.7:0)});if(visible.length===10)break;
@@ -190,7 +190,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     }return true;
   }
   function updateTrick(dt,input){
-    const eligible=!!input.trick&&!state.grounded&&!state.anchor&&!state.zipActive&&!state.diving&&state.pointPhase==='idle'&&!state.wallContact&&!state.blockedReason&&!input.swing&&!input.autoSwing&&!input.zip&&!input.point&&!input.dive&&trickClear();
+    const eligible=!!input.trick&&!state.grounded&&!state.anchor&&!state.zipActive&&!state.diving&&state.pointPhase==='idle'&&!state.wallContact&&!state.blockedReason&&!input.swing&&!input.zip&&!input.point&&!input.dive&&trickClear();
     if(!eligible)stopTrick();
     if(eligible&&state.trickPhase!=='perform'&&state.trickBlend<.05){trickAge=0;state.trickActive=true;state.trickPhase='perform';state.trickType=Math.abs(input.trickX??0)>Math.abs(input.trickY??0)?input.trickX>0?'rightroll':'leftroll':input.trickY<0?'backflip':'frontflip';}
     if(state.trickPhase==='perform'){
@@ -204,43 +204,38 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     if(state.grounded)state.trickCombo=0;
     if(state.trickActive)state.traversalPhase='trick';
   }
-  function clearActionInputs(){recoveryDirection=null;recoveryTime=0;jumpHeld=false;swingHeld=false;zipHeld=false;pointHeld=false;autoWas=false;jumpBuffer=0;zipBuffer=0;pointBuffer=0;chainHeld=false;stopTrick();}
-  function detach(reason=''){if(state.anchor)lastAnchor={...state.anchor};state.anchor=null;state.swingPivot=null;state.ropeLength=0;state.webTension=0;state.webSlack=0;attachedAge=0;ropeRate=0;releaseDelay=.18;state.releaseTime=0;state.candidateAnchor=null;candidateClock=0;if(reason)state.blockedReason=reason;}
+  function clearSwingRequest(){swingRequest=null;swingRequestTime=0;}
+  function clearActionInputs(){
+    // Blur/suspension may arrive while a physical button is still held. A
+    // subsequent high input must not manufacture another casting edge.
+    swingNeedsRelease=swingNeedsRelease||swingHeld;clearSwingRequest();if(state.anchor)detach();jumpHeld=false;zipHeld=false;pointHeld=false;jumpBuffer=0;zipBuffer=0;pointBuffer=0;chainHeld=false;stopTrick();
+  }
+  function detach(reason=''){clearSwingRequest();state.anchor=null;state.swingPivot=null;state.ropeLength=0;state.webTension=0;state.webSlack=0;attachedAge=0;ropeRate=0;releaseDelay=.18;state.releaseTime=0;state.candidateAnchor=null;candidateClock=0;if(reason)state.blockedReason=reason;}
   function attach(anchor){if(!anchor||!lineClear(hand(state),anchor))return false;
     state.anchor={...anchor};const fx=-Math.sin(state.yaw),fz=-Math.cos(state.yaw),dx=state.x-anchor.x,dz=state.z-anchor.z,along=dx*fx+dz*fz,lx=dx-fx*along,lz=dz-fz*along,lateral=Math.hypot(lx,lz)||1,shift=Math.min(5,lateral*.55),lift=clamp(28+groundAt(state.x,state.z).height-anchor.y,0,12);
     // The visible endpoint and occlusion use the real building. A disclosed
     // gameplay pivot shifts low-roof pendulums into the street and raises their
     // clearance, following the separation used in action-game traversal.
     state.swingPivot={x:anchor.x+lx/lateral*shift,y:anchor.y+lift,z:anchor.z+lz/lateral*shift};const p=state.swingPivot;
-    state.ropeLength=Math.hypot(p.x-state.x,p.y-state.y-HAND,p.z-state.z)+.15;ropeRate=0;state.swingHand=state.swingCount%2?-1:1;state.swingCount++;attachedAge=0;swingLowY=state.y;state.webTension=0;wallBudget=Math.min(1.1,wallBudget+.35);return true;
+    state.ropeLength=Math.hypot(p.x-state.x,p.y-state.y-HAND,p.z-state.z)+.15;ropeRate=0;state.swingHand=state.swingCount%2?-1:1;state.swingCount++;attachedAge=0;clearSwingRequest();state.webTension=0;wallBudget=Math.min(1.1,wallBudget+.35);return true;
   }
   function reset(){Object.assign(state,{anchor:null,swingPivot:null,candidateAnchor:null,ropeLength:0,vx:0,vz:0,verticalSpeed:0,swingCount:0,airTime:0,webTension:0,webSlack:0,swingHand:1,roofIndex:null,traversalPhase:'ground',wallContact:null,releaseTime:0,landingImpact:0,inputBuffered:false,attachAge:0,swingPhase:'entry',bottomKick:0,zipActive:false,zipAnchors:[],zipCandidateAnchors:[],zipProgress:0,zipCooldown:0,zipCount:0,zipStrength:0,zipAvailable:false,zipReady:false,zipUnavailableReason:'请先起跳',diving:false,diveBlend:0,
     pointPhase:'idle',pointTarget:null,candidatePoint:null,pointProgress:0,pointLaunchWindow:0,pointLaunchQuality:0,pointLaunchReady:false,pointTimeToArrival:null,pointLaunchTime:0,pointLaunchProgress:0,pointCount:0,pointLaunchCount:0,pointReady:false,pointUnavailableReason:'前方没有安全屋顶落点',
     trickActive:false,trickType:'frontflip',trickProgress:0,trickPhase:'idle',trickBlend:0,trickRotation:{x:0,y:0,z:0},trickCount:0,trickCombo:0});
-    recoveryDirection=null;recoveryTime=0;candidateClock=0;attachedAge=0;releaseDelay=0;lastAnchor=null;jumpHeld=false;swingHeld=false;autoWas=false;landingCooldown=0;ropeRate=0;jumpBuffer=0;coyote=0;wallAge=0;wallBudget=1.1;wallGrace=0;chainHeld=false;zipHeld=false;zipBuffer=0;zipAge=0;zipImpulse=0;zipBoostTime=0;zipDirection=null;pointHeld=false;pointBuffer=0;pointPath=null;pointDistance=0;pointSpeed=0;pointPerchTime=0;pointBoostTime=0;pointAimYaw=null;pointFeedback='';pointFeedbackTime=0;trickAge=0;lastSafe={x:state.x,y:state.y,z:state.z,yaw:state.yaw};
+    swingNeedsRelease=false;clearSwingRequest();candidateClock=0;attachedAge=0;releaseDelay=0;jumpHeld=false;swingHeld=false;landingCooldown=0;ropeRate=0;jumpBuffer=0;coyote=0;wallAge=0;wallBudget=1.1;wallGrace=0;chainHeld=false;zipHeld=false;zipBuffer=0;zipAge=0;zipImpulse=0;zipBoostTime=0;zipDirection=null;pointHeld=false;pointBuffer=0;pointPath=null;pointDistance=0;pointSpeed=0;pointPerchTime=0;pointBoostTime=0;pointAimYaw=null;pointFeedback='';pointFeedbackTime=0;trickAge=0;lastSafe={x:state.x,y:state.y,z:state.z,yaw:state.yaw};
     if(state.mode==='spider'){state.candidateAnchor=findAnchor(null);state.candidatePoint=findPoint();state.pointReady=!!state.candidatePoint;}
   }
-  function suspend(){detach();stopZip();stopPoint();stopTrick(true);clearActionInputs();state.vx=0;state.vz=0;state.verticalSpeed=0;state.speed=0;candidateClock=0;releaseDelay=0;lastAnchor=null;coyote=0;wallGrace=0;state.wallContact=null;zipBoostTime=0;pointBoostTime=0;pointFeedback='';pointFeedbackTime=0;state.diving=false;state.diveBlend=0;state.zipCandidateAnchors=[];state.zipAvailable=false;state.zipReady=false;state.candidatePoint=null;state.pointReady=false;}
+  function suspend(){detach();stopZip();stopPoint();stopTrick(true);clearActionInputs();state.vx=0;state.vz=0;state.verticalSpeed=0;state.speed=0;candidateClock=0;releaseDelay=0;coyote=0;wallGrace=0;state.wallContact=null;zipBoostTime=0;pointBoostTime=0;pointFeedback='';pointFeedbackTime=0;state.diving=false;state.diveBlend=0;state.zipCandidateAnchors=[];state.zipAvailable=false;state.zipReady=false;state.candidatePoint=null;state.pointReady=false;}
   function respawn(reason){detach();stopZip();stopPoint();stopTrick(true);pointBoostTime=0;zipBoostTime=0;pointFeedback='';pointFeedbackTime=0;state.diving=false;state.diveBlend=0;state.zipCandidateAnchors=[];state.zipAvailable=false;state.zipReady=false;state.zipUnavailableReason='请先起跳';state.candidatePoint=null;state.pointReady=false;if(lastSafe)Object.assign(state,lastSafe);Object.assign(state,{vx:0,vz:0,verticalSpeed:0,speed:0,grounded:true,airTime:0,pitch:0,lean:0,blockedReason:reason});landingCooldown=.8;candidateClock=0;}
   function contactNormal(p){let best=null;
     for(const b of buildings){if(p.y>=b.height+.02||p.y+HEIGHT<=b.minHeight||!overlap(p,b,R+.35))continue;
       for(const e of b.edges){const dx=e.b.x-e.a.x,dz=e.b.z-e.a.z,l2=dx*dx+dz*dz,t=clamp(((p.x-e.a.x)*dx+(p.z-e.a.z)*dz)/l2,0,1),qx=e.a.x+t*dx,qz=e.a.z+t*dz,d=Math.hypot(p.x-qx,p.z-qz);if(d>R+.4||best&&d>=best.distance)continue;const nx=(p.x-qx)/(d||1),nz=(p.z-qz)/(d||1);best={nx,nz,buildingIndex:b.index,distance:d};}
     }return best;
   }
-  function desiredDirection(input,automatic,dt){
+  function desiredDirection(input,dt){
     const worldIntent=finite(input.moveX)||finite(input.moveZ);let x=0,z=0,magnitude=0;
     if(worldIntent){x=Number(input.moveX)||0;z=Number(input.moveZ)||0;magnitude=Math.hypot(x,z);if(magnitude>1){x/=magnitude;z/=magnitude;magnitude=1;}}
     else{const turn=clamp(Number(input.turn)||0,-1,1);state.yaw+=turn*(state.grounded?2.7:2.1)*dt;const f=clamp(Number(input.forward)||0,-1,1);x=-Math.sin(state.yaw)*f;z=-Math.cos(state.yaw)*f;magnitude=Math.abs(f);}
-    if(recoveryTime>0&&chainHeld&&!automatic&&magnitude<.05&&recoveryDirection){
-      x=recoveryDirection.x;z=recoveryDirection.z;magnitude=1;
-    }
-    if(automatic&&magnitude<.05&&typeof guideAt==='function'){
-      const near=groundAt(state.x,state.z),lookAhead=clamp(12+state.speed*.35,14,23),point=guideAt((near.progress??0)+lookAhead);x=point.x-state.x;z=point.z-state.z;const d=Math.hypot(x,z)||1;x/=d;z/=d;magnitude=1;
-      // Probe complete bodies along several short headings, choosing a visible
-      // route around a facade instead of repeatedly pushing into the same wall.
-      const base=Math.atan2(x,z),probe=clamp(2+state.speed*.25,3,7);let best=null;
-      for(const angle of[0,.35,-.35,.7,-.7,1.1,-1.1,1.55,-1.55,2,-2]){const tx=Math.sin(base+angle),tz=Math.cos(base+angle);let clearance=0;for(let d=.5;d<=probe;d+=.5){if(!clearBody({x:state.x+tx*d,y:state.y,z:state.z+tz*d}))break;clearance=d;}const score=clearance/probe*3-Math.abs(angle)*.35;if(!best||score>best.score)best={x:tx,z:tz,score};}if(best){x=best.x;z=best.z;}
-    }
     if(magnitude<.05&&Math.hypot(state.vx,state.vz)>2&&!(Math.abs(Number(input.turn)||0)>.01&&!worldIntent)){const target=Math.atan2(-state.vx,-state.vz),error=Math.atan2(Math.sin(target-state.yaw),Math.cos(target-state.yaw));state.yaw+=clamp(error,-2.8*dt,2.8*dt);}
     if(magnitude>.05){const target=Math.atan2(-x,-z),error=Math.atan2(Math.sin(target-state.yaw),Math.cos(target-state.yaw));state.yaw+=clamp(error,-3.5*dt,3.5*dt);}
     state.yaw=Math.atan2(Math.sin(state.yaw),Math.cos(state.yaw));
@@ -285,24 +280,32 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
   }
   function step(dt,input={}){
     state.rotorPower=0;state.jetPower=0;state.flightEnabled=false;state.steeringAngle=0;state.blockedReason='';
-    recoveryTime=Math.max(0,recoveryTime-dt);
+    swingRequestTime=Math.max(0,swingRequestTime-dt);if(swingRequestTime===0)swingRequest=null;
     releaseDelay=Math.max(0,releaseDelay-dt);landingCooldown=Math.max(0,landingCooldown-dt);candidateClock-=dt;wallGrace=Math.max(0,wallGrace-dt);state.releaseTime+=dt;state.landingImpact*=Math.exp(-5*dt);state.bottomKick*=Math.exp(-10*dt);
     state.zipCooldown=Math.max(0,state.zipCooldown-dt);zipBoostTime=Math.max(0,zipBoostTime-dt);pointBoostTime=Math.max(0,pointBoostTime-dt);
     pointFeedbackTime=Math.max(0,pointFeedbackTime-dt);
     const zip=!!input.zip,zipEdge=zip&&!zipHeld;zipHeld=zip;zipBuffer=zipEdge?.12:Math.max(0,zipBuffer-dt);
-    const point=!!input.point,pointEdge=point&&!pointHeld,swingEdge=!!input.swing&&!swingHeld;pointHeld=point;pointBuffer=pointEdge?.18:Math.max(0,pointBuffer-dt);
+    const rawSwing=!!input.swing;if(!rawSwing)swingNeedsRelease=false;
+    const swingEdge=rawSwing&&!swingHeld&&!swingNeedsRelease;swingHeld=rawSwing;
+    const point=!!input.point,pointEdge=point&&!pointHeld;pointHeld=point;pointBuffer=pointEdge?.18:Math.max(0,pointBuffer-dt);
+    if(!rawSwing||input.dive||pointEdge||zipEdge)clearSwingRequest();
     pointAimYaw=finite(input.aimYaw)?input.aimYaw:null;if(pointEdge)candidateClock=0;
     if(state.pointPhase==='launch'){state.pointLaunchTime+=dt;state.pointLaunchProgress=clamp(state.pointLaunchTime/.55,0,1);if(state.pointLaunchTime>=.55)stopPoint();}
     if((state.pointPhase==='approach'||state.pointPhase==='perch')&&(input.dive||zipEdge||swingEdge&&!pointEdge))stopPoint();
     state.diving=!!input.dive&&!state.grounded&&!state.zipActive;state.diveBlend=approach(state.diveBlend,state.diving?1:0,dt*4);
     if(state.diving&&state.anchor)detach();
     if(!wallGrace){state.wallContact=null;wallAge=0;}
-    const automatic=!!input.autoSwing,wantsWeb=(!!input.swing||automatic)&&!input.dive,jump=!!input.jump,jumpEdge=jump&&!jumpHeld;jumpHeld=jump;swingHeld=!!input.swing;chainHeld=wantsWeb;
+    const wantsWeb=rawSwing&&!swingNeedsRelease&&!input.dive,jump=!!input.jump,jumpEdge=jump&&!jumpHeld;jumpHeld=jump;chainHeld=wantsWeb&&!!state.anchor;
     if(jumpEdge)jumpBuffer=state.pointPhase==='approach'||state.pointPhase==='perch'?.18:.16;else jumpBuffer=Math.max(0,jumpBuffer-dt);
     if(state.grounded)coyote=.12;else coyote=Math.max(0,coyote-dt);
-    if(automatic&&!autoWas){candidateClock=0;lastAnchor=null;releaseDelay=0;}autoWas=automatic;
-    const intent=desiredDirection(input,automatic,dt),fx=-Math.sin(state.yaw),fz=-Math.cos(state.yaw);
-    if(candidateClock<=0){state.candidateAnchor=findAnchor();if(!state.candidateAnchor&&state.grounded)state.candidateAnchor=findAnchor(null);state.zipCandidateAnchors=findZipAnchors();state.candidatePoint=findPoint();candidateClock=.10;}
+    const intent=desiredDirection(input,dt),fx=-Math.sin(state.yaw),fz=-Math.cos(state.yaw);
+    if(candidateClock<=0){state.candidateAnchor=findAnchor(null,pointAimYaw??state.yaw);state.zipCandidateAnchors=findZipAnchors();state.candidatePoint=findPoint();candidateClock=.10;}
+    if(swingEdge&&!input.dive&&!pointEdge&&!zipEdge){
+      // Capture one actual target at the press. The short request window only
+      // absorbs release cooldown; holding in empty space cannot acquire a
+      // later point, and this target never changes during the buffered cast.
+      swingRequest=findAnchor(null,pointAimYaw??state.yaw);swingRequestTime=swingRequest?.2:0;
+    }
     if(pointBuffer>0&&!input.dive&&startPoint()){pointBuffer=0;zipBuffer=0;}
     state.pointReady=!!state.candidatePoint&&state.pointPhase!=='approach'&&state.pointPhase!=='perch'&&!state.diving&&pointFeedbackTime===0;
     state.pointUnavailableReason=state.pointPhase==='approach'?'正在吸向屋沿':state.pointPhase==='perch'?'空格弹射或重新按 E 接丝':state.diving?'松开俯冲后再选点':pointFeedbackTime>0?pointFeedback:!state.candidatePoint?'前方没有安全屋顶落点':'';
@@ -310,54 +313,27 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     if(state.anchor&&!lineClear(hand(state),state.anchor))detach('蛛丝被建筑挡住');
     if(state.anchor&&!wantsWeb)detach();
     if(state.grounded){
-      wallBudget=1.1;const moving=intent.magnitude>.05,along=state.vx*fx+state.vz*fz,chainSpeed=wantsWeb?Math.max(9,Math.min(along,18)):0,desired=moving?(input.fast?9:6):chainSpeed;
-      const dx=moving?intent.x:fx,dz=moving?intent.z:fz,response=input.brake?24:wantsWeb?10:18;
+      wallBudget=1.1;const moving=intent.magnitude>.05,desired=moving?(input.fast?9:6):0;
+      const dx=moving?intent.x:swingRequest?-Math.sin(pointAimYaw??state.yaw):fx,dz=moving?intent.z:swingRequest?-Math.cos(pointAimYaw??state.yaw):fz,response=input.brake?24:18;
       state.vx=approach(state.vx,input.brake?0:dx*desired,response*dt);state.vz=approach(state.vz,input.brake?0:dz*desired,response*dt);
-      const near=groundAt(state.x,state.z),bridgeTarget=typeof guideAt==='function'?guideAt(near.progress??0):null;
-      const canVault=moving&&bridgeTarget&&bridgeTarget.y-state.y>.8&&bridgeTarget.y-state.y<8&&Math.hypot(bridgeTarget.x-state.x,bridgeTarget.z-state.z)<30;
-      // Check the whole short approach, not only its far endpoint. A person
-      // beside the player's leading shoulder can block the next 10 cm while
-      // the old 1.4 m probe has already passed them, deadlocking held-web travel.
-      const canVaultActor=moving&&[.35,.7,1.05,1.4].some(ahead=>actorHit({x:state.x+dx*ahead,y:state.y,z:state.z+dz*ahead}))&&groundAt(state.x+dx*5,state.z+dz*5,R).allowed;
-      const canChain=state.candidateAnchor||state.roofIndex!==null||canVault||canVaultActor;
-      if((jumpBuffer>0||wantsWeb&&canChain&&landingCooldown===0)&&!input.brake){
-        state.verticalSpeed=state.roofIndex===null?(wantsWeb?(canVaultActor&&!state.candidateAnchor&&!canVault?8:15.5):10):wantsWeb?7.5:10;state.grounded=false;jumpBuffer=0;coyote=0;landingCooldown=.55;
-        if(wantsWeb&&Math.hypot(state.vx,state.vz)<8){state.vx=dx*8;state.vz=dz*8;}state.traversalPhase='launch';
+      const webLaunch=!!swingRequest&&swingRequestTime>0&&releaseDelay<=0&&landingCooldown===0&&lineClear(hand(state),swingRequest);
+      if((jumpBuffer>0||webLaunch)&&!input.brake){
+        state.verticalSpeed=webLaunch?(state.roofIndex===null?15.5:7.5):10;state.grounded=false;jumpBuffer=0;coyote=0;landingCooldown=.55;
+        if(webLaunch&&Math.hypot(state.vx,state.vz)<8){state.vx=dx*8;state.vz=dz*8;}state.traversalPhase='launch';
       }
     }else if(jumpBuffer>0&&(state.anchor||state.wallContact||coyote>0)){
+      clearSwingRequest();
       if(state.wallContact){const n=state.wallContact;state.vx+=n.nx*6;state.vz+=n.nz*6;state.verticalSpeed=Math.max(state.verticalSpeed,8);wallBudget=0;wallGrace=0;state.wallContact=null;}
       else if(state.anchor){const speed=Math.hypot(state.vx,state.vz)||1;state.vx+=state.vx/speed*3;state.vz+=state.vz/speed*3;state.verticalSpeed=Math.min(15,Math.max(state.verticalSpeed,0)+4);detach();releaseDelay=.32;}
       else state.verticalSpeed=10;
       jumpBuffer=0;coyote=0;state.traversalPhase='launch';
     }
-    if(state.anchor){
-      attachedAge+=dt;swingLowY=Math.min(swingLowY,state.y);
-      const a=state.anchor,dx=a.x-state.x,dz=a.z-state.z,ahead=dx*fx+dz*fz,turnAway=state.vx*dx+state.vz*dz< -10;
-      const clearance=state.y-groundAt(state.x,state.z).height;
-      // Passing the anchor or a timer is not a reason to drop a low player.
-      // Keep supporting the arc until a real upswing has gained clearance, and
-      // use another visible attachment; above 12 m an upswing may also coast
-      // ballistically while searching. A stalled recovery always needs a point.
-      const safeUpswing=clearance>=8&&state.verticalSpeed>1.8&&state.y-swingLowY>=2;
-      const safeRecovery=clearance>=7&&attachedAge>2&&state.speed<5&&state.verticalSpeed> -2;
-      if(wantsWeb&&attachedAge>.6&&(safeUpswing&&(ahead< -1.5||turnAway)||safeRecovery)){
-        let nextAnchor=findAnchor(a);
-        // A facade directly ahead can hide every point in the narrow forward
-        // cone. Look along its sides before giving up; all candidates still
-        // use building edges and the same line-of-sight test.
-        if(safeRecovery&&!nextAnchor)for(const turn of[.4,-.4,.8,-.8,1.2,-1.2]){nextAnchor=findAnchor(a,state.yaw+turn);if(nextAnchor)break;}
-        if(nextAnchor||safeUpswing&&clearance>=12){
-          if(safeRecovery&&nextAnchor&&intent.magnitude<.05){
-            let x=nextAnchor.x-state.x,z=nextAnchor.z-state.z,length=Math.hypot(x,z)||1;x/=length;z/=length;
-            if(state.wallContact){const n=state.wallContact,dot=x*n.nx+z*n.nz;if(dot<.3){x+=n.nx*(.3-dot);z+=n.nz*(.3-dot);}}
-            length=Math.hypot(x,z)||1;recoveryDirection={x:x/length,z:z/length};recoveryTime=.85;
-          }
-          detach();state.candidateAnchor=nextAnchor;candidateClock=.18;releaseDelay=.10;
-        }
-      }
-    }
+    if(state.anchor)attachedAge+=dt;
     if(zipBuffer>0&&startZip())zipBuffer=0;
-    if(!state.anchor&&!state.grounded&&!state.zipActive&&releaseDelay<=0&&wantsWeb&&state.candidateAnchor)attach(state.candidateAnchor);
+    if(!state.anchor&&!state.grounded&&!state.zipActive&&state.pointPhase!=='approach'&&state.pointPhase!=='perch'&&releaseDelay<=0&&wantsWeb&&swingRequest&&swingRequestTime>0){
+      const requested=swingRequest;clearSwingRequest();attach(requested);
+    }
+    chainHeld=wantsWeb&&!!state.anchor;
     if(state.zipActive){
       if(!state.zipAnchors.every(a=>lineClear(hand(state),a))||state.grounded){stopZip();state.blockedReason='前冲蛛丝被障碍挡住';}
       else{zipAge+=dt;state.zipProgress=clamp(zipAge/.28,0,1);state.zipStrength=Math.sin(state.zipProgress*Math.PI);
@@ -367,16 +343,16 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     }
     if(!state.grounded){
       state.verticalSpeed-=(G+(state.diving?18:0))*dt;
-      const speed=Math.hypot(state.vx,state.vz),direction=intent.magnitude>.05?intent:{x:speed>2?state.vx/speed:fx,z:speed>2?state.vz/speed:fz,magnitude:wantsWeb?1:0};
+      const speed=Math.hypot(state.vx,state.vz),direction=intent.magnitude>.05?intent:{x:speed>2?state.vx/speed:fx,z:speed>2?state.vz/speed:fz,magnitude:chainHeld?1:0};
       // Direction input changes acceleration rather than overwriting velocity.
       // Coasting without input preserves tangential momentum after releasing.
-      if(direction.magnitude>.05){const along=state.vx*direction.x+state.vz*direction.z,target=state.zipActive?Math.max(speed,26):input.fast?25:wantsWeb?21:17,drive=clamp((target-along)*2.2,-18,wantsWeb?18:12),lateral=state.vx*direction.z-state.vz*direction.x,side=clamp(-lateral*4,-30,30);
+      if(direction.magnitude>.05){const along=state.vx*direction.x+state.vz*direction.z,target=state.zipActive?Math.max(speed,26):input.fast?25:chainHeld?21:17,drive=clamp((target-along)*2.2,-18,chainHeld?18:12),lateral=state.vx*direction.z-state.vz*direction.x,side=clamp(-lateral*4,-30,30);
         let ax=direction.x*drive+direction.z*side,az=direction.z*drive-direction.x*side,ay=0;
         if(state.anchor){const h=hand(state),pivot=state.swingPivot??state.anchor,nx=h.x-pivot.x,ny=h.y-pivot.y,nz=h.z-pivot.z,l2=nx*nx+ny*ny+nz*nz,dot=(ax*nx+az*nz)/(l2||1);ax-=dot*nx;az-=dot*nz; /* Pumping never adds a downward pull. */}
         state.vx+=ax*dt;state.vz+=az*dt;state.verticalSpeed+=ay*dt;
       }
       if(state.diving&&speed>1){const gain=clamp(-state.verticalSpeed*.25,0,4)*dt;state.vx+=state.vx/speed*gain;state.vz+=state.vz/speed*gain;}
-      if(state.wallContact&&wantsWeb&&wallBudget>0){const n=state.wallContact,along=state.vx*n.nx+state.vz*n.nz;if(along<0){state.vx-=along*n.nx;state.vz-=along*n.nz;}if(wallAge>.35&&Math.hypot(state.vx,state.vz)<3){state.vx+=n.nx*4;state.vz+=n.nz*4;state.verticalSpeed=Math.max(state.verticalSpeed,7);wallBudget=0;wallGrace=0;state.wallContact=null;}}
+      if(state.wallContact&&chainHeld&&wallBudget>0){const n=state.wallContact,along=state.vx*n.nx+state.vz*n.nz;if(along<0){state.vx-=along*n.nx;state.vz-=along*n.nz;}}
       const drag=Math.exp(-(input.brake?2.5:.015)*dt);state.vx*=drag;state.vz*=drag;
     }
     const speed=Math.hypot(state.vx,state.vz),limit=Math.max(input.fast?30:26,26+6*Math.max(state.diveBlend,clamp(zipBoostTime/.45,0,1),clamp(pointBoostTime/.45,0,1)));if(speed>limit){state.vx*=limit/speed;state.vz*=limit/speed;}state.verticalSpeed=clamp(state.verticalSpeed,-42,18);

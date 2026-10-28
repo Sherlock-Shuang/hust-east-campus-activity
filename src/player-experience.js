@@ -46,13 +46,13 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   scene.add(models.group); models.group.visible = false;
   const keys = new Set(), held = new Set(), pulses = new Map(), listeners = [];
   let active=false, suspended=false, initialized=false, view='third', yawOffset=0, pitch=.25, distance, drag=null, mouseLook=null,
-    cruise=false, autoSwing=false, liftTarget=null, landing=false, uiElapsed=0, savedNear=camera.near, savedFov=camera.fov, disposed=false, immersive=true, driveImmersive=true, suitView=false, lookHold=0, manualPitch=false, steeringSideways=false, suitAngle=0, suitPitch=.03, suitDistance=3.15;
+    cruise=false, liftTarget=null, landing=false, uiElapsed=0, savedNear=camera.near, savedFov=camera.fov, disposed=false, immersive=true, driveImmersive=true, suitView=false, lookHold=0, manualPitch=false, steeringSideways=false, suitAngle=0, suitPitch=.03, suitDistance=3.15;
   const aimPosition=new THREE.Vector3();
   let comfortableCamera=!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   let lookSensitivity=1,escapeReleaseUntil=0;
   const followPosition = new THREE.Vector3(), lookTarget = new THREE.Vector3();
   const modeNames={walk:'步行探索',scooter:'电动车骑行',helicopter:'直升机探索',roadster:'喷气跑车',hoverboard:'飞行滑板',spider:'蜘蛛侠 · 蛛丝摆荡'};
-  const codes=new Set(['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyQ','KeyE','KeyF','KeyX','KeyG','KeyT','Space','ShiftLeft','ShiftRight','KeyV','KeyC','KeyR','KeyL','Escape']);
+  const codes=new Set(['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyQ','KeyE','KeyF','KeyX','KeyG','KeyT','Space','ShiftLeft','ShiftRight','KeyV','KeyC','KeyL','Escape']);
   // Pause guards every event entry point, including optional host/touch controls.
   const actionEvents=new Set(['keydown','pointerenter','pointerdown','pointermove','mousedown','mousemove','wheel','click','input','change']);
   const on=(el,type,fn,options)=>{if(!el)return;const handler=e=>{if(suspended&&actionEvents.has(type))return;return fn(e);};el.addEventListener(type,handler,options);listeners.push(()=>el.removeEventListener(type,handler,options));};
@@ -62,11 +62,11 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     onChange(locked){clearInput();if(!locked)escapeReleaseUntil=performance.now()+300;updateUI();invalidate();},
     onError(){notify(pointerLock.supported?'暂未锁定鼠标：请先点一下游戏画面，再按 L；仍可直接移动鼠标环视。':'当前浏览器不支持鼠标锁定，仍可移动鼠标环视；在 Chrome 中打开此预览可使用锁定。');},
   });
-  function clearInput(){if(!suspended)motion.clearActionInputs?.();keys.clear();held.clear();pulses.clear();cruise=false;autoSwing=false;liftTarget=null;landing=false;drag=null;mouseLook=null;held.delete('mouse-swing');webAudio.setActive(false);}
+  function clearInput(){if(!suspended)motion.clearActionInputs?.();keys.clear();held.clear();pulses.clear();cruise=false;liftTarget=null;landing=false;drag=null;mouseLook=null;held.delete('mouse-swing');webAudio.setActive(false);}
   function recenter(preserveVehicleCamera=false,smooth=false){mouseLook=null;yawOffset=0;pitch=view==='first'?.04:motion.state.mode==='spider'?.18:motion.state.mode==='hoverboard'?.12:motion.state.mode==='roadster'?.15:.25;distance=undefined;manualPitch=false;lookHold=0;spiderCamera.reset(motion.state);if(smooth)vehicleCamera.recenter(motion.state);else if(!preserveVehicleCamera)vehicleCamera.reset(motion.state,motion.state.yaw);}
   function setImmersive(value){immersive=!!value;document.body.classList.toggle('spider-immersive',active&&motion.state.mode==='spider'&&immersive);document.body.classList.toggle('drive-immersive',active&&['roadster','hoverboard'].includes(motion.state.mode)&&driveImmersive);window.dispatchEvent(new Event('resize'));}
   function stopSuitView(){if(!suitView)return;suitView=false;recenter();updateUI();}
-  function queueJump(){const s=motion.state;autoSwing=false;const freeAir=!['approach','perch'].includes(s.pointPhase)&&!s.grounded&&!s.anchor&&!s.wallContact&&s.airTime>.12;pulses.set(freeAir?'zip':'jump',.12);}
+  function queueJump(){const s=motion.state;const freeAir=!['approach','perch'].includes(s.pointPhase)&&!s.grounded&&!s.anchor&&!s.wallContact&&s.airTime>.12;pulses.set(freeAir?'zip':'jump',.12);}
   function cameraFrame(dt,snap=false){
     const spider=motion.state.mode==='spider';
     const cameraState=suitView?{...motion.state,vx:0,vz:0,speed:0,verticalSpeed:0,grounded:true,anchor:null,candidateAnchor:null,lean:0,zipActive:false,diving:false,pointPhase:'idle',pointTarget:null,trickActive:false,trickBlend:0}:motion.state;
@@ -130,7 +130,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
       const releaseHint=attached?({entry:'接丝过渡',downswing:'下摆蓄速',bottom:'谷底 · 松丝前冲',upswing:'上摆 · 松丝腾高'}[s.swingPhase]||'松丝保留惯性'):'空格起跳 · E 接丝';
       const target=$('web-target-status');
       if(target)target.dataset.state=attached||s.zipActive?'attached':ready?'ready':'searching';
-      let targetLabel=suitView?'移动鼠标环视':s.diving?'松开 X · E 接丝':s.zipActive?'蛛丝前冲 · WASD 控向':attached?`${releaseHint} · 空格弹射`:ready?'按住 E / 左键连续摆荡':s.wallContact?'空格蹬墙跃出':'寻找挂点 · WASD 控向';
+      let targetLabel=suitView?'移动鼠标环视':s.diving?'松开 X · E 接丝':s.zipActive?'蛛丝前冲 · WASD 控向':attached?`${releaseHint} · 松手后重按换点`:ready?'按 E / 左键挂丝':s.wallContact?'空格蹬墙跃出':s.grounded?'空格起跳 / WASD 移动后找挂点':'暂无可见挂点 · 调整方向后重按';
       if(!suitView&&pointBusy)targetLabel=s.pointPhase==='approach'?'接近屋沿时按空格弹射':'空格弹射 · E 接丝';
       else if(!suitView&&s.trickActive)targetLabel='松开 T 收招 · E 接丝';
       updateElement('web-target-label',{textContent:targetLabel});
@@ -141,7 +141,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
       roadster:'WASD 驾驶 · 按住 Q 喷气，松开下落',
       helicopter:'WASD 移动 · Q / E 升降 · 空格悬停',
       hoverboard:'WASD 移动 · Q / E 升降 · Shift 加速',
-      spider:'WASD 控向 · E / 左键摆荡 · 空格起跳',
+      spider:'WASD 控向 · 空格起跳\nE / 左键挂丝 · 松手后重按换点',
     };
     const escapeHint=pointerLock.locked?'Esc 释放，再按退出':'Esc 退出';
     updateElement('player-help',{textContent:`${basics[s.mode]}\n鼠标环视 · L 锁定 · V 切视角 · ${escapeHint}`});
@@ -211,12 +211,10 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(e.code==='Escape'){if(e.repeat)return;if(pointerLock.locked||pointerLock.pending){pointerLock.release();return;}if(performance.now()<escapeReleaseUntil)return;exit();return;}
     if(e.code==='KeyL'){if(!e.repeat){pointerLock.toggle();updateUI();}return;}
     if(e.code==='KeyV'){if(!e.repeat)setView(view==='third'?'first':'third');return;}
-    if(e.code==='KeyG'&&motion.state.mode==='spider'){if(!e.repeat){autoSwing=false;pulses.set('point',.12);}return;}
-    if(e.code==='KeyF'){if(!e.repeat){if(motion.state.mode==='spider'){autoSwing=false;pulses.set('zip',.12);}else toggleFlight();}return;}
+    if(e.code==='KeyG'&&motion.state.mode==='spider'){if(!e.repeat){pulses.set('point',.12);}return;}
+    if(e.code==='KeyF'){if(!e.repeat){if(motion.state.mode==='spider'){pulses.set('zip',.12);}else toggleFlight();}return;}
     if(e.code==='KeyC'){recenter(false,true);return;}
-    if(e.code==='KeyR'&&motion.state.mode==='spider'){if(!e.repeat){autoSwing=!autoSwing;updateUI();}return;}
     if(e.code==='Space'){cruise=false;liftTarget=null;landing=false;if(motion.state.mode==='spider'){if(!e.repeat)queueJump();return;}}
-    if((e.code==='KeyE'||e.code==='KeyX'||e.code==='KeyT')&&motion.state.mode==='spider')autoSwing=false;
     if(e.code==='KeyQ'||e.code==='KeyE'){
       liftTarget=null;landing=false;
       if(e.code==='KeyQ'&&motion.state.mode==='roadster'){
@@ -236,7 +234,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(!active||inputBlocked())return;canvas.focus({preventScroll:true});
     if(e.pointerType==='mouse'){
       const wasLooking=!!mouseLook?.looking;seedMouse(e);mouseLook.looking=wasLooking;
-      if(motion.state.mode==='spider'&&e.button===0&&!suitView){held.add('mouse-swing');autoSwing=false;}
+      if(motion.state.mode==='spider'&&e.button===0&&!suitView){held.add('mouse-swing');}
       return;
     }
     if(drag&&drag.id!==e.pointerId)return;
@@ -259,7 +257,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(active&&pointerLock.locked&&!inputBlocked())applyLook(e.movementX,e.movementY);
   });
   // Pointer Lock guarantees MouseEvents; some engines omit PointerEvents.
-  on(document,'mousedown',e=>{if(pointerLock.locked&&active&&!inputBlocked()&&motion.state.mode==='spider'&&e.button===0&&!suitView){held.add('mouse-swing');autoSwing=false;}});
+  on(document,'mousedown',e=>{if(pointerLock.locked&&active&&!inputBlocked()&&motion.state.mode==='spider'&&e.button===0&&!suitView){held.add('mouse-swing');}});
   on(document,'mouseup',e=>{if(e.button===0)held.delete('mouse-swing');});
   on(canvas,'pointermove',e=>{
     if(!active||inputBlocked()){mouseLook=null;return;}
@@ -290,18 +288,17 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   document.querySelectorAll('[data-player-camera]').forEach(b=>on(b,'click',()=>setView(b.dataset.playerCamera)));
   document.querySelectorAll('[data-player-input]').forEach(b=>{
     const key=b.dataset.playerInput;
-    on(b,'pointerdown',e=>{e.preventDefault();stopSuitView();if(key==='up'&&motion.state.mode==='roadster'&&!armRoadsterJet())return;b.setPointerCapture(e.pointerId);if(key==='jump')queueJump();else if(key==='zip'||key==='point')pulses.set(key,.12);else held.add(key);if(['swing','jump','zip','dive','point','trick'].includes(key))autoSwing=false;if(['brake','back'].includes(key)){cruise=false;liftTarget=null;landing=false;}if(['forward','left','right'].includes(key))landing=false;if(['up','down'].includes(key)){liftTarget=null;landing=false;}});
+    on(b,'pointerdown',e=>{e.preventDefault();stopSuitView();if(key==='up'&&motion.state.mode==='roadster'&&!armRoadsterJet())return;b.setPointerCapture(e.pointerId);if(key==='jump')queueJump();else if(key==='zip'||key==='point')pulses.set(key,.12);else held.add(key);if(['brake','back'].includes(key)){cruise=false;liftTarget=null;landing=false;}if(['forward','left','right'].includes(key))landing=false;if(['up','down'].includes(key)){liftTarget=null;landing=false;}});
     on(b,'pointerup',()=>{held.delete(key);});on(b,'pointercancel',()=>{held.delete(key);});on(b,'lostpointercapture',()=>{held.delete(key);});
     // Pointer release already ends a hold. Only keyboard/assistive activation
     // needs a short pulse; the synthetic click after release must not restart it.
-    on(b,'click',e=>{if(e.detail===0){if(key==='up'&&motion.state.mode==='roadster'&&!armRoadsterJet())return;if(!['swing','reel','jump','zip','dive','point','trick'].includes(key))pulses.set(key,.28);else{if(key==='jump')queueJump();if(key==='zip'||key==='point')pulses.set(key,.12);if(key==='trick')pulses.set('trick',.78);}}if(['swing','jump','zip','dive','point','trick'].includes(key))autoSwing=false;if(['brake','back'].includes(key)){cruise=false;liftTarget=null;landing=false;}if(['forward','left','right'].includes(key))landing=false;if(['up','down'].includes(key)){liftTarget=null;landing=false;}});
+    on(b,'click',e=>{if(e.detail===0){if(key==='up'&&motion.state.mode==='roadster'&&!armRoadsterJet())return;if(!['swing','reel','jump','zip','dive','point','trick'].includes(key))pulses.set(key,.28);else{if(key==='jump')queueJump();if(key==='zip'||key==='point')pulses.set(key,.12);if(key==='trick')pulses.set('trick',.78);}}if(['brake','back'].includes(key)){cruise=false;liftTarget=null;landing=false;}if(['forward','left','right'].includes(key))landing=false;if(['up','down'].includes(key)){liftTarget=null;landing=false;}});
   });
   on($('player-side-view'),'click',()=>{mouseLook=null;setView('third');yawOffset=.95;pitch=motion.state.mode==='hoverboard'?.22:.28;manualPitch=true;lookHold=4;spiderCamera.rotate(.95);const delta=motion.state.yaw+.95-vehicleCamera.heading;vehicleCamera.rotate(Math.atan2(Math.sin(delta),Math.cos(delta)));distance=motion.state.mode==='hoverboard'?8.8:motion.state.mode==='spider'?5.2:9.4;cameraFrame(0,motion.state.mode==='spider');});
   on($('exit-player'),'click',exit);on($('player-recenter'),'click',()=>{recenter(false,true);canvas.focus({preventScroll:true});});
   on($('walk-controls'),'click',()=>{const expanded=$('player-hud').classList.toggle('walk-controls-open');$('walk-controls').setAttribute('aria-expanded',String(expanded));$('walk-controls').textContent=expanded?'收起操作':'展开操作';});
   on($('player-cruise'),'click',()=>{cruise=!cruise;canvas.focus({preventScroll:true});updateUI();});
   on($('player-flight-toggle'),'click',toggleFlight);
-  on($('player-auto-swing'),'click',()=>{stopSuitView();autoSwing=!autoSwing;cruise=false;updateUI();});
   on($('web-immersive'),'click',()=>{setImmersive(!immersive);updateUI();});
   on($('web-controls'),'click',()=>{const open=$('player-hud').classList.toggle('controls-open');$('web-controls').setAttribute('aria-expanded',String(open));});
   on($('web-suit'),'click',()=>{const next=!suitView;clearInput();suitView=next;setView('third');suitAngle=motion.state.yaw+Math.PI+.28;suitPitch=.03;suitDistance=3.15;spiderCamera.reset(motion.state,suitView?suitAngle:motion.state.yaw);updateUI();cameraFrame(0,true);});
@@ -371,7 +368,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     motion.step(dt,{forward:board&&landing?0:forward,turn:board&&landing?0:-sideways,vertical,lift:car?Math.max(0,vertical):undefined,brake:brake||landing&&!board,
       altitudeTarget:board&&landing?motion.groundAt(motion.state.x,motion.state.z).height:board&&liftTarget!==null?liftTarget:undefined,fast:pressed('fast','ShiftLeft','ShiftRight'),
       ...(spider?{moveX,moveZ,aimYaw:heading}:{}),
-      swing:spider&&(pressed('swing','KeyE')||held.has('mouse-swing')),jump:spider&&pressed('jump','Space'),zip:spider&&pressed('zip'),dive:spider&&pressed('dive','KeyX'),point:spider&&pressed('point'),trick:spider&&pressed('trick','KeyT'),trickX:sideways,trickY:forward,reel:spider&&pressed('reel','KeyQ'),autoSwing:spider&&autoSwing});
+      swing:spider&&(pressed('swing','KeyE')||held.has('mouse-swing')),jump:spider&&pressed('jump','Space'),zip:spider&&pressed('zip'),dive:spider&&pressed('dive','KeyX'),point:spider&&pressed('point'),trick:spider&&pressed('trick','KeyT'),trickX:sideways,trickY:forward,reel:spider&&pressed('reel','KeyQ')});
     webAudio.setActive(spider);if(spider)webAudio.tick(motion.state);
     pulses.forEach((v,k)=>{if(v<=dt)pulses.delete(k);else pulses.set(k,v-dt);});
     models.update({...motion.state,view},dt);models.group.visible=view==='third'||motion.state.mode==='spider';cameraFrame(dt);

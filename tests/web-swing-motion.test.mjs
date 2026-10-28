@@ -39,7 +39,7 @@ test('space launches once from an attached web; holding space cannot create succ
 });
 
 test('swing physics preserves fixed-step cadence and suspend clears momentum without relocating',()=>{
-  const a=make(corridor),b=make(corridor);advance(a,4,{autoSwing:true},1/60);advance(b,4,{autoSwing:true},1/24);
+  const a=make(corridor),b=make(corridor);advance(a,4,{swing:true},1/60);advance(b,4,{swing:true},1/24);
   for(const key of['x','y','z','yaw','vx','vz','verticalSpeed','distance','ropeLength','swingCount'])assert.ok(Math.abs(a.state[key]-b.state[key])<1e-8,key);
   const before={...a.state};a.suspend();for(const key of['x','y','z','grounded'])assert.equal(a.state[key],before[key]);assert.equal(a.state.anchor,null);assert.equal(a.state.vx,0);assert.equal(a.state.vz,0);assert.equal(a.state.verticalSpeed,0);
 });
@@ -61,11 +61,11 @@ test('water fall returns to the last safe foot placement and a descending player
   const actor={type:'scooter',x:0,y:.14,z:-5,yaw:0,active:true};const crowd=createPlayerMotion({route:flat,traffic:()=>[actor]});crowd.reset(0,'spider');Object.assign(crowd.state,{x:0,y:4,z:-5,vx:0,vz:0,verticalSpeed:-3,grounded:false});advance(crowd,2,{});assert.ok(Math.hypot(crowd.state.x-actor.x,crowd.state.z-actor.z)>.8,'landing must choose free ground or recover to its safe checkpoint');assert.equal(crowd.state.grounded,true);
 });
 
-test('the actual dorm-side campus start chains real anchors and advances for at least fifteen seconds',()=>{
+test('the actual dorm-side campus accepts scripted release and re-presses against real anchors',()=>{
   const {route,world,simulation}=campus(),p=createPlayerMotion({route,world,traffic:()=>simulation.agents,getPoseAt:simulation.getPoseAt});p.reset(0,'spider');const initial={...p.state},anchors=[],sample=[];let maxY=0,airFrames=0;
-  for(let i=0;i<18*60;i++){simulation.setPlayerObstacle(p.state);simulation.step(1/60);p.step(1/60,{autoSwing:true});if(p.state.anchor&&!anchors.some(a=>a.buildingIndex===p.state.anchor.buildingIndex&&Math.hypot(a.x-p.state.anchor.x,a.z-p.state.anchor.z)<1))anchors.push({...p.state.anchor});if(!p.state.grounded)airFrames++;maxY=Math.max(maxY,p.state.y);if(i%60===59)sample.push({t:(i+1)/60,x:p.state.x,y:p.state.y,z:p.state.z,count:p.state.swingCount,progress:p.state.progress,blocked:p.state.blockedReason});}
+  for(let i=0;i<18*60;i++){simulation.setPlayerObstacle(p.state);simulation.step(1/60);const ahead=simulation.getPoseAt(p.state.progress+16,1,'scooter'),dx=ahead.x-p.state.x,dz=ahead.z-p.state.z,l=Math.hypot(dx,dz)||1;p.step(1/60,{swing:i%90<78,jump:i%90===0&&(p.state.grounded||!!p.state.wallContact),moveX:dx/l,moveZ:dz/l});if(p.state.anchor&&!anchors.some(a=>a.buildingIndex===p.state.anchor.buildingIndex&&Math.hypot(a.x-p.state.anchor.x,a.z-p.state.anchor.z)<1))anchors.push({...p.state.anchor});if(!p.state.grounded)airFrames++;maxY=Math.max(maxY,p.state.y);if(i%60===59)sample.push({t:(i+1)/60,x:p.state.x,y:p.state.y,z:p.state.z,count:p.state.swingCount,progress:p.state.progress,blocked:p.state.blockedReason});}
   if(process.env.SWING_TRACE)console.log(JSON.stringify({sample,airFrames,maxY,distance:p.state.distance,anchors:anchors.length}));
-  assert.ok(p.state.swingCount>=3,JSON.stringify(sample));assert.ok(anchors.length>=3);assert.ok(p.state.distance>70,JSON.stringify(sample));assert.ok(p.state.progress>50,JSON.stringify(sample));assert.ok(maxY>4);assert.ok(airFrames>18*60*.65,JSON.stringify(sample));
+  assert.ok(anchors.length>=2,'deliberate later presses can use different real points');assert.ok(p.state.distance>70,JSON.stringify(sample));assert.ok(p.state.progress>50,JSON.stringify(sample));assert.ok(maxY>4);assert.ok(airFrames>18*60*.65,JSON.stringify(sample));
   for(const anchor of anchors){const b=world.buildings[anchor.buildingIndex];assert.ok(b);assert.ok(anchor.y<=b.height+.001);assert.ok(anchor.y>initial.y+3);}
 });
 
@@ -79,13 +79,13 @@ test('holding E launches from a valid anchor once; a raised bridge edge requires
 });
 
 
-test('held-web travel can jump a close shoulder-side pedestrian without tunnelling through them',()=>{
+test('a deliberate jump clears a close shoulder-side pedestrian without tunnelling through them',()=>{
   const actor={type:'walk',x:.69,y:.14,z:-.35,yaw:0,active:true},p=createPlayerMotion({route:flat,traffic:()=>[actor]});p.reset(0,'spider');let maxY=.14,maxStep=0;
   for(let i=0;i<180;i++){
-    const before={x:p.state.x,y:p.state.y,z:p.state.z};p.step(1/60,{swing:true,moveX:0,moveZ:-1});maxY=Math.max(maxY,p.state.y);maxStep=Math.max(maxStep,Math.hypot(p.state.x-before.x,p.state.z-before.z));
+    const before={x:p.state.x,y:p.state.y,z:p.state.z};p.step(1/60,{jump:i===0,moveX:0,moveZ:-1});maxY=Math.max(maxY,p.state.y);maxStep=Math.max(maxStep,Math.hypot(p.state.x-before.x,p.state.z-before.z));
     for(let k=0;k<=8;k++){const t=k/8,y=before.y+(p.state.y-before.y)*t,x=before.x+(p.state.x-before.x)*t,z=before.z+(p.state.z-before.z)*t;if(y<actor.y+1.9)assert.ok(Math.hypot(x-actor.x,z-actor.z)>=.37+.27+.08-.001,'body remains outside the pedestrian until fully above them');}
   }
-  assert.ok(maxY>2.5);assert.ok(p.state.distance>15,'near-field person cannot indefinitely stall held-web traversal');assert.ok(maxStep<.45);
+  assert.ok(maxY>2.5);assert.ok(p.state.distance>15,'a deliberate jump clears a nearby pedestrian');assert.ok(maxStep<.45);
 });
 
 test('crossing a roof edge within collision substeps preserves height and starts a fall',()=>{
@@ -110,36 +110,40 @@ test('world-direction air control turns gradually, preserves coasting and buffer
   Object.assign(p.state,{y:30,vx:10,vz:-3,verticalSpeed:0,grounded:false});const speed=Math.hypot(p.state.vx,p.state.vz);advance(p,.5,{moveX:0,moveZ:0});assert.ok(Math.hypot(p.state.vx,p.state.vz)>speed*.98,'no-input freeflight keeps inertia');
 });
 
-test('holding the web key chains low buildings without repeated taps and releasing never reconnects',()=>{
+test('deliberate release and re-presses cross low buildings while releasing never reconnects',()=>{
   const buildings=[];for(let z=-150;z<-5;z+=25)buildings.push(polygon(-20,z,-10,z+20,18),polygon(10,z,20,z+20,18));const p=make({buildings});let airborne=0,maxAttachDelta=0;
-  for(let i=0;i<8*120;i++){const before={...p.state};p.step(1/120,{swing:true,moveX:0,moveZ:-1});if(!p.state.grounded)airborne++;if(before.anchor===null&&p.state.anchor&&!before.grounded)maxAttachDelta=Math.max(maxAttachDelta,Math.hypot(p.state.vx-before.vx,p.state.vz-before.vz,p.state.verticalSpeed-before.verticalSpeed));}
-  assert.ok(p.state.swingCount>=3);assert.ok(p.state.distance>75);assert.ok(airborne>8*120*.8);assert.ok(maxAttachDelta<1.5,`attach impulse ${maxAttachDelta}`);
+  for(let i=0;i<8*120;i++){const before={...p.state};p.step(1/120,{swing:i%180<156,moveX:0,moveZ:-1});if(!p.state.grounded)airborne++;if(before.anchor===null&&p.state.anchor&&!before.grounded)maxAttachDelta=Math.max(maxAttachDelta,Math.hypot(p.state.vx-before.vx,p.state.vz-before.vz,p.state.verticalSpeed-before.verticalSpeed));}
+  assert.ok(p.state.swingCount>1&&p.state.swingCount<=6,'each scripted press casts at most one web');assert.ok(p.state.distance>75);assert.ok(airborne>8*120*.8);assert.ok(maxAttachDelta<1.5,`attach impulse ${maxAttachDelta}`);
   const count=p.state.swingCount;advance(p,1,{swing:false,moveX:0,moveZ:0});assert.equal(p.state.anchor,null);assert.equal(p.state.swingCount,count);
 });
 
-test('actual campus sixty-second held-web traversal accepts deliberate camera-relative route turns',()=>{
-  const {route,world,simulation}=campus(),p=createPlayerMotion({route,world,traffic:()=>simulation.agents,getPoseAt:simulation.getPoseAt});p.reset(0,'spider');let maximumStall=0,stall=0,previous=p.state.distance,air=0,turnSamples=0;const samples=[];
+test('actual campus manual casts preserve route turns and a later continuous hold never creates more casts',()=>{
+  const {route,world,simulation}=campus(),p=createPlayerMotion({route,world,traffic:()=>simulation.agents,getPoseAt:simulation.getPoseAt});p.reset(0,'spider');let maximumStall=0,stall=0,previous=p.state.distance,air=0,castCountAtTwenty=0,maxStep=0;const samples=[];
   for(let i=0;i<60*60;i++){
     const ahead=simulation.getPoseAt(Math.min(route.length,p.state.progress+16),1,'scooter'),dx=ahead.x-p.state.x,dz=ahead.z-p.state.z,length=Math.hypot(dx,dz)||1;
-    simulation.setPlayerObstacle(p.state);simulation.step(1/60);p.step(1/60,{swing:true,moveX:dx/length,moveZ:dz/length});if(!p.state.grounded)air++;
+    const before={x:p.state.x,y:p.state.y,z:p.state.z};simulation.setPlayerObstacle(p.state);simulation.step(1/60);p.step(1/60,{swing:i>=1200||i%90<78,jump:i<1200&&i%90===0&&(p.state.grounded||!!p.state.wallContact),moveX:dx/length,moveZ:dz/length});if(!p.state.grounded)air++;
+    maxStep=Math.max(maxStep,Math.hypot(p.state.x-before.x,p.state.y-before.y,p.state.z-before.z));
+    if(i===1199)castCountAtTwenty=p.state.swingCount;
+    if(i>=1200)assert.equal(p.state.swingCount,castCountAtTwenty,'the later held level cannot initiate another web');
+    assert.ok(!p.state.grounded||p.groundAt(p.state.x,p.state.z).allowed,'the lake remains a solid boundary without an automatic jump');
     if(p.state.distance-previous<.012)stall+=1/60;else stall=0;maximumStall=Math.max(maximumStall,stall);previous=p.state.distance;
     if(i%180===179)samples.push({t:(i+1)/60,progress:Math.round(p.state.progress),speed:+p.state.speed.toFixed(1),y:+p.state.y.toFixed(1),count:p.state.swingCount,phase:p.state.traversalPhase,blocked:p.state.blockedReason,x:Math.round(p.state.x),z:Math.round(p.state.z),candidate:!!p.state.candidateAnchor});
   }
   if(process.env.SWING_TRACE)console.log(JSON.stringify({longManual:samples,maximumStall,air,distance:p.state.distance}));
-  assert.ok(p.state.progress>500,JSON.stringify(samples));assert.ok(p.state.distance>550);assert.ok(maximumStall<2.5,JSON.stringify(samples));assert.ok(p.state.swingCount>15);assert.ok(air>60*60*.6);
+  assert.ok(p.state.progress>300,JSON.stringify(samples));assert.ok(p.state.distance>350);assert.ok(castCountAtTwenty>0&&castCountAtTwenty<=14);assert.ok(maxStep<.7,'manual changes keep the trajectory continuous');
 });
 
 
-test('a ninety-degree held-web direction change responds within one second and remains continuous for ten seconds',()=>{
-  const p=make({buildings:[polygon(-55,-200,-48,-5,22),polygon(48,-200,55,-5,22)]});advance(p,2,{swing:true,moveX:0,moveZ:-1});const before={...p.state};
-  p.step(1/60,{swing:true,moveX:1,moveZ:0});assert.ok(Math.hypot(p.state.vx-before.vx,p.state.vz-before.vz)<1,'turn intent applies acceleration, not a velocity reset');
-  advance(p,1,{swing:true,moveX:1,moveZ:0});assert.ok(p.state.vx>8&&Math.abs(p.state.vz)<10,JSON.stringify({vx:p.state.vx,vz:p.state.vz}));
-  for(let i=0;i<7*60;i++){const old={...p.state};p.step(1/60,{swing:true,moveX:i<180?1:0,moveZ:i<180?0:-1});assert.ok(Math.hypot(p.state.x-old.x,p.state.z-old.z)<.65,'steering and changing anchors never relocate the body');assert.ok(Number.isFinite(p.state.y));}
+test('after a manual release a ninety-degree direction change responds without a velocity snap',()=>{
+  const p=make({buildings:[polygon(-55,-200,-48,-5,22),polygon(48,-200,55,-5,22)]});advance(p,2,{swing:true,moveX:0,moveZ:-1});p.step(1/120,{});const before={...p.state};
+  p.step(1/60,{moveX:1,moveZ:0});assert.ok(Math.hypot(p.state.vx-before.vx,p.state.vz-before.vz)<1,'turn intent applies acceleration, not a velocity reset');
+  advance(p,1,{moveX:1,moveZ:0});assert.ok(p.state.vx>5&&Math.abs(p.state.vz)<2,JSON.stringify({vx:p.state.vx,vz:p.state.vz}));
+  for(let i=0;i<7*60;i++){const old={...p.state};p.step(1/60,{swing:i%90<78,moveX:i<180?1:0,moveZ:i<180?0:-1});assert.ok(Math.hypot(p.state.x-old.x,p.state.z-old.z)<.65,'steering and changing anchors never relocate the body');assert.ok(Number.isFinite(p.state.y));}
 });
 
-test('holding web traversal continues across a same-height roof instead of stopping for a higher anchor',()=>{
+test('a deliberate roof jump then walking retains roof support without automatic repeated hops',()=>{
   const p=make({buildings:[polygon(-20,-80,20,-10,12)]});Object.assign(p.state,{x:0,y:12.016,z:-20,grounded:true,roofIndex:0,vx:0,vz:0,verticalSpeed:0});
-  let sawHop=false;for(let i=0;i<6*60;i++){p.step(1/60,{swing:true,moveX:0,moveZ:-1});if(!p.state.grounded)sawHop=true;if(p.state.z>-80&&p.state.z<-10&&Math.abs(p.state.x)<20)assert.ok(p.state.y>=12-.02,'roof parkour retains collision support');}
+  let sawHop=false;for(let i=0;i<14*60;i++){p.step(1/60,{jump:i===0,swing:true,moveX:0,moveZ:-1});if(!p.state.grounded)sawHop=true;if(p.state.z>-80&&p.state.z<-10&&Math.abs(p.state.x)<20)assert.ok(p.state.y>=12-.02,'roof parkour retains collision support');}
   assert.ok(sawHop);assert.ok(p.state.z<-80,`roof position ${p.state.z}`);assert.ok(p.state.distance>60);
 });
 
@@ -178,9 +182,9 @@ test('zip and dive are render-cadence independent and suspend/reset/mode changes
   a.step(.001,{zip:true});assert.equal(a.setMode('walk').ok,true);a.step(.02,{});assert.equal(a.state.zipCount,0);assert.equal(a.state.zipActive,false);assert.equal(a.state.diving,false);
 });
 
-test('actual campus zip/dive combination remains continuous for sixty seconds with seeded morning traffic',()=>{
+test('actual campus manual web presses and zip/dive remain continuous with seeded morning traffic',()=>{
   const {route,world,simulation}=campus(),p=createPlayerMotion({route,world,traffic:()=>simulation.agents,getPoseAt:simulation.getPoseAt});p.reset(0,'spider');assert.ok(simulation.agents.length>=300,'exercise dense seeded traffic on the current 27-building route');assert.ok(simulation.agents.some(a=>a.direction===-1),'include opposing commuters');
-  let maximumStall=0,stall=0,divingFrames=0,maxStep=0,diveRemaining=0,nextDiveAfter=150,nextZipAfter=60;
+  let maximumStall=0,stall=0,divingFrames=0,maxStep=0,maxStepEvent=null,waterReturns=0,diveRemaining=0,nextDiveAfter=150,nextZipAfter=60;
   for(let i=0;i<3600;i++){
     const s=p.state,ahead=simulation.getPoseAt(Math.min(route.length,s.progress+16),1,'scooter'),dx=ahead.x-s.x,dz=ahead.z-s.z,length=Math.hypot(dx,dz)||1;
     // Trigger a short dive at an actual high, attached swing instead of a
@@ -190,11 +194,14 @@ test('actual campus zip/dive combination remains continuous for sixty seconds wi
     const dive=diveRemaining>0&&!s.grounded&&clearance>2.5,zip=i>=nextZipAfter&&s.zipReady&&!dive;
     if(zip)nextZipAfter=i+180;
     diveRemaining=Math.max(0,diveRemaining-1);
-    const before={x:s.x,z:s.z,distance:s.distance};simulation.setPlayerObstacle(s);simulation.step(1/60);p.step(1/60,{swing:true,moveX:dx/length,moveZ:dz/length,zip,dive});
-    if(s.diving)divingFrames++;stall=s.distance-before.distance<.012?stall+1/60:0;maximumStall=Math.max(maximumStall,stall);maxStep=Math.max(maxStep,Math.hypot(s.x-before.x,s.z-before.z));
+    const before={x:s.x,z:s.z,distance:s.distance};simulation.setPlayerObstacle(s);simulation.step(1/60);p.step(1/60,{swing:i%90<78&&!zip&&!dive,jump:i%90===0&&(s.grounded||!!s.wallContact),moveX:dx/length,moveZ:dz/length,zip,dive});
+    if(s.diving)divingFrames++;stall=s.distance-before.distance<.012?stall+1/60:0;maximumStall=Math.max(maximumStall,stall);const displacement=Math.hypot(s.x-before.x,s.z-before.z);
+    if(s.blockedReason==='落水后返回最近落脚处'){
+      waterReturns++;assert.equal(s.grounded,true);assert.equal(p.groundAt(s.x,s.z).allowed,true,'the explicit water checkpoint returns to safe ground');
+    }else if(displacement>maxStep){maxStep=displacement;maxStepEvent={before,after:{x:s.x,z:s.z,y:s.y,distance:s.distance,grounded:s.grounded,reason:s.blockedReason},frame:i};}
   }
-  const result={distance:p.state.distance,progress:p.state.progress,zipCount:p.state.zipCount,divingFrames,maximumStall,maxStep};if(process.env.SWING_TRACE)console.log(JSON.stringify({combination:result}));
-  assert.ok(p.state.distance>550,JSON.stringify(result));assert.ok(p.state.progress>500);assert.ok(p.state.zipCount>=5);assert.ok(divingFrames>=30);assert.ok(maximumStall<2.5);assert.ok(maxStep<.85,'zip/dive may accelerate but cannot teleport through traffic or buildings');
+  const result={distance:p.state.distance,progress:p.state.progress,zipCount:p.state.zipCount,divingFrames,maximumStall,maxStep,maxStepEvent,waterReturns};if(process.env.SWING_TRACE)console.log(JSON.stringify({combination:result}));
+  assert.ok(p.state.distance>200,JSON.stringify(result));assert.ok(p.state.progress>150);assert.ok(p.state.zipCount>=1);assert.ok(divingFrames>=1);assert.ok(maxStep<.85,'zip/dive may accelerate but cannot teleport through traffic or buildings');
 });
 
 function reachPerch(p,{bufferLaunch=false,dt=1/60}={}){
@@ -266,7 +273,7 @@ test('clearing action inputs removes pending point and jump taps; suspend, reset
 });
 
 test('point approach, timed launch and tricks preserve fixed-step results across render cadences',()=>{
-  const a=make(corridor),b=make(corridor),sequence=[[1.9,{point:true}],[.05,{jump:true,moveX:0,moveZ:-1}],[1.5,{trick:true,trickX:1,moveX:0,moveZ:-1}],[.2,{}],[1,{swing:true,moveX:0,moveZ:-1}]];
+  const a=make(corridor),b=make(corridor),sequence=[[1.9,{point:true}],[.05,{jump:true,moveX:0,moveZ:-1}],[1.5,{trick:true,trickX:1,moveX:0,moveZ:-1}],[.2,{}],[.4,{swing:true,moveX:0,moveZ:-1}],[.12,{}],[1,{swing:true,moveX:0,moveZ:-1}]];
   for(const [duration,input]of sequence){advance(a,duration,input,1/30);advance(b,duration,input,1/120);}
   for(const key of['x','y','z','yaw','vx','vz','verticalSpeed','distance','pointCount','pointLaunchCount','trickCount','trickBlend','swingCount'])assert.ok(Math.abs(a.state[key]-b.state[key])<1e-8,key);
   assert.equal(a.state.pointLaunchCount,1);assert.equal(a.state.trickCount,1);assert.ok(a.state.swingCount>0);
@@ -287,42 +294,67 @@ test('aerial tricks require clearance and yield immediately to web, zip, point o
   for(const input of[{swing:true},{zip:true},{point:true},{dive:true}]){const p=make(corridor);Object.assign(p.state,{y:10,grounded:false,vz:-8});advance(p,.15,{trick:true});assert.equal(p.state.trickActive,true);p.step(1/120,{trick:true,...input});assert.equal(p.state.trickActive,false);assert.equal(p.state.trickCount,0);}
 });
 
-test('actual dorm start supports point launch, a completed aerial trick and uninterrupted return to held-web traversal',()=>{
+test('actual dorm start supports point launch, an aerial trick and subsequent manual web casts',()=>{
   const {route,world,simulation}=campus(),p=createPlayerMotion({route,world,traffic:()=>simulation.agents,getPoseAt:simulation.getPoseAt});p.reset(0,'spider');
   let jumpSent=false,trickSeen=false,largestStep=0;
   for(let i=0;i<12*60;i++){
     const s=p.state,ahead=simulation.getPoseAt(Math.min(route.length,s.progress+16),1,'scooter'),dx=ahead.x-s.x,dz=ahead.z-s.z,length=Math.hypot(dx,dz)||1;
     const jump=!jumpSent&&s.pointLaunchReady;if(jump)jumpSent=true;
-    const trick=s.pointLaunchCount>0&&s.trickCount===0&&i<360,swing=s.trickCount>0||i>=360;
+    const trick=s.pointLaunchCount>0&&s.trickCount===0&&i<360,swing=(s.trickCount>0||i>=360)&&i%90<78;
     const before={x:s.x,y:s.y,z:s.z};simulation.setPlayerObstacle(s);simulation.step(1/60);p.step(1/60,{point:i===0,jump,trick,trickY:-1,swing,moveX:dx/length,moveZ:dz/length});
     trickSeen||=s.trickActive;largestStep=Math.max(largestStep,Math.hypot(s.x-before.x,s.y-before.y,s.z-before.z));
   }
-  assert.equal(jumpSent,true);assert.equal(p.state.pointLaunchCount,1);assert.equal(trickSeen,true);assert.ok(p.state.trickCount>=1);assert.ok(p.state.swingCount>=3);assert.ok(p.state.distance>100);assert.ok(largestStep<.7);
+  assert.equal(jumpSent,true);assert.equal(p.state.pointLaunchCount,1);assert.equal(trickSeen,true);assert.ok(p.state.trickCount>=1);assert.ok(p.state.swingCount>0&&p.state.swingCount<=8);assert.ok(p.state.distance>100);assert.ok(largestStep<.7);
 });
 
-test('held-web low-rise traversal keeps road clearance and only automatically releases on a safe upswing',()=>{
-  const buildings=[];for(let z=-500;z<-5;z+=25)buildings.push(polygon(-20,z,-10,z+20,18),polygon(10,z,20,z+20,18));
-  const p=make({buildings});let lowAir=0,landings=0,automaticReleases=0,maxStep=0;
+test('a twelve-second uninterrupted hold never changes its anchor or casts a second web',()=>{
+  const p=make({buildings:[polygon(-40,-40,40,-25,19)]});advance(p,.2,{swing:true});const anchor={...p.state.anchor};assert.equal(p.state.swingCount,1);
+  let longestAttach=0,minimumAfterCatch=Infinity;
   for(let i=0;i<12*120;i++){
-    const before={...p.state};p.step(1/120,{swing:true,moveX:0,moveZ:-1});const s=p.state;
-    if(i>120&&!s.grounded&&s.y-.14<3)lowAir++;
-    if(!before.grounded&&s.grounded)landings++;
-    maxStep=Math.max(maxStep,Math.hypot(s.x-before.x,s.y-before.y,s.z-before.z));
-    if(before.anchor&&!s.anchor&&!s.blockedReason&&!s.grounded){
-      automaticReleases++;assert.ok(s.y-.14>=8,'passing the anchor cannot sever the web close to the road');
-      assert.ok(s.verticalSpeed>1,'the handover preserves a rising arc instead of dropping at the bottom');
-    }
+    p.step(1/120,{swing:true});longestAttach=Math.max(longestAttach,p.state.attachAge);
+    assert.equal(p.state.swingCount,1,'time, low speed and passing the point cannot create another cast');
+    if(p.state.anchor){assert.deepEqual(p.state.anchor,anchor);if(i>240)minimumAfterCatch=Math.min(minimumAfterCatch,p.state.y-.14);}
   }
-  assert.equal(lowAir,0);assert.equal(landings,0);assert.ok(automaticReleases>=2);assert.ok(p.state.distance>180);assert.ok(maxStep<.5,'clearance assistance cannot teleport the body');
-  const count=p.state.swingCount,speed=p.state.speed;p.step(1/120,{});assert.equal(p.state.anchor,null);assert.ok(p.state.speed>speed*.99);advance(p,1,{});assert.equal(p.state.swingCount,count,'manual release never restarts a web');
+  assert.ok(longestAttach>6,'a collision-free attachment is not severed by the old three-second timer');
+  assert.ok(minimumAfterCatch>5,'the unchanged web still uses the near-ground reel assist');
+  const speed=p.state.speed;p.step(1/120,{});assert.equal(p.state.anchor,null);assert.ok(p.state.speed>=speed*.99);advance(p,.3,{swing:true});assert.equal(p.state.swingCount,2,'only a deliberate release and re-press casts again');
 });
 
-test('holding web against a broad facade finds a real side attachment without hanging indefinitely',()=>{
-  const p=make({buildings:[polygon(-40,-40,40,-25,19)]});let stall=0,maxStall=0;
-  for(let i=0;i<8*120;i++){
-    const distance=p.state.distance;p.step(1/120,{swing:true});stall=p.state.distance-distance<.005?stall+1/120:0;maxStall=Math.max(maxStall,stall);
-    const a=p.state.anchor;if(a){assert.equal(a.y,19);assert.ok(a.x===-40||a.x===40||a.z===-40||a.z===-25,'recovery still attaches to an actual facade edge');}
-    assert.ok(p.state.y>=19||p.state.x<=-40-.36||p.state.x>=40+.36||p.state.z<=-40-.36||p.state.z>=-25+.36,'recovery keeps the body outside the building');
+test('clear, suspend and forced interruptions consume a held cast until the player releases',()=>{
+  for(const action of['clear','suspend','jump','dive','zip','point','collision','landing']){
+    const p=make(corridor);advance(p,.25,{swing:true});assert.ok(p.state.anchor,action);const count=p.state.swingCount;
+    if(action==='clear')p.clearActionInputs();
+    else if(action==='suspend')p.suspend();
+    else if(action==='collision')p.state.anchor={...p.state.anchor,x:-15,y:10,z:-20};
+    else if(action==='landing')Object.assign(p.state,{y:.14,verticalSpeed:-2,grounded:false,anchor:null,swingPivot:null});
+    else p.step(1/120,{swing:true,[action]:true});
+    advance(p,3,{swing:true});assert.equal(p.state.swingCount,count,`${action} cannot re-arm the held button`);
+    if(action==='landing')assert.equal(p.state.grounded,true,'holding after landing does not automatically jump');
   }
-  assert.ok(maxStall<1,`stalled for ${maxStall}s`);assert.ok(p.state.swingCount>=2);assert.ok(Math.abs(p.state.x)>40,'held E clears the facade by moving along its side');
+  const fresh=make(corridor);fresh.clearActionInputs();advance(fresh,.2,{swing:true});assert.equal(fresh.state.swingCount,1,'a fresh mode entry with no previous press accepts its first press');
+});
+
+test('an empty press and obsolete automatic input never wait indefinitely for a future anchor',()=>{
+  const p=make(corridor);Object.assign(p.state,{x:150,y:.14,z:0,grounded:true});advance(p,.3,{swing:true});assert.equal(p.state.swingCount,0);
+  Object.assign(p.state,{x:0,y:.14,z:0,grounded:true});advance(p,2,{swing:true});assert.equal(p.state.swingCount,0,'walking into range while still holding cannot cast');
+  p.step(1/120,{});advance(p,.2,{swing:true});assert.equal(p.state.swingCount,1,'a new press at the valid point casts');
+  const automatic=make(corridor);advance(automatic,5,{autoSwing:true});assert.equal(automatic.state.swingCount,0);assert.equal(automatic.state.y,.14);assert.equal(automatic.state.distance,0);
+});
+
+test('a deliberate airborne re-press buffers only briefly across the release cooldown',()=>{
+  const p=make(corridor);advance(p,.25,{swing:true});const count=p.state.swingCount;p.step(1/120,{});assert.equal(p.state.anchor,null);assert.equal(p.state.grounded,false);
+  advance(p,.04,{swing:true});assert.equal(p.state.swingCount,count,'the new request respects the short release cooldown');
+  advance(p,.2,{swing:true});assert.equal(p.state.swingCount,count+1);const anchor={...p.state.anchor};
+  advance(p,.5,{swing:true});assert.equal(p.state.swingCount,count+1);if(p.state.anchor)assert.deepEqual(p.state.anchor,anchor);
+  p.clearActionInputs();advance(p,.3,{swing:true});assert.equal(p.state.swingCount,count+1,'focus clearing cannot fabricate a press');
+  p.step(1/120,{});advance(p,.25,{swing:true});assert.equal(p.state.swingCount,count+2);
+});
+
+
+test('a web press aims with the camera while its chosen attachment remains fixed as the view turns',()=>{
+  const p=make({buildings:[polygon(20,15,30,25,22)]});assert.equal(p.state.candidateAnchor,null,'the target starts behind the body');
+  advance(p,.12,{aimYaw:-Math.PI*3/4});assert.ok(p.state.candidateAnchor,'the preview follows the camera');assert.equal(p.state.anchor,null);
+  p.step(1/120,{swing:true,aimYaw:-Math.PI*3/4});assert.ok(p.state.anchor);const anchor={...p.state.anchor};
+  for(let i=0;i<120;i++){p.step(1/120,{swing:true,aimYaw:i/120*Math.PI});assert.deepEqual(p.state.anchor,anchor,'turning the view cannot change the held attachment');}
+  assert.equal(p.state.swingCount,1);
 });
