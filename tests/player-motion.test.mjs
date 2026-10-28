@@ -15,17 +15,17 @@ test('fixed-step movement is independent of render cadence, with forward -Z and 
   advance(a,3,{forward:1,turn:.12},1/60);advance(b,3,{forward:1,turn:.12},1/24);
   for(const field of ['x','y','z','yaw','speed','distance'])assert.ok(Math.abs(a.state[field]-b.state[field])<1e-9,field);
   assert.ok(a.state.x<0&&a.state.z<0&&a.state.yaw>0);
-  assert.equal(a.state.speed,2.2);assert.ok(a.state.distance>4);
-  const before=a.state.distance;a.step(100,{forward:1});assert.ok(a.state.distance-before<=.551,'resuming after a stalled tab cannot jump across campus');
+  assert.equal(a.state.speed,3.2);assert.ok(a.state.distance>7);
+  const before=a.state.distance;a.step(100,{forward:1});assert.ok(a.state.distance-before<=.801,'resuming after a stalled tab cannot jump across campus');
 });
 
 test('walking, scooter acceleration, braking and mode switches preserve player position',()=>{
   const player=createPlayerMotion({route:flat});advance(player,1,{forward:1});
   const before={...player.state};assert.equal(player.setMode('scooter').ok,true);
   assert.equal(player.state.x,before.x);assert.equal(player.state.z,before.z);assert.equal(player.state.speed,0);
-  advance(player,4,{forward:1});assert.equal(player.state.speed,5.5);assert.ok(player.state.distance>15);
-  const stopDistance=player.state.distance;advance(player,1,{brake:true});assert.equal(player.state.speed,0);assert.ok(player.state.distance-stopDistance<2.1);
-  player.setMode('walk');advance(player,1,{forward:1,fast:true});assert.equal(player.state.speed,3.8);
+  advance(player,4,{forward:1});assert.equal(player.state.speed,7.5);assert.ok(player.state.distance>20);
+  const stopDistance=player.state.distance;advance(player,1,{brake:true});assert.equal(player.state.speed,0);assert.ok(player.state.distance-stopDistance<3.2);
+  player.setMode('walk');advance(player,1,{forward:1,fast:true});assert.equal(player.state.speed,5.2);
 });
 
 test('body clearance prevents building and lake penetration and respects polygon holes',()=>{
@@ -46,7 +46,7 @@ test('scooter capsule and world bounds stop both wheels before obstacles',()=>{
 test('bridge ramp contact stays continuous and a raised deck cannot be exited sideways',()=>{
   const route={length:100,points:[{x:0,z:0,y:.16,progress:0},{x:0,z:-20,y:.16,progress:20},{x:0,z:-40,y:2.16,progress:40},{x:0,z:-60,y:2.16,progress:60},{x:0,z:-80,y:.16,progress:80},{x:0,z:-100,y:.16,progress:100}],segments:[{startProgress:0,endProgress:100,width:6}]};
   const player=createPlayerMotion({route,world:{water:[polygon(-15,-60,15,-40)]}});player.setMode('scooter');player.reset(25);
-  let previous=player.state.y;for(let i=0;i<400;i++){player.step(1/60,{forward:1});assert.ok(Math.abs(player.state.y-previous)<.011,'ramp follows continuous source profile');previous=player.state.y;}
+  let previous=player.state.y;for(let i=0;i<300;i++){player.step(1/60,{forward:1});assert.ok(Math.abs(player.state.y-previous)<.013,'ramp follows continuous source profile');previous=player.state.y;}
   assert.ok(player.state.progress>50);assert.ok(Math.abs(player.state.y-2.139)<.002);
   player.setMode('walk');player.reset(50);advance(player,Math.PI/2/2.2,{turn:1});advance(player,5,{forward:1});assert.ok(Math.abs(player.state.x)<=3-.26+1e-5);assert.ok(player.state.y>2.13);assert.ok(['水域边界','桥面边缘'].includes(player.state.blockedReason));
 });
@@ -220,24 +220,24 @@ test('walking starts without a one-frame velocity or steering kick and releases 
   assert.ok(player.state.speed>0&&player.state.speed<.01,'throttle begins with a small non-zero response');
   assert.ok(player.state.yawRate>0&&player.state.yawRate<.2,'turning ramps instead of jumping to 2.2 rad/s');
   let previous={...player.state};
-  for(let i=0;i<48;i++){
+  for(let i=0;i<72;i++){
     player.step(1/120,{forward:1,turn:1});
     assert.ok(Math.abs(player.state.yawRate-previous.yawRate)<=18/120+1e-9,'the initial steering acceleration is bounded');
-    assert.ok(player.state.speed>=previous.speed&&player.state.speed<=2.2);
+    assert.ok(player.state.speed>=previous.speed&&player.state.speed<=3.2);
     previous={...player.state};
   }
-  assert.equal(player.state.speed,2.2);assert.ok(Math.abs(player.state.yawRate-2.2)<1e-9);
-  const before=player.state.distance;advance(player,.4,{});
+  assert.equal(player.state.speed,3.2);assert.ok(Math.abs(player.state.yawRate-2.2)<1e-9);
+  const before=player.state.distance;advance(player,.55,{});
   assert.equal(player.state.speed,0);assert.equal(player.state.yawRate,0);
-  assert.ok(player.state.distance-before<.42,'letting go stops a walk within one short step');
+  assert.ok(player.state.distance-before<.75,'letting go stops a brisk walk within a short step');
 });
 
 test('scooter release settles before the junction while braking remains decisive',()=>{
   for(const brake of [false,true]){
     const player=createPlayerMotion({route:flat});player.setMode('scooter');advance(player,4,{forward:1});
     const distance=player.state.distance;advance(player,brake?1:2.3,{brake});
-    assert.equal(player.state.speed,0);assert.ok(player.state.distance-distance<(brake?2.1:6.2));
-    assert.ok(player.state.distance-distance>(brake?1.6:5.5),'release remains a smooth coast instead of an instant velocity reset');
+    assert.equal(player.state.speed,0);assert.ok(player.state.distance-distance<(brake?3.2:7));
+    assert.ok(player.state.distance-distance>(brake?2.5:5.5),'release remains a smooth coast instead of an instant velocity reset');
   }
 });
 
@@ -248,4 +248,65 @@ test('walking and scooter easing remain deterministic across 24, 60 and 144 Hz a
     for(const other of runs.slice(1))for(const key of ['x','z','yaw','speed','acceleration','yawRate','distance'])assert.ok(Math.abs(runs[0].state[key]-other.state[key])<1e-9,`${mode} ${key}`);
     for(const player of runs){player.reset(0);advance(player,.3,{});assert.equal(player.state.distance,0);assert.equal(player.state.yaw,0);advance(player,.2,{forward:1,turn:1});player.suspend();const before={...player.state};advance(player,.3,{});assert.equal(player.state.distance,before.distance);assert.equal(player.state.yaw,before.yaw);}
   }
+});
+
+test('world-relative walking follows all camera axes regardless of avatar heading and turns naturally',()=>{
+  for(const [moveX,moveZ] of [[0,-1],[1,0],[0,1],[-1,0]]){
+    const player=createPlayerMotion({route:flat});player.placeWalker({x:0,z:0,yaw:.71});
+    player.step(1/120,{moveX,moveZ,forward:-1,turn:1});
+    assert.ok(Math.abs(player.state.yaw-.71)<.01,'first frame does not snap avatar to the new heading');
+    advance(player,1.5,{moveX,moveZ,forward:-1,turn:1});
+    assert.ok(player.state.x*moveX+player.state.z*moveZ>3.5,'world input wins over legacy body-relative controls');
+    assert.ok(Math.abs(player.state.x*moveZ-player.state.z*moveX)<1e-9,'path never arcs with avatar rotation');
+    assert.ok(Math.abs(Math.atan2(Math.sin(player.state.yaw-Math.atan2(-moveX,-moveZ)),Math.cos(player.state.yaw-Math.atan2(-moveX,-moveZ))))<.002);
+    assert.equal(player.state.speed,3.2);
+  }
+});
+
+test('world-relative walking normalizes diagonals, respects analog input, and eases direction changes and stops',()=>{
+  const straight=createPlayerMotion({route:flat}),diagonal=createPlayerMotion({route:flat}),analog=createPlayerMotion({route:flat});
+  advance(straight,2,{moveX:0,moveZ:-1});advance(diagonal,2,{moveX:1,moveZ:-1});advance(analog,2,{moveX:0,moveZ:-.5});
+  assert.ok(Math.abs(straight.state.distance-diagonal.state.distance)<1e-8,'diagonal input gives no speed boost');
+  assert.ok(Math.abs(analog.state.speed-1.6)<1e-9);
+  const z=straight.state.z;straight.step(1/120,{moveX:0,moveZ:1});
+  assert.ok(straight.state.z<z,'reversal first arrests existing velocity instead of instantly flipping it');
+  advance(straight,1.5,{moveX:0,moveZ:1,fast:true});assert.equal(straight.state.speed,5.2);
+  const stop={...straight.state};advance(straight,1,{moveX:0,moveZ:0});
+  assert.equal(straight.state.speed,0);assert.ok(straight.state.distance-stop.distance<1.7);
+  const idle={...straight.state};advance(straight,1,{moveX:0,moveZ:0});assert.equal(straight.state.distance,idle.distance);
+  straight.suspend();advance(straight,1,{moveX:0,moveZ:0});assert.equal(straight.state.distance,idle.distance);
+});
+
+test('camera-relative walking retains walls, water, fences, traffic and raised-deck boundaries at running speed',()=>{
+  const worlds=[{buildings:[polygon(4,-10,10,10)]},{water:[polygon(4,-10,10,10)]},{barriers:[{polygon:polygon(4,-10,4.15,10).rings[0],minHeight:0,height:2,label:'围栏'}]}];
+  for(const world of worlds){const player=createPlayerMotion({route:flat,world});advance(player,4,{moveX:1,moveZ:0,fast:true});assert.ok(player.state.x<3.741);assert.equal(player.state.speed,0);assert.ok(player.state.blockedReason);}
+  const actor={type:'walk',x:4,z:0,y:.14,active:true},traffic=createPlayerMotion({route:flat,traffic:()=>[actor]});
+  advance(traffic,4,{moveX:1,moveZ:0,fast:true});assert.ok(traffic.state.x<3.38);assert.equal(traffic.state.blockedReason,'前方人车');
+  const before=traffic.state.x;advance(traffic,1,{moveX:-1,moveZ:0});assert.ok(traffic.state.x<before,'walking back out of a queue remains possible');
+  const route={length:100,points:[{x:0,z:0,y:2.16,progress:0},{x:0,z:-100,y:2.16,progress:100}],segments:[{startProgress:0,endProgress:100,width:6,bridge:true}]};
+  const bridge=createPlayerMotion({route,world:{water:[polygon(-10,-100,10,10)]}});advance(bridge,3,{moveX:1,moveZ:0,fast:true});assert.ok(bridge.state.x<=2.74);assert.ok(bridge.state.y>2.13);assert.ok(bridge.state.blockedReason);
+});
+
+test('world-relative walking is deterministic at 24, 60 and 144 Hz and reset clears residual velocity',()=>{
+  const sequence=[[1,{moveX:1,moveZ:-1}],[.5,{moveX:0,moveZ:1,fast:true}],[.5,{moveX:0,moveZ:0}],[1,{moveX:-1,moveZ:0}],[.5,{moveX:1,moveZ:0,brake:true}]];
+  const runs=[24,60,144].map(fps=>{const player=createPlayerMotion({route:flat});for(const[seconds,input]of sequence)advance(player,seconds,input,1/fps);return player;});
+  for(const other of runs.slice(1))for(const key of ['x','z','yaw','speed','acceleration','yawRate','distance'])assert.ok(Math.abs(runs[0].state[key]-other.state[key])<1e-9,key);
+  for(const player of runs){player.reset();advance(player,1,{moveX:0,moveZ:0});assert.equal(player.state.distance,0);assert.equal(player.state.speed,0);assert.equal(player.state.yaw,0);}
+});
+
+test('restoring a captured walking pose honors its canonical velocity and placement clears previous motion',()=>{
+  const player=createPlayerMotion({route:flat});const idle={...player.state};
+  advance(player,1,{moveX:1,moveZ:0});assert.ok(player.state.vx>3);assert.equal(player.state.vz,0);
+  Object.assign(player.state,idle);advance(player,.3,{moveX:0,moveZ:0});
+  assert.equal(player.state.x,idle.x);assert.equal(player.state.z,idle.z);assert.equal(player.state.speed,0);
+  advance(player,1,{moveX:0,moveZ:-1});const saved={...player.state};
+  advance(player,1,{moveX:1,moveZ:0});Object.assign(player.state,saved);
+  player.step(1/120,{moveX:0,moveZ:0});
+  assert.equal(player.state.x,saved.x,'return preserves the saved movement axis rather than the most recent one');
+  assert.ok(player.state.z<saved.z);assert.equal(player.state.speed,Math.hypot(player.state.vx,player.state.vz));
+  player.placeWalker({x:25,z:0,yaw:.5});advance(player,.5,{moveX:0,moveZ:0});
+  assert.equal(player.state.x,25);assert.equal(player.state.z,0);assert.equal(player.state.vx,0);assert.equal(player.state.vz,0);
+  advance(player,1,{forward:-1});assert.ok(player.state.vx>0&&player.state.vz>0,'legacy backward movement also captures its actual velocity');
+  const legacy={...player.state};player.step(1/120,{moveX:0,moveZ:0});
+  assert.ok(player.state.x>legacy.x&&player.state.z>legacy.z,'switching input styles eases the existing motion');
 });

@@ -119,6 +119,55 @@ test('activity pose restores location, mode and viewpoint without retaining held
   assert.equal(f.experience.restoreActivityPose({...saved,state:{...saved.state,x:Infinity}}),false);
 });
 
+function horizontalView(f){
+  const direction=new THREE.Vector3();f.camera.getWorldDirection(direction);direction.y=0;return direction.normalize();
+}
+for(const view of ['third','first'])test(`walking ${view}: W follows the mouse view and A/D/S use that fixed basis`,t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter('walk');
+  if(view==='first')f.key('KeyV');
+  f.canvas.emit('pointerenter',{clientX:100,clientY:100});
+  f.canvas.emit('pointermove',{clientX:430,clientY:100});f.tick(.7);
+  f.canvas.emit('pointerleave');f.tick(2); // No mouse-look grace period can hide camera recentering.
+  const forward=horizontalView(f),right=new THREE.Vector3(-forward.z,0,forward.x);
+  assert.ok(Math.abs(forward.x)>.8,'view must differ substantially from initial avatar yaw');
+  for(const [key,expected] of [['KeyW',forward],['KeyD',right],['KeyA',right.clone().negate()],['KeyS',forward.clone().negate()]]){
+    const start={...f.experience.state};f.key(key);f.tick(2);f.key(key,'keyup');f.tick(1);
+    const moved=new THREE.Vector3(f.experience.state.x-start.x,0,f.experience.state.z-start.z);
+    assert.ok(moved.length()>5,`${key} moves instead of turning in place`);
+    assert.ok(moved.normalize().dot(expected)>.999,`${key} follows the view's horizontal basis`);
+    f.tick(2);
+    assert.ok(horizontalView(f).dot(forward)>.999,'moving and stopping never swing the view behind the avatar');
+  }
+});
+
+test('walking view switches and activity returns retain the movement basis after sideways movement',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter('walk');
+  f.key('KeyD');f.tick(1);f.key('KeyD','keyup');f.tick(1);
+  const forward=horizontalView(f),saved=f.experience.captureActivityPose();
+  assert.ok(Math.abs(saved.lookHeading-saved.state.yaw)>1,'body faces right while camera still faces forward');
+  f.key('KeyV');f.tick(1);assert.ok(horizontalView(f).dot(forward)>.999);
+  f.canvas.emit('pointerenter',{clientX:100,clientY:100});f.canvas.emit('pointermove',{clientX:500,clientY:100});f.tick(.6);
+  assert.equal(f.experience.restoreActivityPose(saved),true);f.tick(1);
+  assert.ok(horizontalView(f).dot(forward)>.999,'restoration persists beyond the single restored render frame');
+  const start={...f.experience.state};f.key('KeyW');f.tick(1);f.key('KeyW','keyup');
+  const moved=new THREE.Vector3(f.experience.state.x-start.x,0,f.experience.state.z-start.z).normalize();
+  assert.ok(moved.dot(forward)>.999,'returning from a work restores logical movement heading too');
+});
+
+test('walking can redirect while moving and explicit recenter settles during held sideways input',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter('walk');
+  f.key('KeyW');f.tick(.6);
+  f.canvas.emit('pointerenter',{clientX:100,clientY:100});f.canvas.emit('pointermove',{clientX:500,clientY:100});f.tick(.7);
+  const forward=horizontalView(f),start={...f.experience.state};f.tick(.7);f.key('KeyW','keyup');
+  const moved=new THREE.Vector3(f.experience.state.x-start.x,0,f.experience.state.z-start.z).normalize();
+  assert.ok(moved.dot(forward)>.99,'held W follows a new view without waiting for key release');
+  f.tick(1);f.key('KeyD');f.tick(1);const facing=f.experience.state.yaw;
+  f.key('KeyC');f.key('KeyC','keyup');f.tick(4);
+  const centred=horizontalView(f),expected=new THREE.Vector3(-Math.sin(facing),0,-Math.cos(facing));
+  assert.ok(centred.dot(expected)>.999,'C targets the initial facing rather than spinning while D is held');
+  f.tick(2);assert.ok(horizontalView(f).dot(centred)>.999);f.key('KeyD','keyup');
+});
+
 for(const mode of ['walk','scooter','roadster','helicopter','hoverboard','spider'])test(`${mode}: mouse movement without any button rotates the player camera`,t=>{
   const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter(mode);f.tick(1);
   const before=f.camera.position.clone(),start={x:f.experience.state.x,z:f.experience.state.z};
@@ -661,6 +710,21 @@ function pushJoystick(f,pointerId=10){
   return {clientX,clientY};
 }
 
+test('touch sideways walking uses the same camera basis as keys and does not orbit after release',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('walk');
+  touch(f.canvas,'pointerdown',20,{clientX:600,clientY:150});
+  touch(f.canvas,'pointermove',20,{clientX:900,clientY:150});
+  touch(f.canvas,'pointerup',20);f.tick(2);
+  const forward=horizontalView(f),right=new THREE.Vector3(-forward.z,0,forward.x),start={...f.experience.state};
+  const joystick=f.el('mobile-joystick'),rect=joystick.getBoundingClientRect(),clientX=rect.left+rect.width/2,clientY=rect.top+rect.height/2;
+  touch(joystick,'pointerdown',10,{clientX,clientY});
+  touch(f.win,'pointermove',10,{clientX:clientX+rect.width*.45,clientY});f.tick(2);
+  touch(f.win,'pointerup',10);f.tick(2);
+  const moved=new THREE.Vector3(f.experience.state.x-start.x,0,f.experience.state.z-start.z);
+  assert.ok(moved.length()>5);assert.ok(moved.normalize().dot(right)>.999);
+  assert.ok(horizontalView(f).dot(forward)>.999,'release must not redirect the view toward the walking avatar');
+});
+
 test('shipped mobile joystick moves the real walker while an independent finger turns the camera',t=>{
   const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true,joystickRect:{left:32,top:170,width:132,height:132}});
   f.experience.enter('walk');f.tick(.6);
@@ -752,4 +816,16 @@ test('the shipped mobile nearby-vehicle action mounts and dismounts once per ges
   touch(interact,'pointerdown',31);touch(f.win,'pointerup',31);interact.emit('click',{detail:1});
   assert.equal(f.experience.state.mode,'walk');assert.equal(source.items[0].taken,false);
   assert.equal(source.items.length,1,'dismount returns the leased scene vehicle instead of creating another one');
+});
+
+test('the shipped first-level mobile G action reaches a roof and its jump button launches from that point',t=>{
+  const f=fixture(t,{legacyControls:false,coarsePointer:true});f.experience.enter('spider');f.tick(.2);
+  const point=f.mobileAction('point');assert.equal(point.hidden,false);assert.equal(f.el('mobile-extra-actions').hidden,true);
+  assert.match(f.el('player-help').textContent,/定点弹射/);assert.equal(f.el('web-point-label').textContent,'定点');
+  touch(point,'pointerdown',31);f.tick(.12);touch(point,'pointerup',31);point.emit('click',{detail:1});
+  assert.equal(f.experience.state.pointCount,1);assert.equal(f.experience.state.pointPhase,'approach');
+  for(let i=0;i<360&&f.experience.state.pointPhase==='approach';i++)f.tick(1/60);
+  assert.equal(f.experience.state.pointPhase,'perch');
+  touch(f.mobileAction('jump'),'pointerdown',32);f.tick(.05);
+  assert.equal(f.experience.state.pointLaunchCount,1);assert.equal(f.experience.state.pointCount,1);
 });

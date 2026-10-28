@@ -308,17 +308,20 @@ export function createVehicleCameraRig() {
   let speed=0, fov=58, pitch=.15, lead=0, activeMode=null, activeView=null;
   let velocity={x:0,y:0,z:0};
   let transition=null, renderedPosition=null, renderedTarget=null, renderedFov=58;
-  let centering=false,firstHeading=0;
+  let centering=false,centeringHeading=null,firstHeading=0;
   let followRelease=1;
   function reset(state, angle=state.yaw||0) {
     heading=wrapAngle(angle);ready=false;position=null;target=null;previousOrigin=null;
     firstHeading=heading;speed=Math.abs(finite(state.speed,0));velocity={x:0,y:0,z:0};
-    activeMode=null;activeView=null;lead=0;transition=null;renderedPosition=null;renderedTarget=null;centering=false;followRelease=1;
+    activeMode=null;activeView=null;lead=0;transition=null;renderedPosition=null;renderedTarget=null;centering=false;centeringHeading=null;followRelease=1;
   }
-  function rotate(delta) { heading=wrapAngle(heading+finite(delta,0));centering=false; }
+  function rotate(delta) { heading=wrapAngle(heading+finite(delta,0));centering=false;centeringHeading=null; }
   function recenter(state) {
     if (!ready) {reset(state);return;}
     centering=true;
+    // Camera-relative walking changes body yaw as this camera turns. Capture
+    // the requested direction once, otherwise C + sideways input spins forever.
+    centeringHeading=state.mode==='walk'?finite(state.yaw,0):null;
   }
   function update(state, dt, options={}) {
     const h=Math.max(0,Math.min(.1,finite(dt,0)));
@@ -344,14 +347,15 @@ export function createVehicleCameraRig() {
     // chase force back in instead of grabbing a manually placed flight camera.
     followRelease=options.lookLocked?0:Math.min(1,followRelease+h/.55);
     if ((centering||!options.lookLocked)&&!Number.isFinite(options.heading)&&(centering||rawSpeed>.25||view==='first')) {
-      const delta=wrapAngle(bodyHeading-heading);
+      const followHeading=centeringHeading??bodyHeading;
+      const delta=wrapAngle(followHeading-heading);
       // Cabin steering is direct; a trailing boom eases around the turn. The
       // bounded angular rate also avoids whip pans after a manual rear view.
       const followBlend=!centering&&view!=='first'?followRelease*followRelease*(3-2*followRelease):1;
       const rate=(view==='first'?14:board?8.5:5.8)*followBlend;
       const maxStep=(view==='first'?5.5:board?3.2:2.5)*h*followBlend;
       heading=wrapAngle(heading+Math.max(-maxStep,Math.min(maxStep,delta*(1-Math.exp(-rate*h)))));
-      if (centering&&Math.abs(wrapAngle(bodyHeading-heading))<.001) {heading=bodyHeading;centering=false;}
+      if (centering&&Math.abs(wrapAngle(followHeading-heading))<.001) {heading=followHeading;centering=false;centeringHeading=null;}
     }
     const ratio=Math.min(1,speed/profile.speedScale),speedBlend=ratio*ratio*(3-2*ratio);
     const desiredPitch=Math.max(-.35,Math.min(.85,finite(options.pitch,view==='first'?.025:profile.pitch)));

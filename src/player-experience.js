@@ -81,7 +81,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
       lookLocked:pointerLock.locked||lookHold>0||!!drag||!!mouseLook?.looking||steeringSideways||suitView,comfortable:comfortableCamera,
       heading:suitView?suitAngle:undefined,
       pitch:suitView?suitPitch:(manualPitch||view==='first'?pitch:undefined),distance:suitView?suitDistance:distance
-    }):vehicleCamera.update(motion.state,dt,{view,snap,world,groundAt:motion.groundAt,lookLocked:pointerLock.locked||lookHold>0||!!drag||!!mouseLook?.looking||motion.state.mode==='walk'&&Math.hypot(mobileAxes.forward,mobileAxes.sideways)>.05,comfortable:comfortableCamera,pitch:manualPitch||view==='first'?pitch:undefined,distance,baseFov:motion.state.mode==='roadster'?58:undefined});
+    }):vehicleCamera.update(motion.state,dt,{view,snap,world,groundAt:motion.groundAt,lookLocked:motion.state.mode==='walk'||pointerLock.locked||lookHold>0||!!drag||!!mouseLook?.looking,comfortable:comfortableCamera,pitch:manualPitch||view==='first'?pitch:undefined,distance,baseFov:motion.state.mode==='roadster'?58:undefined});
     followPosition.set(desired.position.x,desired.position.y,desired.position.z);
     lookTarget.set(desired.target.x,desired.target.y,desired.target.z);
     camera.position.copy(followPosition);controls.target.copy(lookTarget);camera.lookAt(lookTarget);
@@ -143,7 +143,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
       updateElement('web-target-label',{textContent:targetLabel});
     }
     const basics={
-      walk:'WASD 移动 · Shift 快走',
+      walk:'WASD 按镜头方向移动 · Shift 加速',
       scooter:'WASD 骑行 · 空格刹车',
       roadster:'WASD 驾驶 · 按住 Q 喷气，松开下落',
       helicopter:'WASD 移动 · Q / E 升降 · 空格悬停',
@@ -158,13 +158,14 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     updateElement('transport-interact',{hidden:!nearby});
     updateElement('transport-interact-label',{textContent:nearby?`${nearby.item.mode==='spider'?'穿上':nearby.item.mode==='boat'?'登上':'驾驶'}${nearby.item.label}`:''});
     updateElement('resume-exploration',{hidden:active||suspended||!interaction});
-    mobileControls?.update({active,suspended,mode:s.mode,view,canInteract:!!nearby||!!interaction?.mounted,
+    mobileControls?.update({active,suspended,mode:s.mode,view,pointReady:!!s.candidatePoint,pointPhase:s.pointPhase,canInteract:!!nearby||!!interaction?.mounted,
       interactionLabel:nearby?`${nearby.item.mode==='spider'?'穿上':'使用'}${nearby.item.label}`:s.mode==='spider'?'脱下战衣':s.mode==='boat'?'靠岸下船':'落地 / 停稳下车'});
     if(mobileControls?.enabled){
-      const touchHelp={walk:'左侧摇杆移动 · 右侧空白处拖动视角',scooter:'摇杆骑行 · 按住刹车后下车',roadster:'摇杆驾驶 · 按住喷气飞起，松开下落',helicopter:'摇杆移动 · 按住升降 · 落地后下机',hoverboard:'摇杆移动 · 按住升降 · 落地后退出',boat:'摇杆航行 · 刹车停稳，靠岸下船',spider:'按住挂丝 · 松开后重按换锚点'};
+      const touchHelp={walk:'左侧摇杆移动 · 右侧空白处拖动视角',scooter:'摇杆骑行 · 按住刹车后下车',roadster:'摇杆驾驶 · 按住喷气飞起，松开下落',helicopter:'摇杆移动 · 按住升降 · 落地后下机',hoverboard:'摇杆移动 · 按住升降 · 落地后退出',boat:'摇杆航行 · 刹车停稳，靠岸下船',spider:'按住「摆荡」挂丝 · 松开后重按换点\n「定点弹射」锁定屋沿，再点「跳跃」弹出'};
       updateElement('player-help',{textContent:touchHelp[s.mode]});
-      if(spider){const target=$('web-target-label');if(target)target.textContent=target.textContent.replaceAll('按 E / 左键挂丝','按住「挂丝」').replaceAll('空格','「跳跃」').replaceAll('WASD','摇杆').replaceAll('E 接丝','挂丝').replaceAll('松开 X','松开「俯冲」').replaceAll('松开 T','松开「特技」');}
+      if(spider){const target=$('web-target-label');if(target)target.textContent=target.textContent.replaceAll('按 E / 左键挂丝','按住「摆荡」').replaceAll('空格','「跳跃」').replaceAll('WASD','摇杆').replaceAll('E 接丝','按住「摆荡」').replaceAll('松开 X','松开「俯冲」').replaceAll('松开 T','松开「空中特技」');}
     }
+    updateElement('web-point-label',{textContent:mobileControls?.enabled?'定点':'G'});
   }
   function armRoadsterJet(){
     if(motion.state.mode!=='roadster')return false;
@@ -370,7 +371,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     lookHold=Math.max(0,lookHold-dt);
     if(suitView){webAudio.setActive(false);models.update({...motion.state,view:'third',inspection:true,speed:0,vx:0,vz:0,verticalSpeed:0,pitch:0,lean:0,grounded:true,anchor:null,traversalPhase:'ground',landingImpact:0,releaseTime:10,zipActive:false,zipAnchors:[],zipStrength:0,diving:false,diveBlend:0,pointPhase:'idle',pointTarget:null,pointProgress:0,trickActive:false,trickPhase:'idle',trickBlend:0,trickRotation:{x:0,y:0,z:0}},dt);cameraFrame(dt);return true;}
     const pressed=(key,...code)=>held.has(key)||mobileHeld.has(key)||(pulses.get(key)||0)>0||code.some(c=>keys.has(c));
-    const spider=motion.state.mode==='spider',board=motion.state.mode==='hoverboard',car=motion.state.mode==='roadster';
+    const spider=motion.state.mode==='spider',walking=motion.state.mode==='walk',board=motion.state.mode==='hoverboard',car=motion.state.mode==='roadster';
     const brake=!spider&&pressed('brake','Space');
     if(brake){cruise=false;liftTarget=null;landing=false;}
     let vertical=spider||brake?0:Number(pressed('up','KeyQ')||car&&pressed('roadster-jet'))-Number(pressed('down','KeyE'));
@@ -383,21 +384,17 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     }
     const digitalForward=Number(pressed('forward','KeyW','ArrowUp')||cruise)-Number(pressed('back','KeyS','ArrowDown'));
     const digitalSideways=Number(pressed('right','KeyD','ArrowRight'))-Number(pressed('left','KeyA','ArrowLeft'));
-    let forward=digitalForward||mobileAxes.forward,sideways=digitalSideways||mobileAxes.sideways;
-    // A walking thumbstick follows the view; vehicle sticks still steer their
-    // wheels/heading. The camera holds its heading during this walking gesture.
-    if(motion.state.mode==='walk'&&!digitalForward&&!digitalSideways&&Math.hypot(mobileAxes.forward,mobileAxes.sideways)>.05){
-      const wanted=vehicleCamera.heading-Math.atan2(mobileAxes.sideways,mobileAxes.forward);
-      const error=Math.atan2(Math.sin(wanted-motion.state.yaw),Math.cos(wanted-motion.state.yaw));
-      forward=Math.hypot(mobileAxes.forward,mobileAxes.sideways)*Math.max(0,Math.cos(error));sideways=-Math.max(-1,Math.min(1,error*3));
-    }
+    const forward=digitalForward||mobileAxes.forward,sideways=digitalSideways||mobileAxes.sideways;
+    // Keyboard and thumbstick share the view's horizontal basis. A walking
+    // avatar turns toward this vector; its yaw never steers the camera back.
+    // Vehicles keep their wheel/heading steering inputs below.
     steeringSideways=spider&&(sideways!==0||forward<0);
-    const heading=spiderCamera.heading,length=Math.max(1,Math.hypot(forward,sideways));
+    const heading=spider?spiderCamera.heading:vehicleCamera.heading,length=Math.max(1,Math.hypot(forward,sideways));
     const moveX=(Math.cos(heading)*sideways-Math.sin(heading)*forward)/length;
     const moveZ=(-Math.sin(heading)*sideways-Math.cos(heading)*forward)/length;
     motion.step(dt,{forward:board&&landing?0:forward,turn:board&&landing?0:-sideways,vertical,lift:car?Math.max(0,vertical):undefined,brake:brake||landing&&!board,
       altitudeTarget:board&&landing?motion.groundAt(motion.state.x,motion.state.z).height:board&&liftTarget!==null?liftTarget:undefined,fast:pressed('fast','ShiftLeft','ShiftRight'),
-      ...(spider?{moveX,moveZ,aimYaw:heading}:{}),
+      ...(spider||walking?{moveX,moveZ,aimYaw:heading}:{}),
       swing:spider&&(pressed('swing','KeyE')||held.has('mouse-swing')),jump:spider&&pressed('jump','Space'),zip:spider&&pressed('zip'),dive:spider&&pressed('dive','KeyX'),point:spider&&pressed('point'),trick:spider&&pressed('trick','KeyT'),trickX:sideways,trickY:forward,reel:spider&&pressed('reel','KeyQ')});
     webAudio.setActive(spider);if(spider)webAudio.tick(motion.state);
     pulses.forEach((v,k)=>{if(v<=dt)pulses.delete(k);else pulses.set(k,v-dt);});
@@ -408,7 +405,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   function captureActivityPose(){
     if(!active)return null;
     const fields=['x','y','z','yaw','vx','vz','speed','verticalSpeed','grounded','flightEnabled'];
-    return {mode:motion.state.mode,transport:interaction?.capture(),view,pitch,distance:distance??null,yawOffset,manualPitch,state:Object.fromEntries(fields.map(k=>[k,motion.state[k]])),camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray(),fov:camera.fov}};
+    return {mode:motion.state.mode,transport:interaction?.capture(),view,pitch,distance:distance??null,yawOffset,manualPitch,lookHeading:motion.state.mode==='spider'?spiderCamera.heading:vehicleCamera.heading,state:Object.fromEntries(fields.map(k=>[k,motion.state[k]])),camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray(),fov:camera.fov}};
   }
   function restoreActivityPose(saved){
     if(suspended||!saved||!modeNames[saved.mode]||!['first','third'].includes(saved.view))return false;
@@ -427,7 +424,8 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     for(const key of ['grounded','flightEnabled'])if(typeof saved.state[key]==='boolean')motion.state[key]=saved.state[key];
     view=saved.view;pitch=Number.isFinite(saved.pitch)?Math.max(-1.4,Math.min(1.4,saved.pitch)):.25;
     yawOffset=Number.isFinite(saved.yawOffset)?saved.yawOffset:0;manualPitch=!!saved.manualPitch;distance=Number.isFinite(saved.distance)?Math.max(1,Math.min(100,saved.distance)):undefined;
-    clearInput();spiderCamera.reset(motion.state);vehicleCamera.reset(motion.state,motion.state.yaw);models.update({...motion.state,view},0);cameraFrame(0,true);
+    const restoredHeading=Number.isFinite(saved.lookHeading)?saved.lookHeading:motion.state.yaw;
+    clearInput();spiderCamera.reset(motion.state,restoredHeading);vehicleCamera.reset(motion.state,restoredHeading);models.update({...motion.state,view},0);cameraFrame(0,true);
     if(saved.camera?.position?.length===3&&saved.camera.position.every(Number.isFinite)&&saved.camera?.quaternion?.length===4&&saved.camera.quaternion.every(Number.isFinite)){camera.position.fromArray(saved.camera.position);camera.quaternion.fromArray(saved.camera.quaternion);if(Number.isFinite(saved.camera.fov))camera.fov=Math.max(20,Math.min(100,saved.camera.fov));camera.updateProjectionMatrix();}
     updateUI();invalidate();return true;
   }

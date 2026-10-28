@@ -85,9 +85,35 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   let roadsterAcceleration=0,roadsterYawRate=0;
   let groundAcceleration=0,walkYawRate=0;
   let boardAcceleration=0,boardYawRate=0,boardLastVertical=0,boardTargeted=false;
-  const state={mode:'walk',x:0,y:BASE_Y,z:0,yaw:0,speed:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,forwardJetPower:0,blockedReason:'',progress:0,verticalSpeed:0,elapsed:0,braking:false,acceleration:0,yawRate:0,altitudeTarget:null,flightPhase:'ground'};
+  const state={mode:'walk',x:0,y:BASE_Y,z:0,yaw:0,speed:0,vx:0,vz:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,forwardJetPower:0,blockedReason:'',progress:0,verticalSpeed:0,elapsed:0,braking:false,acceleration:0,yawRate:0,altitudeTarget:null,flightPhase:'ground'};
   function resetRoadsterControls(){roadsterAcceleration=0;roadsterYawRate=0;state.acceleration=0;state.yawRate=0;state.forwardJetPower=0;state.altitudeTarget=null;state.flightPhase=state.mode==='roadster'?(state.grounded?(state.flightEnabled?'armed':'ground'):'coasting'):'ground';}
-  function resetGroundControls(){groundAcceleration=0;walkYawRate=0;}
+  function resetGroundControls(){groundAcceleration=0;walkYawRate=0;state.vx=0;state.vz=0;}
+  function worldWalk(input,brake){
+    // Keep velocity on the captured activity state: returning from a work,
+    // restoring a saved walk or placing a new actor must never revive a hidden
+    // velocity from the previously active pose.
+    const magnitude=Math.hypot(input.moveX,input.moveZ),normalizer=Math.max(1,magnitude),speed=input.fast?5.2:3.2;
+    const targetX=brake?0:input.moveX/normalizer*speed,targetZ=brake?0:input.moveZ/normalizer*speed;
+    const dx=targetX-state.vx,dz=targetZ-state.vz,error=Math.hypot(dx,dz),before=Math.hypot(state.vx,state.vz);
+    // Ease the actual world velocity, not the avatar's heading. Reversing or
+    // releasing a stick therefore brakes smoothly without walking in an arc.
+    if(error<.001){state.vx=targetX;state.vz=targetZ;groundAcceleration=0;}
+    else{
+      const slowing=targetX*state.vx+targetZ*state.vz<0||Math.hypot(targetX,targetZ)<before;
+      groundAcceleration=approach(Math.max(0,groundAcceleration),brake?18:slowing?15:11,STEP*(brake?100:60));
+      const change=Math.min(error,error*(1-Math.exp(-14*STEP)),groundAcceleration*STEP);
+      state.vx+=dx/error*change;state.vz+=dz/error*change;
+    }
+    state.speed=Math.hypot(state.vx,state.vz);state.acceleration=(state.speed-before)/STEP;
+    let angle=0;
+    if(!brake&&magnitude>1e-5){const wanted=Math.atan2(-input.moveX,-input.moveZ);angle=Math.atan2(Math.sin(wanted-state.yaw),Math.cos(wanted-state.yaw));}
+    const targetRate=clamp(angle*12,-8,8);
+    walkYawRate=approach(walkYawRate,targetRate,STEP*60);
+    // Stop exactly at the requested facing, including a 180-degree reversal.
+    const rotation=Math.abs(walkYawRate*STEP)>Math.abs(angle)?angle:walkYawRate*STEP;
+    if(rotation===angle)walkYawRate=rotation/STEP;
+    return state.yaw+rotation;
+  }
   function groundSpeed(target,{acceleration,deceleration,brake=false}){
     const before=state.speed,error=target-before;
     if(Math.abs(error)<1e-8){state.speed=target;groundAcceleration=0;state.acceleration=0;return;}
@@ -361,15 +387,17 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       state.lean=approach(state.lean,clamp(-walkYawRate*Math.abs(state.speed)*.012,-.045,.045),STEP*.16);
       state.acceleration=(state.speed-oldSpeed)/STEP;contactPose();state.flightPhase='water';return;
     }
-    let nextYaw=state.yaw;
+    let nextYaw=state.yaw;const worldWalking=state.mode==='walk'&&finite(input.moveX)&&finite(input.moveZ);
     if(state.mode==='walk'){
-      groundSpeed(brake?0:forward*(input.fast?3.8:2.2),{acceleration:8.5,deceleration:brake?12:11,brake});
-      walkYawRate=approach(walkYawRate,turn*2.2,STEP*(turn?18:26));nextYaw+=walkYawRate*STEP;state.steeringAngle=0;state.lean=0;
+      if(worldWalking)nextYaw=worldWalk(input,brake);
+      else{groundSpeed(brake?0:forward*(input.fast?5.2:3.2),{acceleration:8.5,deceleration:brake?12:11,brake});
+        walkYawRate=approach(walkYawRate,turn*2.2,STEP*(turn?18:26));nextYaw+=walkYawRate*STEP;}
+      state.steeringAngle=0;state.lean=0;
     }else if(state.mode==='scooter'){
-      const target=brake?0:forward*(forward<0?1.1:5.5);
-      // Releasing the throttle settles within about 6 m from campus cruise,
-      // instead of drifting for more than 11 m before the next junction.
-      groundSpeed(target,{acceleration:2.6,deceleration:brake?8.5:2.6,brake});
+      const target=brake?0:forward*(forward<0?1.1:7.5);
+      // Faster campus travel retains a short coast and a decisive brake before
+      // junctions; reverse remains a slow manoeuvre around parked vehicles.
+      groundSpeed(target,{acceleration:3.4,deceleration:brake?10.5:4.8,brake});
       const steering=turn*.5/(1+.065*state.speed*state.speed);state.steeringAngle=approach(state.steeringAngle,steering,STEP*1.8);const yawRate=state.speed*Math.tan(state.steeringAngle)/1.15;nextYaw+=yawRate*STEP;
       state.lean=approach(state.lean,clamp(-yawRate*state.speed*.035,-.18,.18),STEP*.6);
     }else if(state.mode==='roadster'){
@@ -415,18 +443,19 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       const clearance=Math.max(0,state.y-groundAt(state.x,state.z).height),tiltLimit=Math.min(1,clearance/2);
       state.pitch=clamp(approach(state.pitch,clamp(-state.speed*.012,-.22,.1)*tiltLimit,STEP*.5),-.22*tiltLimit,.1*tiltLimit);state.lean=clamp(approach(state.lean,-turn*Math.abs(state.speed)/18*.14*tiltLimit,STEP*.5),-.14*tiltLimit,.14*tiltLimit);
     }
-    const nextX=state.x-Math.sin(nextYaw)*state.speed*STEP,nextZ=state.z-Math.cos(nextYaw)*state.speed*STEP;
+    const nextX=state.x+(worldWalking?state.vx:-Math.sin(nextYaw)*state.speed)*STEP,nextZ=state.z+(worldWalking?state.vz:-Math.cos(nextYaw)*state.speed)*STEP;
     let reason=obstacleAt(nextX,nextZ,nextYaw,state.mode,state.y,state);
     if(!reason&&state.mode!=='helicopter'&&trafficBlocked(nextX,nextZ,nextYaw))reason='前方人车';
     const beforeYaw=state.yaw;
     if(reason){if(state.mode==='hoverboard'||state.mode==='roadster'){state.pitch=previousBodyPose.pitch;state.lean=previousBodyPose.lean;}state.speed=0;state.blockedReason=reason;
       if(state.mode==='roadster'){roadsterAcceleration=0;state.acceleration=0;state.forwardJetPower=0;}
       if(state.mode==='hoverboard'){boardAcceleration=0;state.acceleration=0;}
-      if(state.mode==='walk'||state.mode==='scooter'){groundAcceleration=0;state.acceleration=0;}
+      if(state.mode==='walk'||state.mode==='scooter'){groundAcceleration=0;state.acceleration=0;state.vx=0;state.vz=0;}
       // Walking can turn in place beside a wall. A scooter only rotates if its
       // full footprint remains clear; neither collider tunnels through corners.
       if(!obstacleAt(state.x,state.z,nextYaw,state.mode,state.y,state)&&(state.mode==='helicopter'||!trafficBlocked(state.x,state.z,nextYaw)))state.yaw=nextYaw;
     }else{state.distance+=Math.hypot(nextX-state.x,nextZ-state.z);state.x=nextX;state.z=nextZ;state.yaw=nextYaw;}
+    if(state.mode==='walk'&&!worldWalking){state.vx=-Math.sin(state.yaw)*state.speed;state.vz=-Math.cos(state.yaw)*state.speed;}
     if(state.mode==='walk'||state.mode==='scooter'){state.yawRate=(state.yaw-beforeYaw)/STEP;if(Math.abs(state.yaw-nextYaw)>EPS)walkYawRate=0;}
     if(state.mode==='roadster'){state.yawRate=(state.yaw-beforeYaw)/STEP;if(Math.abs(state.yaw-nextYaw)>EPS)roadsterYawRate=0;}
     if(state.mode==='hoverboard'){state.yawRate=(state.yaw-beforeYaw)/STEP;if(Math.abs(state.yaw-nextYaw)>EPS)boardYawRate=0;}
