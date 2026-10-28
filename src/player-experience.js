@@ -8,6 +8,8 @@ import { createVehicleCameraRig, createTraversalCameraRig } from './player-camer
 import { getBuildingProfile } from './building-profiles.js';
 import { getReconstructionBuildings } from './campus-feature-selection.js';
 import { createPlayerPointerLock } from './player-pointer-lock.js';
+import { createWorldTransport } from './world-transport.js';
+import { createTransportInteraction } from './transport-interaction.js';
 
 // Keep the spawn relative to the model's projected entrance, not a GIS origin
 // or the separate dorm-to-class traffic route. Leave room for all vehicle sizes.
@@ -21,29 +23,32 @@ export function getCampusPlayerSpawn(model) {
 }
 
 // Collision footprints use the same projection and height estimates as the scene.
-export function createPlayerWorld(model) {
+export function createPlayerWorld(model,{movableParking=false}={}) {
   const polygons = records => records.flatMap(record => (record.shapes || []).map(shape => ({
+    id:record.id, surfaceY:record.mesh?.position.y??.022,
     rings: record.id==='way/103814566' ? [planCanteenBoundary(record).boundary.map(p=>({...p}))] : [shape, ...shape.holes].map(r => r.getPoints().map(p => ({ x:p.x, z:-p.y }))),
     height: record.category === 'building' ? getBuildingProfile(record.feature).height + .065 : 0,
     minHeight: record.category === 'building' ? getBuildingProfile(record.feature).baseHeight + .065 : 0,
   })));
   const architecture=model.architectureInfrastructure||{},sports=model.sportsInfrastructure||{},parking=model.parkingInfrastructure||{};
   const replacedBuildings=new Set([...(sports.replacedBuildingIds||[]),...(architecture.replacedBuildingIds||[])]);
-  return { buildings:[...polygons(getReconstructionBuildings(model).filter(record=>!replacedBuildings.has(record.id))),...(architecture.buildings||[])], water:polygons(model.water), bounds:{...model.bounds}, barriers:[...(sports.barriers||[]),...(architecture.barriers||[]),...(parking.barriers||[])], walkSurfaces:[...(sports.walkSurfaces||[]),...(architecture.walkSurfaces||[])] };
+  return { buildings:[...polygons(getReconstructionBuildings(model).filter(record=>!replacedBuildings.has(record.id))),...(architecture.buildings||[])], water:polygons(model.water), bounds:{...model.bounds}, barriers:[...(sports.barriers||[]),...(architecture.barriers||[]),...(parking.barriers||[]).filter(b=>!movableParking||!String(b.id).startsWith('parked-east-nine-'))], walkSurfaces:[...(sports.walkSurfaces||[]),...(architecture.walkSurfaces||[])] };
 }
 
 export function createPlayerExperience({ THREE, scene, camera, controls, canvas, route, simulation,
-  model, onEnter, notify, invalidate }) {
-  const $ = id => document.getElementById(id), world = createPlayerWorld(model);
+  model, onEnter, notify, invalidate, scooterTransport, transportSources }) {
+  const $ = id => document.getElementById(id), world = createPlayerWorld(model,{movableParking:!!scooterTransport});
   const updateElement = (id, properties) => {
     const element = $(id);
     if (element) Object.assign(element, properties);
   };
-  const motion = createPlayerMotion({route,world,traffic:()=>simulation.agents,getPoseAt:simulation.getPoseAt});
+  const motion = createPlayerMotion({route,world,traffic:()=>scooterTransport?[...simulation.agents,...scooterTransport.parkedAgents]:simulation.agents,getPoseAt:simulation.getPoseAt});
   const spawnPose = getCampusPlayerSpawn(model);
   const models = createPlayerModels(THREE), spiderCamera=createTraversalCameraRig(), vehicleCamera=createVehicleCameraRig(), webAudio=createWebSwingAudio();
   const disposeReferences=installRoadsterReferences(),disposeHoverboardReferences=installHoverboardReferences();
   scene.add(models.group); models.group.visible = false;
+  const worldTransport=scooterTransport?createWorldTransport({THREE,scene,model,route,simulation,playerModels:models,groundAt:motion.groundAt,canPlaceMode:motion.canPlaceMode}):null;
+  const interaction=worldTransport||transportSources?createTransportInteraction({motion,sources:transportSources||[worldTransport,scooterTransport],notify,onChange:mode=>{if(mode==='scooter')models.setScooterAppearance(interaction.mounted.item.appearance);enter(mode);}}):null;
   const keys = new Set(), held = new Set(), pulses = new Map(), listeners = [];
   let active=false, suspended=false, initialized=false, view='third', yawOffset=0, pitch=.25, distance, drag=null, mouseLook=null,
     cruise=false, liftTarget=null, landing=false, uiElapsed=0, savedNear=camera.near, savedFov=camera.fov, disposed=false, immersive=true, driveImmersive=true, suitView=false, lookHold=0, manualPitch=false, steeringSideways=false, suitAngle=0, suitPitch=.03, suitDistance=3.15;
@@ -51,7 +56,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   let comfortableCamera=!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   let lookSensitivity=1,escapeReleaseUntil=0;
   const followPosition = new THREE.Vector3(), lookTarget = new THREE.Vector3();
-  const modeNames={walk:'步行探索',scooter:'电动车骑行',helicopter:'直升机探索',roadster:'喷气跑车',hoverboard:'飞行滑板',spider:'蜘蛛侠 · 蛛丝摆荡'};
+  const modeNames={walk:'步行探索',scooter:'电动车骑行',helicopter:'直升机探索',roadster:'特斯拉 · 喷气跑车',hoverboard:'电动飞行器',spider:'蜘蛛侠 · 蛛丝摆荡',boat:'湖上游艇'};
   const codes=new Set(['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyQ','KeyE','KeyF','KeyX','KeyG','KeyT','Space','ShiftLeft','ShiftRight','KeyV','KeyC','KeyL','Escape']);
   // Pause guards every event entry point, including optional host/touch controls.
   const actionEvents=new Set(['keydown','pointerenter','pointerdown','pointermove','mousedown','mousemove','wheel','click','input','change']);
@@ -142,9 +147,15 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
       helicopter:'WASD 移动 · Q / E 升降 · 空格悬停',
       hoverboard:'WASD 移动 · Q / E 升降 · Shift 加速',
       spider:'WASD 控向 · 空格起跳\nE / 左键挂丝 · 松手后重按换点',
+      boat:'WASD 航行 · 空格减速 · Shift 加速',
     };
     const escapeHint=pointerLock.locked?'Esc 释放，再按退出':'Esc 退出';
-    updateElement('player-help',{textContent:`${basics[s.mode]}\n鼠标环视 · L 锁定 · V 切视角 · ${escapeHint}`});
+    const actionHint=!interaction?'':s.mode==='walk'?'靠近载具 / 战衣 · F 使用':s.mode==='spider'?'F 空中前冲 / 地面脱下战衣':s.mode==='boat'?'靠岸停稳 · F 下船':'停稳落地 · F 下车';
+    updateElement('player-help',{textContent:`${basics[s.mode]}${actionHint?'\n'+actionHint:''}\n鼠标环视 · L 锁定 · V 切视角 · ${escapeHint}`});
+    const nearby=active&&!suspended?interaction?.nearest():null;
+    updateElement('transport-interact',{hidden:!nearby});
+    updateElement('transport-interact-label',{textContent:nearby?`${nearby.item.mode==='spider'?'穿上':nearby.item.mode==='boat'?'登上':'驾驶'}${nearby.item.label}`:''});
+    updateElement('resume-exploration',{hidden:active||suspended||!interaction});
   }
   function armRoadsterJet(){
     if(motion.state.mode!=='roadster')return false;
@@ -180,7 +191,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(result?.ok===false){notify(result.reason);return;}
     clearInput();active=true;suitView=false;controls.enabled=false;recenter();
     canvas.focus({preventScroll:true});$('player-hud').hidden=false;
-    $('viewport').classList.add('playing');$('viewport').classList.toggle('spider-playing',mode==='spider');$('viewport').classList.toggle('drive-playing',mode==='roadster'||mode==='hoverboard');setImmersive(immersive);models.group.visible=view==='third'||motion.state.mode==='spider';
+    $('viewport').classList.add('playing');document.body.classList.toggle('campus-playing',!!interaction);$('viewport').classList.toggle('spider-playing',mode==='spider');$('viewport').classList.toggle('drive-playing',mode==='roadster'||mode==='hoverboard');setImmersive(immersive);models.group.visible=view==='third'||motion.state.mode==='spider';
     camera.near=view==='first'?.06:.12;camera.updateProjectionMatrix();
     models.update({...motion.state,view},0);cameraFrame(0,true);updateUI();invalidate();
   }
@@ -198,7 +209,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     controls.enabled=true;camera.near=savedNear;camera.fov=savedFov;camera.updateProjectionMatrix();
     // Clear OrbitControls' residual damping from before entering the player.
     controls.enableDamping=false;controls.update();controls.enableDamping=true;
-    $('player-hud').hidden=true;$('viewport').classList.remove('playing','spider-playing','drive-playing');updateUI();invalidate();
+    $('player-hud').hidden=true;document.body.classList.remove('campus-playing');$('viewport').classList.remove('playing','spider-playing','drive-playing');updateUI();invalidate();
   }
   on(window,'keydown',e=>{
     if(!active||e.metaKey||e.ctrlKey||e.altKey||editing(e.target)||inputBlocked()||!codes.has(e.code))return;
@@ -212,7 +223,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(e.code==='KeyL'){if(!e.repeat){pointerLock.toggle();updateUI();}return;}
     if(e.code==='KeyV'){if(!e.repeat)setView(view==='third'?'first':'third');return;}
     if(e.code==='KeyG'&&motion.state.mode==='spider'){if(!e.repeat){pulses.set('point',.12);}return;}
-    if(e.code==='KeyF'){if(!e.repeat){if(motion.state.mode==='spider'){pulses.set('zip',.12);}else toggleFlight();}return;}
+    if(e.code==='KeyF'){if(!e.repeat){if(interaction&&(motion.state.mode!=='spider'||motion.state.grounded)){interaction.interact();updateUI();}else if(motion.state.mode==='spider'){pulses.set('zip',.12);}else toggleFlight();}return;}
     if(e.code==='KeyC'){recenter(false,true);return;}
     if(e.code==='Space'){cruise=false;liftTarget=null;landing=false;if(motion.state.mode==='spider'){if(!e.repeat)queueJump();return;}}
     if(e.code==='KeyQ'||e.code==='KeyE'){
@@ -285,6 +296,8 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   on($('player-mouse-toggle'),'click',()=>{pointerLock.toggle();updateUI();});
   on($('look-sensitivity'),'input',e=>{const value=Number(e.target.value);if(Number.isFinite(value)){lookSensitivity=Math.max(.45,Math.min(1.8,value));updateElement('look-sensitivity-value',{textContent:`${lookSensitivity.toFixed(2)}×`});}});
   document.querySelectorAll('[data-player-mode]').forEach(b=>on(b,'click',()=>enter(b.dataset.playerMode)));
+  on($('transport-interact'),'click',()=>{if(active){interaction?.interact();canvas.focus({preventScroll:true});updateUI();}});
+  on($('resume-exploration'),'click',()=>enter(motion.state.mode));
   document.querySelectorAll('[data-player-camera]').forEach(b=>on(b,'click',()=>setView(b.dataset.playerCamera)));
   document.querySelectorAll('[data-player-input]').forEach(b=>{
     const key=b.dataset.playerInput;
@@ -372,16 +385,26 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     webAudio.setActive(spider);if(spider)webAudio.tick(motion.state);
     pulses.forEach((v,k)=>{if(v<=dt)pulses.delete(k);else pulses.set(k,v-dt);});
     models.update({...motion.state,view},dt);models.group.visible=view==='third'||motion.state.mode==='spider';cameraFrame(dt);
+    worldTransport?.update(dt,motion.state);
     uiElapsed+=dt;if(uiElapsed>.15){updateUI();uiElapsed=0;}invalidate();return true;
   }
   function captureActivityPose(){
     if(!active)return null;
     const fields=['x','y','z','yaw','vx','vz','speed','verticalSpeed','grounded','flightEnabled'];
-    return {mode:motion.state.mode,view,pitch,distance:distance??null,yawOffset,manualPitch,state:Object.fromEntries(fields.map(k=>[k,motion.state[k]])),camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray(),fov:camera.fov}};
+    return {mode:motion.state.mode,transport:interaction?.capture(),view,pitch,distance:distance??null,yawOffset,manualPitch,state:Object.fromEntries(fields.map(k=>[k,motion.state[k]])),camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray(),fov:camera.fov}};
   }
   function restoreActivityPose(saved){
     if(suspended||!saved||!modeNames[saved.mode]||!['first','third'].includes(saved.view))return false;
     if(!['x','y','z','yaw'].every(k=>Number.isFinite(saved.state?.[k]))||Math.abs(saved.state.x)>6000||Math.abs(saved.state.z)>6000||saved.state.y< -10||saved.state.y>1000)return false;
+    const newLease=interaction&&saved.transport&&!interaction.mounted;
+    if(interaction&&saved.transport&&!interaction.restore(saved.transport))return false;
+    // A refreshed return must claim its parked model and activate the vehicle
+    // at its own safe footprint, not try to spawn a helicopter at the canteen.
+    if(newLease){
+      const initial=saved.state.grounded?saved.state:interaction.mounted.item;
+      if(!motion.placeMode(initial,saved.mode).ok){interaction.cancelRestore();return false;}
+      if(saved.mode==='scooter')models.setScooterAppearance(interaction.mounted.item.appearance);
+    }else if(saved.mode==='boat'&&motion.state.mode!=='boat'&&!motion.placeMode(saved.state,'boat').ok)return false;
     enter(saved.mode);if(!active||motion.state.mode!==saved.mode)return false;
     for(const key of ['x','y','z','yaw','vx','vz','speed','verticalSpeed'])if(Number.isFinite(saved.state[key]))motion.state[key]=saved.state[key];
     for(const key of ['grounded','flightEnabled'])if(typeof saved.state[key]==='boolean')motion.state[key]=saved.state[key];
@@ -392,5 +415,5 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     updateUI();invalidate();return true;
   }
   return {get active(){return active;},get suspended(){return suspended;},state:motion.state,enter,enterAt,exit,tick,setSuspended,captureActivityPose,restoreActivityPose,
-    dispose(){exit();disposed=true;pointerLock.dispose();listeners.forEach(remove=>remove());models.dispose();webAudio.dispose();disposeReferences();disposeHoverboardReferences();}};
+    dispose(){exit();disposed=true;pointerLock.dispose();listeners.forEach(remove=>remove());worldTransport?.dispose();models.dispose();webAudio.dispose();disposeReferences();disposeHoverboardReferences();}};
 }

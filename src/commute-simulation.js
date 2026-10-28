@@ -742,7 +742,18 @@ export function createCommuteSimulation(route,options={}){
       if(!inserted)break;
     }
   }
+  function takeScooter(agent){
+    if(!state.agents.includes(agent)||!agent.active||agent.kind!=='scooter')return{ok:false};
+    const lease={ok:true,agent,phase:agent.phase};
+    agent.active=false;agent.phase='borrowed';state.agents=state.agents.filter(a=>a!==agent);refreshStats();
+    return lease;
+  }
+  function restoreScooter(lease){
+    const agent=lease?.agent;
+    if(!agent||agent.phase!=='borrowed'||state.agents.some(a=>a.id===agent.id))return{ok:false};
+    agent.active=true;agent.phase=lease.phase;state.agents.push(agent);refreshStats();return{ok:true};
+  }
   function step(dt){if(!finite(dt)||dt<=0)return state;accumulator+=dt;let updated=false;while(accumulator>=fixedStep-EPS){integrate();accumulator-=fixedStep;updated=true;}if(updated)refreshStats();return state;}
-  reset();return{state,setTime,setDensity,setScooterShare,setSignals,setPlayerObstacle,step,reset,getPoseAt,getAgent:id=>state.agents.find(a=>a.id===id)||completedAgents.get(id)||null,
+  reset();return{state,setTime,setDensity,setScooterShare,setSignals,setPlayerObstacle,step,reset,takeScooter,restoreScooter,getPoseAt,getAgent:id=>state.agents.find(a=>a.id===id)||completedAgents.get(id)||null,
     get agents(){return state.agents;},get stats(){return state.stats;},get signals(){return state.signals;},get routeLength(){return length;}};
 }

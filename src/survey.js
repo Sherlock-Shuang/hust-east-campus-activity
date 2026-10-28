@@ -607,7 +607,7 @@ function loadDataset(data, manifest = {}) {
     });
     const selector = document.querySelector('.transport-selector');
     if (selector) selector.hidden = false;
-    commute.spawnView();
+    commute.player.enter('walk');
   } catch (error) {
     const selector = document.querySelector('.transport-selector') || $("commute-panel");
     if (selector) selector.hidden = true;

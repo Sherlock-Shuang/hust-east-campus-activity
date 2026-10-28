@@ -5,7 +5,7 @@
  */
 import {createWebSwingMotion} from './web-swing-motion.js';
 const STEP=1/120,BASE_Y=.14,EPS=1e-7;
-const MODES=new Set(['walk','scooter','helicopter','roadster','hoverboard','spider']);
+const MODES=new Set(['walk','scooter','helicopter','roadster','hoverboard','spider','boat']);
 // Roadster dimensions and dynamics below are gameplay/model estimates, not
 // Tesla engineering or flight-envelope data. The visual uses cold-gas mist.
 // Hoverboard performance and collision margins are simulation estimates.
@@ -23,6 +23,7 @@ function overlapsPolygon(p,radius,polygon){
   return rings.some(r=>r.some((a,i)=>distanceToSegment(p,a,r[(i+1)%r.length])<radius-EPS));
 }
 function standardBodySamples(x,z,yaw,mode){const radius=mode==='spider'?.37:mode==='walk'?.26:mode==='scooter'?.42:4;
+  if(mode==='boat')return[-2.7,-2.1,-1.1,0,1.1,2.1,2.7].map(offset=>({x:x-Math.sin(yaw)*offset,z:z-Math.cos(yaw)*offset,radius:Math.abs(offset)>2.5?.5:Math.abs(offset)>2?1.0:1.2,minY:-.38,maxY:2.75}));
   if(mode==='spider')return[{x,z,radius,minY:0,maxY:2.08}];
   if(mode==='helicopter')return[{x:x+Math.sin(yaw)*.12,z:z+Math.cos(yaw)*.12,radius},{x:x+Math.sin(yaw)*4.22,z:z+Math.cos(yaw)*4.22,radius:.72}];
   if(mode==='roadster')return[-1.225,-.8,-.4,0,.4,.8,1.225].map(offset=>({x:x-Math.sin(yaw)*(offset-.022),z:z-Math.cos(yaw)*(offset-.022),radius:1.1}));
@@ -211,14 +212,26 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     }
     return height;
   };
+  // Source water rings keep islands dry. A hull sample needs its whole disk
+  // inside one body of water, not merely intersecting the shore polygon.
+  function waterAt(x,z,radius=0){
+    const point={x,z};
+    const record=water.find(p=>x>=p.minX&&x<=p.maxX&&z>=p.minZ&&z<=p.maxZ&&inRing(point,p.rings[0])&&!p.rings.slice(1).some(r=>inRing(point,r))&&(!radius||p.rings.every(r=>r.every((a,i)=>distanceToSegment(point,a,r[(i+1)%r.length])>=radius-EPS))));
+    return record?{height:finite(record.surfaceY)?record.surfaceY:.022,id:record.id??null}:null;
+  }
   function outside(p){return bounds&&(p.x-p.radius<bounds.minX||p.x+p.radius>bounds.maxX||p.z-p.radius<bounds.minZ||p.z+p.radius>bounds.maxZ);}
-  function obstacleAt(x,z,yaw,mode,y=state.y,previous=null){
-    const bodies=bodySamples(x,z,yaw,mode),ground=groundAt(x,z,mode==='spider'?.37:mode==='walk'?.26:mode==='scooter'?.42:mode==='roadster'?1.1:mode==='hoverboard'?1.42:0);
+  function obstacleAt(x,z,yaw,mode,y=state.y,previous=null,grounded=state.grounded,bodyPose=state){
+    const bodies=bodySamples(x,z,yaw,mode,bodyPose),ground=groundAt(x,z,mode==='spider'?.37:mode==='walk'?.26:mode==='scooter'?.42:mode==='roadster'?1.1:mode==='hoverboard'?1.42:0);
     if(bodies.some(outside))return'校园边界';
-    const barrierY=state.grounded&&mode!=='helicopter'?Math.max(y,ground.height):y;
+    const barrierY=grounded&&mode!=='helicopter'&&mode!=='boat'?Math.max(y,ground.height):y;
     if(barriers.length)for(const p of bodies){const hit=barrierAt({...p,y:barrierY},p.radius,p.minY??0,p.maxY??(mode==='helicopter'?3.4:mode==='roadster'?1.7:2));if(hit)return hit.label||'围栏边界';}
     if(bodies.some(p=>buildings.some(b=>y+(p.minY??0)<(b.height??18)+.5&&y+(p.maxY??(mode==='helicopter'?3.4:mode==='roadster'?1.7:2))>(b.minHeight??0)&&overlapsPolygon(p,p.radius,b))))return'建筑边界';
-    if(mode==='helicopter'||mode==='roadster'&&!state.grounded||mode==='hoverboard'&&!state.grounded){
+    if(mode==='boat'){
+      if(bodies.some(p=>!waterAt(p.x,p.z,p.radius)))return'请在水域内航行';
+      if(bodies.some(p=>[[0,0],[p.radius,0],[-p.radius,0],[0,p.radius],[0,-p.radius]].some(([dx,dz])=>{const g=groundAt(p.x+dx,p.z+dz);return g.onBridge&&g.height>y-.4&&g.height<y+2.8;})))return'桥下净空不足';
+      return'';
+    }
+    if(mode==='helicopter'||mode==='roadster'&&!grounded||mode==='hoverboard'&&!grounded){
       const contacts=mode==='roadster'||mode==='hoverboard'?bodies.map(p=>groundAt(p.x,p.z)): [ground];
       if(mode==='hoverboard'?bodies.some(p=>groundAt(p.x,p.z).height>y+p.minY+.04):contacts.some(g=>g.height>y+.04))return'桥面边界';
       const waterContact=mode==='roadster'||mode==='hoverboard'?bodies.some(p=>!groundAt(p.x,p.z,p.radius).allowed):ground.overWater&&!ground.onBridge;
@@ -254,6 +267,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   }
   function roadsterContact(){const half=ROADSTER.wheelbase/2,f=groundAt(state.x-Math.sin(state.yaw)*half,state.z-Math.cos(state.yaw)*half),r=groundAt(state.x+Math.sin(state.yaw)*half,state.z+Math.cos(state.yaw)*half);return{y:(f.height+r.height)/2,pitch:Math.atan2(f.height-r.height,ROADSTER.wheelbase)};}
   function contactPose(){const ground=groundAt(state.x,state.z);state.progress=ground.progress;
+    if(state.mode==='boat'){const water=waterAt(state.x,state.z);if(water)state.y=water.height;state.grounded=true;state.verticalSpeed=0;return;}
     if(state.mode==='helicopter'||state.mode==='roadster'&&!state.grounded||state.mode==='hoverboard'&&!state.grounded)return;
     if(state.mode==='hoverboard'){const contact=hoverboardContact();state.y=contact.y;state.pitch=contact.pitch;state.lean=contact.lean;state.grounded=true;return;}
     if(state.mode==='roadster'){const contact=roadsterContact();state.y=contact.y;state.pitch=contact.pitch;state.lean=0;state.grounded=true;return;}
@@ -269,9 +283,9 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       floor=Math.max(floor,contact.height+ROADSTER.wheelRadius-ry);
     }return floor;
   }
-  function trafficClear(point,mode){if(mode==='helicopter')return true;const actors=typeof traffic==='function'?traffic():traffic;if(!Array.isArray(actors))return true;
+  function trafficClear(point,mode,{ignoreTrafficId}={}){if(mode==='helicopter'||mode==='boat')return true;const actors=typeof traffic==='function'?traffic():traffic;if(!Array.isArray(actors))return true;
     const bodies=bodySamples(point.x,point.z,point.yaw,mode);
-    for(const actor of actors){if(actor.active===false||!finite(actor.x)||!finite(actor.z)||(mode==='roadster'||mode==='hoverboard'?point.y>=(actor.y??BASE_Y)+1.9||point.y+(mode==='roadster'?1.7:2.4)<=(actor.y??BASE_Y):Math.abs((actor.y??BASE_Y)-point.y)>1.6)||Math.hypot(actor.x-point.x,actor.z-point.z)>(mode==='roadster'?3.7:3.4))continue;
+    for(const actor of actors){if(ignoreTrafficId!==undefined&&actor.id===ignoreTrafficId||actor.active===false||!finite(actor.x)||!finite(actor.z)||(mode==='roadster'||mode==='hoverboard'?point.y>=(actor.y??BASE_Y)+1.9||point.y+(mode==='roadster'?1.7:2.4)<=(actor.y??BASE_Y):Math.abs((actor.y??BASE_Y)-point.y)>1.6)||Math.hypot(actor.x-point.x,actor.z-point.z)>(mode==='roadster'?3.7:3.4))continue;
       const kind=actor.type??actor.kind,radius=kind==='walk'?.27:.43,half=kind==='walk'?0:.48,yaw=actor.yaw??0,ax=Math.sin(yaw)*half,az=Math.cos(yaw)*half,front={x:actor.x-ax,z:actor.z-az},rear={x:actor.x+ax,z:actor.z+az};
       if(bodies.some(p=>distanceToSegment(p,front,rear)<p.radius+radius+.1))return false;
     }return true;
@@ -293,20 +307,30 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     if(!position){Object.assign(state,before,{blockedReason:'该路段没有足够净空，未改变位置'});return state;}
     Object.assign(state,{x:position.x,y:groundAt(position.x,position.z).height,z:position.z,yaw:position.yaw,speed:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,blockedReason:reason,progress:position.progress??s,verticalSpeed:0,elapsed:0,braking:false});verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();return state;
   }
-  // Explicit inspection spawn; validate the complete walking capsule before
-  // resetting any flight state. A rejected location leaves the player intact.
-  function placeWalker(pose){
-    if(!pose||![pose.x,pose.z,pose.yaw].every(finite))return{ok:false,reason:'无效的步行位置'};
-    const ground=groundAt(pose.x,pose.z),point={...pose,y:ground.height};
-    const reason=obstacleAt(point.x,point.z,point.yaw,'walk',point.y);
+  // Mounting uses the actual entity pose and never moves to a nearby fallback.
+  // Invalid or occupied footprints leave both player and vehicle untouched.
+  function canPlaceMode(pose,mode='walk',options={}){
+    if(!MODES.has(mode))return{ok:false,reason:'未知移动方式'};
+    if(!pose||![pose.x,pose.z,pose.yaw].every(finite))return{ok:false,reason:'无效的位置'};
+    const ground=groundAt(pose.x,pose.z),surface=mode==='boat'?waterAt(pose.x,pose.z):ground;
+    if(!surface)return{ok:false,reason:'游艇需要停在水面'};
+    const point={x:pose.x,z:pose.z,yaw:pose.yaw,y:surface.height};
+    const reason=obstacleAt(point.x,point.z,point.yaw,mode,point.y,null,true,{pitch:0,lean:0});
     if(reason)return{ok:false,reason};
-    if(!trafficClear(point,'walk'))return{ok:false,reason:'该位置有人车，请稍后再试'};
-    Object.assign(state,{mode:'walk',x:point.x,y:point.y,z:point.z,yaw:point.yaw,speed:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,blockedReason:'',progress:ground.progress,verticalSpeed:0,elapsed:0,braking:false});
+    if(!trafficClear(point,mode,options))return{ok:false,reason:'该位置有人车，请稍后再试'};
+    return{ok:true,pose:point};
+  }
+  function placeMode(pose,mode='walk',options={}){
+    const check=canPlaceMode(pose,mode,options);if(!check.ok)return check;
+    const point=check.pose,ground=groundAt(point.x,point.z);
+    Object.assign(state,{mode,x:point.x,y:point.y,z:point.z,yaw:point.yaw,speed:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,blockedReason:'',progress:ground.progress,verticalSpeed:0,elapsed:0,braking:false});
     verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;
     contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();
     return{ok:true};
   }
+  function placeWalker(pose){return placeMode(pose,'walk');}
   function setMode(mode){if(!MODES.has(mode))return{ok:false,reason:'未知移动方式'};if(mode===state.mode)return{ok:true};
+    if(mode==='boat')return{ok:false,reason:'请靠近岸边游艇按 F 登船'};
     if((state.mode==='helicopter'||state.mode==='roadster'||state.mode==='hoverboard'||state.mode==='spider')&&!state.grounded)return{ok:false,reason:'请先在陆地降落，再切换移动方式'};
     if(state.mode==='spider'&&Math.abs(state.y-groundAt(state.x,state.z).height)>.3)return{ok:false,reason:'请先从屋顶回到地面，再切换移动方式'};
     const reason=obstacleAt(state.x,state.z,state.yaw,mode,state.y);
@@ -323,9 +347,23 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   function fixedUpdate(input){const forward=clamp(Number(input.forward)||0,-1,1),turn=clamp(Number(input.turn)||0,-1,1),vertical=clamp(Number(input.vertical)||0,-1,1),brake=!!input.brake;
     state.elapsed+=STEP;state.blockedReason='';state.braking=brake;previousBodyPose={pitch:state.pitch,lean:state.lean};
     if(state.mode==='spider'){spider.step(STEP,input);return;}
+    if(state.mode==='boat'){
+      const oldSpeed=state.speed;
+      groundSpeed(brake?0:forward*(forward<0?2:input.fast?9:6),{acceleration:2.2,deceleration:brake?5:1.5,brake});
+      walkYawRate=approach(walkYawRate,turn*.65*(.2+Math.min(1,Math.abs(state.speed)/3))*Math.sign(state.speed||1),STEP*1.3);
+      const yaw=state.yaw+walkYawRate*STEP,x=state.x-Math.sin(yaw)*state.speed*STEP,z=state.z-Math.cos(yaw)*state.speed*STEP;
+      const reason=obstacleAt(x,z,yaw,'boat',state.y);
+      if(reason){state.speed=0;groundAcceleration=0;state.acceleration=0;state.blockedReason=reason;
+        if(!obstacleAt(state.x,state.z,yaw,'boat',state.y))state.yaw=yaw;else walkYawRate=0;
+      }else{state.distance+=Math.hypot(x-state.x,z-state.z);state.x=x;state.z=z;state.yaw=yaw;}
+      state.yaw=Math.atan2(Math.sin(state.yaw),Math.cos(state.yaw));state.yawRate=walkYawRate;state.steeringAngle=turn*.35;
+      state.pitch=approach(state.pitch,-Math.min(.025,Math.abs(state.speed)*.003),STEP*.08);
+      state.lean=approach(state.lean,clamp(-walkYawRate*Math.abs(state.speed)*.012,-.045,.045),STEP*.16);
+      state.acceleration=(state.speed-oldSpeed)/STEP;contactPose();state.flightPhase='water';return;
+    }
     let nextYaw=state.yaw;
     if(state.mode==='walk'){
-      groundSpeed(brake?0:forward*(input.fast?2.8:1.6),{acceleration:7,deceleration:brake?10:9,brake});
+      groundSpeed(brake?0:forward*(input.fast?3.8:2.2),{acceleration:8.5,deceleration:brake?12:11,brake});
       walkYawRate=approach(walkYawRate,turn*2.2,STEP*(turn?18:26));nextYaw+=walkYawRate*STEP;state.steeringAngle=0;state.lean=0;
     }else if(state.mode==='scooter'){
       const target=brake?0:forward*(forward<0?1.1:5.5);
@@ -439,5 +477,5 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   const spider=createWebSwingMotion({state,world:{buildings,water,bounds,...(barriers.length?{barrierAt,barrierSweep,barrierVertical}:{})},groundAt,traffic,guideAt:sample});
   function clearActionInputs(){jumpPending=false;zipPending=false;pointPending=false;spider.clearActionInputs();}
   function suspend(){state.speed=0;verticalSpeed=0;state.verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;resetRoadsterControls();resetBoardControls();resetGroundControls();if((state.mode==='roadster'||state.mode==='hoverboard')&&!state.grounded){state.altitudeTarget=state.mode==='roadster'?null:state.y;state.pitch=0;state.lean=0;state.flightPhase=state.mode==='roadster'?'coasting':'hover';if(state.mode==='roadster')state.jetPower=0;}spider.suspend();}
-  reset();return{state,reset,placeWalker,setMode,setFlightEnabled,step,suspend,clearActionInputs,groundAt};
+  reset();return{state,reset,placeWalker,placeMode,canPlaceMode,setMode,setFlightEnabled,step,suspend,clearActionInputs,groundAt,waterAt};
 }

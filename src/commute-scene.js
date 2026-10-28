@@ -9,6 +9,7 @@ import {createTreeLayer} from './vegetation.js';
 import {createStreetDetails} from './street-details.js';
 import {createSurfaceMaterials,applyWorldUV} from './surface-materials.js';
 import {createEastNineParkingDetails} from './east-nine-parking-details.js';
+import {createScooterTransport} from './scooter-transport.js';
 
 /** Photo-informed geometric reconstruction. Source locations belong to route;
  * vehicle styling, parking arrangement, signal poles and ramp grades are estimates.
@@ -32,6 +33,7 @@ export function createCommuteScene(THREE,scene,route,simulation,{model}={}){
   // the photo-refined building. A mapped parking centroid is not every bike.
   const reserved=(model?.photoForecourtReservations||[]).map(p=>streetFootprint(p.x,p.z,p.width+.3,p.depth+.3,p.yaw||0));
   const parking=sourceParking.filter(p=>{const footprint=streetFootprint(p.x,p.z,1.05,2.24,p.yaw||0);return(!boundary||!footprintIntersectsRing(footprint,boundary))&&!reserved.some(r=>footprintIntersectsRing(footprint,r));});
+  const scooterTransport=createScooterTransport({parking,simulation,onChange:()=>update()});
   group.userData.parkingRefinedBoundaryAvoidance=sourceParking.length-parking.length;
   const dummy=new THREE.Object3D(),color=new THREE.Color(),localMatrix=new THREE.Matrix4();
   const brakeMaterial=actors.palette.tail.clone();brakeMaterial.emissive.set('#ee321c');brakeMaterial.emissiveIntensity=1.1;materials.add(brakeMaterial);
@@ -40,6 +42,13 @@ export function createCommuteScene(THREE,scene,route,simulation,{model}={}){
   const distantVehicles=batches(lowScooter,1200,'electric-scooter-distant'),distantWalkers=batches(lowWalker,1200,'pedestrian-distant'),distantParked=batches(lowParked,Math.max(1,parking.length),'parked-scooter-distant');
   for(const part of[...distantVehicles,...distantWalkers,...distantParked])part.mesh.castShadow=false;
   function writeBatch(batch,items,staticBatch=false){
+    // Borrowed traffic scooters can be left parked anywhere; grow only when a
+    // returned vehicle actually exceeds the original instance capacity.
+    for(const part of batch)if(items.length>part.mesh.instanceMatrix.count){
+      const previous=part.mesh,next=new THREE.InstancedMesh(previous.geometry,previous.material,2**Math.ceil(Math.log2(items.length)));
+      Object.assign(next,{name:previous.name,castShadow:previous.castShadow,receiveShadow:previous.receiveShadow,frustumCulled:false,renderOrder:previous.renderOrder,userData:previous.userData});
+      next.instanceMatrix.setUsage(THREE.DynamicDrawUsage);group.remove(previous);previous.dispose();group.add(next);part.mesh=next;
+    }
     const kind=batch===walkers||batch===distantWalkers?'walk':'scooter';
     const posed=items.map(a=>{const pose=actors.samplePose(a,kind);const contact=kind==='scooter'&&!staticBatch&&Number.isFinite(a.progress)?sampleVehicleContact(route,a):{y:(a.y??.16)-(kind==='scooter'?.021:0),pitch:0};dummy.position.set(a.x,contact.y,a.z);dummy.rotation.set(0,a.yaw||0,0);dummy.scale.setScalar(1);dummy.updateMatrix();const world=dummy.matrix.clone();if(kind==='scooter')world.multiply(new THREE.Matrix4().makeRotationX(contact.pitch)).multiply(new THREE.Matrix4().makeRotationZ(pose.lean));return{agent:a,pose,world,appearance:actors.appearance(a)};});
     for(const part of batch){
@@ -51,7 +60,7 @@ export function createCommuteScene(THREE,scene,route,simulation,{model}={}){
       part.mesh.instanceMatrix.needsUpdate=true;if(part.mesh.instanceColor)part.mesh.instanceColor.needsUpdate=true;if(staticBatch)part.mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     }
   }
-  writeBatch(parkedBatches,parking,true);
+  writeBatch(parkedBatches,scooterTransport.parkedAgents,true);
   function mesh(g,m,parent=staticGroup){geometries.add(g);const o=new THREE.Mesh(g,m);o.castShadow=true;o.receiveShadow=true;o.renderOrder=205;parent.add(o);return o;}
   const surfaces=createSurfaceMaterials(THREE);
   const eastNineParking=createEastNineParkingDetails(THREE,{...route,parkingPlaces:parking},{model,heightAt:model?.eastNineGround?.heightAt,surfaceHeightAt:model?.eastNineGround?.surfaceHeightAt});
@@ -104,10 +113,10 @@ export function createCommuteScene(THREE,scene,route,simulation,{model}={}){
   function update(camera){if(disposed)return;if(camera)lastCamera=camera;vegetation.update(lastCamera);
     if(lastCamera){lastCamera.updateMatrixWorld();projection.multiplyMatrices(lastCamera.projectionMatrix,lastCamera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);lastCamera.getWorldPosition(cameraPosition);}
     function partition(items){const near=[],far=[];for(const item of items){if(!lastCamera){near.push(item);continue;}sphere.center.set(item.x,(item.y||.16)+.9,item.z);if(!frustum.intersectsSphere(sphere))continue;(sphere.center.distanceToSquared(cameraPosition)<34*34?near:far).push(item);}return[near,far];}
-    const agents=simulation.agents.filter(a=>a.active!==false&&a.phase!=='arrived'),[nearScooters,farScooters]=partition(agents.filter(a=>(a.kind||a.type)==='scooter')),[nearPeople,farPeople]=partition(agents.filter(a=>(a.kind||a.type)==='walk')),[nearParking,farParking]=partition(parking);
+    const agents=simulation.agents.filter(a=>a.active!==false&&a.phase!=='arrived'),[nearScooters,farScooters]=partition(agents.filter(a=>(a.kind||a.type)==='scooter')),[nearPeople,farPeople]=partition(agents.filter(a=>(a.kind||a.type)==='walk')),[nearParking,farParking]=partition(scooterTransport.parkedAgents);
     writeBatch(vehicles,nearScooters.slice(0,1200));writeBatch(distantVehicles,farScooters.slice(0,1200));writeBatch(walkers,nearPeople.slice(0,1200));writeBatch(distantWalkers,farPeople.slice(0,1200));writeBatch(parkedBatches,nearParking);writeBatch(distantParked,farParking);
     for(const entry of signalLamps){const state=simulation.signals.find(s=>s.id===entry.id)?.state||'off';for(const[name,m]of Object.entries(entry.lamps)){m.emissiveIntensity=name===state?2:.015;m.color.set(name===state?name==='red'?'#ff3b28':name==='green'?'#50ed93':'#ffc637':'#263b35');}}}
   function setVisible(visible){group.visible=!!visible;}
-  function dispose(){if(disposed)return;disposed=true;group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});vegetation.dispose();streetDetails.dispose();crossingDetails.dispose();eastNineParking.dispose();if(model?.parkingInfrastructure===eastNineParking.infrastructure)delete model.parkingInfrastructure;surfaces.dispose();scene.remove(group);scene.remove(staticGroup);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();group.clear();staticGroup.clear();}
-  update();return{group,staticGroup,update,updateStatic:camera=>vegetation.update(camera),setVisible,dispose,counts:{parked:parking.length,photoInferredParked:parking.filter(p=>p.buildingSourceId==='way/103814566').length,trees:trees.length,streetDetails:streetDetails.counts,signals:(route.trafficSignals||[]).length,signalHeads:signalLamps.length,crossings:(route.crossings||[]).filter(c=>c.tags?.['crossing:markings']==='yes'||c.tags?.crossing==='marked').length},vehicleGeometry:scooter};
+  function dispose(){if(disposed)return;disposed=true;scooterTransport.dispose();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});vegetation.dispose();streetDetails.dispose();crossingDetails.dispose();eastNineParking.dispose();if(model?.parkingInfrastructure===eastNineParking.infrastructure)delete model.parkingInfrastructure;surfaces.dispose();scene.remove(group);scene.remove(staticGroup);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();group.clear();staticGroup.clear();}
+  update();return{group,staticGroup,scooterTransport,update,updateStatic:camera=>vegetation.update(camera),setVisible,dispose,counts:{parked:parking.length,photoInferredParked:parking.filter(p=>p.buildingSourceId==='way/103814566').length,trees:trees.length,streetDetails:streetDetails.counts,signals:(route.trafficSignals||[]).length,signalHeads:signalLamps.length,crossings:(route.crossings||[]).filter(c=>c.tags?.['crossing:markings']==='yes'||c.tags?.crossing==='marked').length},vehicleGeometry:scooter};
 }

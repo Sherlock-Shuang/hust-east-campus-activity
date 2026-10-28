@@ -2,6 +2,7 @@
 // poses and stateful rigs both keep their final rendered result collision safe.
 const CAMERA = {
   walk: { distance: 6.4, aim: 1.05, eye: 1.58 },
+  boat: { distance: 12, aim: 2.0, eye: 2.1 },
   scooter: { distance: 8.8, aim: 1.05, eye: 1.4 },
   helicopter: { distance: 18, aim: 1.5, eye: 1.5 },
   roadster: { distance: 9.4, aim: .7, eye: .99 },
@@ -255,6 +256,7 @@ export function createTraversalCameraRig(){
 
 const VEHICLE_FRAMING = {
   walk:       { distance: 6.4, aim: 1.05, pitch: .25, fov: 58, speedScale: 3,  lead: .3, pullback: .2, widen: 0 },
+  boat:       { distance: 12, aim: 2.0, pitch: .21, fov: 60, speedScale: 9, lead: 1.4, pullback: .6, widen: 2 },
   scooter:    { distance: 8.8, aim: 1.05, pitch: .25, fov: 60, speedScale: 7,  lead: 1.2, pullback: .4, widen: 0 },
   roadster:   { distance: 8.7, aim: .85, pitch: .15, fov: 58, speedScale: 24, lead: 3.5, pullback: 1.1, widen: 8 },
   helicopter: { distance: 18, aim: 1.5, pitch: .25, fov: 60, speedScale: 25, lead: 2, pullback: .8, widen: 0 },

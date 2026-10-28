@@ -41,33 +41,6 @@
         ><button id="export">GeoJSON</button>
       </nav>
     </header>
-    <aside class="sidebar transport-selector" aria-label="选择出行方式">
-      <section id="commute-panel" hidden>
-        <section id="player-panel" aria-labelledby="transport-title">
-          <h2 id="transport-title">出行方式</h2>
-          <div class="player-modes" role="group" aria-label="出行方式">
-            <button data-player-mode="walk" aria-pressed="false" title="步行探索校园">
-              <svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="15.5" cy="4.5" r="2.3"/><path d="m10 12 4-4 4 3 4 1M14 8l-2 9 5 4 1 5m-6-9-4 8M10 12l-4 4"/></svg><span>步行</span>
-            </button>
-            <button data-player-mode="scooter" aria-pressed="false" title="骑电动车前往东九">
-              <svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="6" cy="21" r="3.5"/><circle cx="22" cy="21" r="3.5"/><path d="M6 21h11l4-8-2-8h-4M19 7h4m-5 7H9l-3 7m3-7v-4h5m3 11 2-5"/></svg><span>电动车</span>
-            </button>
-            <button data-player-mode="roadster" aria-pressed="false" title="Roadster 喷气跑车">
-              <svg viewBox="0 0 28 28" aria-hidden="true"><path d="m3 17 3-7 5-2h8l4 5 2 2v6H3Zm4-4h14M7 21v3m14-3v3M5 17h4m10 0h4M13 2v3m-3-2 1 2m6-2-1 2"/></svg><span>喷气跑车</span>
-            </button>
-            <button data-player-mode="helicopter" aria-pressed="false" title="驾驶直升机探索校园">
-              <svg viewBox="0 0 28 28" aria-hidden="true"><path d="M5 4h18M14 4v5m-4 0h8c4 0 7 3 7 6H11L6 11H2V8m13 1v6m-3 0v5m9-5v5M8 20h17M4 4v9"/></svg><span>直升机</span>
-            </button>
-            <button data-player-mode="hoverboard" aria-pressed="false" title="电动飞行滑板">
-              <svg viewBox="0 0 28 28" aria-hidden="true"><path d="m3 14 10-5 12 5-10 5Zm5 2v5m13-5v5M7 24h3m8 0h3M14 3v3M4 6l2 2m18-2-2 2"/><ellipse cx="9" cy="14" rx="2" ry="1"/><ellipse cx="19" cy="14" rx="2" ry="1"/></svg><span>飞行滑板</span>
-            </button>
-            <button data-player-mode="spider" aria-pressed="false" title="蜘蛛侠蛛丝摆荡">
-              <svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="15" cy="8" r="2"/><path d="m12 12 4 3 3-3 5-2m-12 2-3-4-3-1m10 8-3 5-5 3m5-3 6 3 3-1M5 2l1 5m17-4 1 7m-3-8 3 1 2-2"/></svg><span>蛛丝摆荡</span>
-            </button>
-          </div>
-        </section>
-      </section>
-    </aside>
     <main id="viewport">
       <canvas id="map-canvas" tabindex="0" aria-label="东校区三维建筑与道路；玩家模式使用 WASD 移动"></canvas>
       <div class="view-toolbar">
@@ -116,6 +89,8 @@
       <div id="web-speed-shade" hidden aria-hidden="true"></div>
       <div id="pointer-lock-hint" hidden>鼠标已锁定 · Esc / L 释放鼠标</div>
       <div id="player-look-reticle" hidden aria-hidden="true"></div>
+      <button id="transport-interact" class="world-interaction" hidden><kbd>F</kbd><span id="transport-interact-label"></span></button>
+      <button id="resume-exploration" hidden>继续校园探索 <span>↗</span></button>
       <section id="player-hud" class="player-guide" aria-label="操作提示" hidden>
         <span id="player-mode-label"></span>
         <p id="player-help"></p>
@@ -146,7 +121,7 @@
       <h3 class="reference-subheading">地图与模型依据</h3>
       <div class="reference-card"><b>东九湖水生植物</b><p>小红书原帖可见湖面成片圆叶植物及开阔水面。场景已加入岸侧叶簇、杯状叶片与少量挺水叶；仅作外观参考，分布、覆盖率与季节状态为估计。原始水域轮廓和岛洞保持不变。</p></div>
       <div class="reference-card"><b>韵苑宿舍与喻岱桥</b><p>华科官方 2020 年《这里是韵苑》照片用于参考浅色墙面、分格窗、楼梯间、空调外机和桥栏。具体开窗位置、尺度及当下外观仍未逐栋测绘。</p><a href="https://news.sina.cn/gn/2020-12-11/detail-iiznctke6018801.d.html" target="_blank" rel="noreferrer">查看校方图文 ↗</a></div>
-      <div class="reference-card"><b>韵苑食堂、教育超市与宿舍</b><p>用户街景确认教育超市位于韵苑食堂底层，深蓝门头下有青绿细线；二楼开敞柱廊、菱形窗门塔和展开雨盖已按照片重建。5栋有单独的弧阳台与圆拱立面，源层数与照片有差异，暂保留地图五层。27栋未套用这套外观。14、18、23栋斜屋面仍参考2022工程答疑。</p><a href="https://www.hbbidcloud.cn/hubei/jyxx/004003/004003006/20220308/8039081a-036f-43b9-afff-686d5635eb3f.html" target="_blank" rel="noreferrer">查看工程答疑 ↗</a></div>
+      <div class="reference-card"><b>韵苑食堂、教育超市与宿舍</b><p>用户街景确认教育超市位于韵苑食堂底层，深蓝门头下有青绿细线；二楼开敞柱廊、菱形窗门塔和展开雨盖已按照片重建。5栋有单独的弧阳台与圆拱立面，源层数与照片有差异，暂保留地图五层。27栋未套用这套外观。14、18、23栋斜屋面仍参考2022工程答疑。</p><a href="/references/local-campus/index.html#yunyuan-canteen-market" target="_blank" rel="noreferrer">查看用户实景 ↗</a> · <a href="https://www.hbbidcloud.cn/hubei/jyxx/004003/004003006/20220308/8039081a-036f-43b9-afff-686d5635eb3f.html" target="_blank" rel="noreferrer">查看工程答疑 ↗</a></div>
       <div class="reference-card"><b>东九前场与电动车停放</b><p>长江日报 2023 年现场报道：东九 B 区弧形玻璃、白色圆柱、浅色铺装和成排停放的电动车。报道描述的拥堵时段为下午 15:35，不能当作早八人数统计。</p><a href="https://www.app.dawuhanapp.com/p/29771276.html" target="_blank" rel="noreferrer">查看报道与实拍 ↗</a></div>
       <div class="reference-card"><b>早高峰道路与车辆外观</b><p>华科官方 2019 年交通治理报道：林荫道路、斑马线、树池、带前篮与防风罩的电动车，以及高峰疏导。照片用于参考外观，未配准到本路线的每个位置。</p><a href="https://www.thepaper.cn/newsDetail_forward_5075801" target="_blank" rel="noreferrer">查看校方照片 ↗</a></div>
       <div class="reference-card"><b>喻家路、启明路与宿舍支路交会</b><p>OpenStreetMap 节点 11395860771 标注信号控制，更新于 2026-02-26。源点代表路口；模型中的灯杆偏移、形制和 42 / 4 / 28 秒配时为展示估计。</p><a href="https://www.openstreetmap.org/node/11395860771" target="_blank" rel="noreferrer">查看路口源记录 ↗</a></div>
@@ -183,7 +158,7 @@
       </div>
       <div class="precision-row">
         <b>通勤情景</b>
-        <p>路线参考从韵苑 27 栋旁公共通道出发，过喻岱桥后在用户确认的红绿灯处左转，沿湖边道路到 B/C 前场；也可选择 A 北侧步道。路口有源地图或用户确认依据，灯杆、横向位置和周期配时为估计。照片用于参考车流、停车和街道外观；86% 骑行、14% 回流及各时段人数为情景参数。</p>
+        <p>默认从韵苑 27 栋旁公共通道出发，过喻岱桥后在用户确认的红绿灯处左转，沿湖边道路到 B/C 前场；也可选择 A 北侧步道。路口有源地图或用户确认依据，灯杆、横向位置和周期配时为估计。照片用于参考车流、停车和街道外观；86% 骑行、14% 回流及各时段人数为情景参数。</p>
       </div>
       <div class="precision-row">
         <b>下一步数据</b>

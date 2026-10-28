@@ -1,3 +1,4 @@
+import { createBoatModel } from './boat-model.js';
 import { createSpiderModel } from './spider-model.js';
 import { createHoverboardModel } from './hoverboard-model.js';
 import { createRoadsterModel } from './roadster-model.js';
@@ -19,22 +20,34 @@ export function createPlayerModels(THREE){
   const roadster=createRoadsterModel(THREE);roadster.group.name='player-roadster';
   const hoverboard=createHoverboardModel(THREE);hoverboard.group.name='player-hoverboard';
   const spider=createSpiderModel(THREE);spider.group.name='player-spider';
-  group.add(walker,scooter,helicopter,roadster.group,hoverboard.group,spider.group);
+  const boat=createBoatModel(THREE,{occupied:true});boat.group.name='player-boat';
+  group.add(walker,scooter,helicopter,roadster.group,hoverboard.group,spider.group,boat.group);
   group.userData={forward:'-Z',units:'metres',contactOrigin:true};
   const library=createActorLibrary(THREE,{registerGeometry:ownGeometry,registerMaterial:ownMaterial});
   const playerColors={paint:'#c9d6cc',coat:'#346d6b',pants:'#343f46',skin:'#c59a7a',hair:'#302923',bag:'#ad704c'};
   for(const [key,color]of Object.entries(playerColors))library.palette[key].color.set(color);
   const character={id:0,colorIndex:0};
   const appearance=library.appearance(character);
-  function actorParts(parent,parts){
-    return parts.filter(part=>library.partApplies(part,appearance)).map(part=>{
-      const mesh=new THREE.Mesh(part.geometry,part.material);
+  function actorParts(parent,parts,selectedAppearance=appearance,paintOverride=null){
+    return parts.filter(part=>library.partApplies(part,selectedAppearance)).map(part=>{
+      const mesh=new THREE.Mesh(part.geometry,paintOverride&&part.colorKey==='paint'?paintOverride:part.material);
       mesh.name=`player-${part.name}-${part.joint??'body'}`;
       mesh.matrixAutoUpdate=false;mesh.castShadow=true;mesh.receiveShadow=true;
       parent.add(mesh);return{mesh,part};
     });
   }
-  const walkingParts=actorParts(walker,library.walker),ridingParts=actorParts(scooter,library.scooter);
+  const walkingParts=actorParts(walker,library.walker);
+  let ridingParts=actorParts(scooter,library.scooter);
+  const selectedScooterPaint=ownMaterial(library.palette.paint.clone());
+  function setScooterAppearance(source={}){
+    const selected=library.appearance(source),colors=library.colors.paint;
+    selectedScooterPaint.color.set(colors[((selected.colorIndex%colors.length)+colors.length)%colors.length]);
+    scooter.clear();
+    // Match the borrowed scooter's shell and paint while retaining the player's
+    // own clothes/body. Shared geometry survives subsequent pickups.
+    ridingParts=[...actorParts(scooter,library.vehicle,selected,selectedScooterPaint),...actorParts(scooter,library.person)];
+    scooter.userData.appearance={family:selected.family,colorIndex:selected.colorIndex};
+  }
   function material(color,roughness=.5,metalness=.15,extra={}){
     return ownMaterial(new THREE.MeshStandardMaterial({color,roughness,metalness,...extra}));
   }
@@ -160,6 +173,7 @@ export function createPlayerModels(THREE){
     if(mode==='hoverboard')hoverboard.update(state,dt);
     roadster.group.visible=mode==='roadster';
     if(mode==='roadster')roadster.update(state,dt);
+    boat.group.visible=mode==='boat';if(mode==='boat')boat.update(state,dt);
     walker.visible=mode==='walk';scooter.visible=mode==='scooter';helicopter.visible=mode==='helicopter';
     const speed=Math.abs(finite(state.speed));
     if(mode==='walk'||mode==='scooter'){
@@ -174,10 +188,10 @@ export function createPlayerModels(THREE){
     group.updateMatrixWorld(true);
   }
   function dispose(){
-    if(disposed)return;disposed=true;group.removeFromParent();roadster.dispose();hoverboard.dispose();spider.dispose();
+    if(disposed)return;disposed=true;group.removeFromParent();roadster.dispose();hoverboard.dispose();spider.dispose();boat.dispose();
     for(const geometry of geometries)geometry.dispose();for(const material of materials)material.dispose();
     group.clear();geometries.clear();materials.clear();
   }
   update({mode:'walk'});
-  return{group,update,dispose};
+  return{group,update,dispose,setScooterAppearance};
 }

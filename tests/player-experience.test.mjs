@@ -43,7 +43,7 @@ const REMOVED_HUD_IDS = new Set([
   'web-phase','web-length','web-chain','web-actions','web-release-hint','web-zip-status',
   'web-maneuvers','web-point-status','web-trick-status','web-launch-meter','web-launch-fill','web-launch-hint',
 ]);
-function fixture(t,{buildings=true,legacyControls=true}={}){
+function fixture(t,{buildings=true,legacyControls=true,transportSources}={}){
   const previous={document:globalThis.document,window:globalThis.window};
   const doc=new Element(),win=new Element(),ids=new Map(),html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   for(const match of html.matchAll(/\bid="([^"]+)"/g)){const el=new Element();el.id=match[1];ids.set(el.id,el);}
@@ -62,7 +62,7 @@ function fixture(t,{buildings=true,legacyControls=true}={}){
   const route={length:300,dismountProgress:280,points:[{x:0,y:.16,z:0,progress:0},{x:0,y:.16,z:-300,progress:300}],segments:[{startProgress:0,endProgress:300,width:7.2}]};
   const rectangle=(x1,z1,x2,z2)=>{const shape=new THREE.Shape();shape.moveTo(x1,-z1);shape.lineTo(x2,-z1);shape.lineTo(x2,-z2);shape.lineTo(x1,-z2);shape.closePath();return {category:'building',feature:{properties:{height:18}},shapes:[shape]};};
   const model={buildings:buildings?[rectangle(8,-160,18,25),rectangle(-18,-160,-8,25)]:[],water:[],bounds:{minX:-200,maxX:200,minZ:-400,maxZ:200}};
-  const notices=[];const experience=createPlayerExperience({THREE,scene,camera,controls,canvas,route,simulation:{agents:[]},model,onEnter(){},notify:s=>notices.push(s),invalidate(){}});
+  const notices=[];const experience=createPlayerExperience({THREE,scene,camera,controls,canvas,route,simulation:{agents:[]},model,transportSources,onEnter(){},notify:s=>notices.push(s),invalidate(){}});
   t.after(()=>{experience.dispose();globalThis.document=previous.document;globalThis.window=previous.window;});
   const tick=seconds=>{for(let remaining=seconds;remaining>1e-9;remaining-=1/60)experience.tick(Math.min(remaining,1/60));};
   const key=(code,type='keydown',extra={})=>win.emit(type,{code,target:canvas,...extra});
@@ -594,4 +594,36 @@ test('administrative pause received before mode selection blocks entry until res
   assert.equal(f.experience.enterAt({x:10,z:-20}).ok,false);f.tick(.4);
   assert.equal(f.experience.active,false);assert.deepEqual(f.experience.state,before);
   f.experience.setSuspended(false);f.experience.enter('walk');assert.equal(f.experience.active,true);
+});
+
+function inventory(mode,pose={}){
+  const item={id:`scene-${mode}`,mode,label:mode,x:1,y:.14,z:0,yaw:0,...pose,taken:false};
+  return {items:[item],nearest(s){return !item.taken&&Math.hypot(s.x-item.x,s.z-item.z)<5?item:null;},take(i){if(i.taken)return{ok:false};i.taken=true;return{ok:true};},release(i,p){Object.assign(i,p,{taken:false});return{ok:true};},restore(i){i.taken=false;return{ok:true};}};
+}
+test('scene F mounts the nearby car, does not arm jets or repeat, and dismounts to walking',t=>{
+  const source=inventory('roadster'),f=fixture(t,{buildings:false,transportSources:[source],legacyControls:false});
+  f.experience.enter('walk');f.tick(.2);assert.equal(f.el('transport-interact').hidden,false);
+  f.key('KeyF');assert.equal(f.experience.state.mode,'roadster');assert.equal(source.items[0].taken,true);assert.equal(f.experience.state.flightEnabled,false);
+  f.key('KeyF','keydown',{repeat:true});assert.equal(f.experience.state.mode,'roadster');
+  f.key('KeyF','keyup');f.key('KeyF');assert.equal(f.experience.state.mode,'walk');assert.equal(source.items[0].taken,false);
+  assert.match(f.el('player-help').textContent,/F 使用/);
+});
+test('scene interactions respect admin pause and preserve manual spider controls in air',t=>{
+  const source=inventory('spider'),f=fixture(t,{transportSources:[source],legacyControls:false});f.experience.enter('walk');
+  f.experience.setSuspended(true);f.key('KeyF');assert.equal(source.items[0].taken,false);f.experience.setSuspended(false);
+  f.key('KeyF');assert.equal(f.experience.state.mode,'spider');f.key('KeyF','keyup');
+  f.key('Space');f.tick(.35);f.key('Space','keyup');assert.equal(f.experience.state.grounded,false);
+  f.key('KeyF');f.tick(.08);assert.equal(f.experience.state.mode,'spider');assert.equal(source.items[0].taken,true);
+  assert.ok(f.experience.state.zipCount>0);assert.match(f.el('player-help').textContent,/松手后重按换点/);
+});
+test('refresh return places the saved helicopter at its own location and claims one world copy',t=>{
+  const source=inventory('helicopter',{x:40,z:20}),f=fixture(t,{transportSources:[source],legacyControls:false});f.experience.enter('walk');
+  const saved={mode:'helicopter',transport:{id:'scene-helicopter',mode:'helicopter'},view:'third',state:{x:40,y:.14,z:20,yaw:0,grounded:true,speed:0}};
+  assert.equal(f.experience.restoreActivityPose(saved),true);assert.equal(source.items[0].taken,true);assert.equal(f.experience.state.x,40);
+  assert.equal(f.experience.restoreActivityPose(saved),true);assert.equal(source.items.length,1);f.key('KeyF');assert.equal(f.experience.state.mode,'walk');assert.equal(source.items[0].taken,false);
+});
+test('failed refreshed vehicle placement returns its inventory item instead of leaving it hidden',t=>{
+  const source=inventory('helicopter',{x:12,z:0}),f=fixture(t,{transportSources:[source],legacyControls:false});f.experience.enter('walk');
+  assert.equal(f.experience.restoreActivityPose({mode:'helicopter',transport:{id:'scene-helicopter',mode:'helicopter'},view:'third',state:{x:12,y:.14,z:0,yaw:0,grounded:true}}),false);
+  assert.equal(source.items[0].taken,false);assert.equal(f.experience.state.mode,'walk');
 });

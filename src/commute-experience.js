@@ -211,7 +211,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
     const exterior=document.querySelector('[data-exterior^="韵苑"]');
     if(exterior)exterior.dataset.exterior=fc.features.find(f=>f.id===route.start.buildingId)?.properties?.name||name;
   }
-  function createPlayer(){const next=createPlayerExperience({THREE,scene,camera,controls,canvas,model,route,simulation,onEnter:()=>{stopFollow();prepareView();},notify,invalidate});next.setSuspended(suspended);return next;}
+  function createPlayer(){const next=createPlayerExperience({THREE,scene,camera,controls,canvas,model,route,simulation,scooterTransport:visual.scooterTransport,onEnter:()=>{stopFollow();prepareView();},notify,invalidate});next.setSuspended(suspended);return next;}
   function changeRoute(){
     // Build the next source route before disposing a playable existing scene.
     let next;try{next=createCommuteRoute(fc,{frame,geoToLocal,dormId:$('route-dorm')?.value ?? route.options.dormId,startAccess:$('route-access')?.value ?? route.options.startAccess,destination:$('route-destination')?.value ?? route.options.destination});}catch(error){notify(error.message);updateRouteLabels();return;}
@@ -268,7 +268,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
     tick(dt) {
       if (disposed || suspended || !($('symbolic')?.checked ?? true) || document.hidden) return false;
       const playerChanged = player.tick(dt);
-      simulation.setPlayerObstacle(player.active ? player.state : null);
+      simulation.setPlayerObstacle(player.active && player.state.mode!=='boat' ? player.state : null);
       if(player.active){observationProgress=player.state.progress;observationMode='route';}
       if (!visible) {
         const moved=camera.position.distanceToSquared(previousCamera)>.0001 || camera.quaternion.angleTo(previousDirection)>.001;
