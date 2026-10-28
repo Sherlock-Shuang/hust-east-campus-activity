@@ -2,6 +2,42 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createPlayerModels} from '../src/player-models.js';
+import {sampleActorPose} from '../src/commute-actors.js';
+
+test('faster player travel retains the original walking leg poses and cadence at both speeds',()=>{
+  const rig=createPlayerModels(THREE);
+  try{
+    const shoes=rig.group.getObjectByName('player-walk').children.filter(mesh=>mesh.name.endsWith('-shoe'));
+    assert.ok(shoes.length>=2);
+    for(const [speed,oldSpeed] of [[3.2,2.2],[5.2,3.8]])for(const fps of [30,144]){
+      rig.update({mode:'scooter'},0);rig.update({mode:'walk',speed,distance:0},0);
+      for(let i=1;i<=fps;i++){
+        const state={mode:'walk',speed,distance:speed*i/fps,yaw:i/fps,x:speed*i/fps};
+        const before={...state};rig.update(state,1/fps);assert.deepEqual(state,before,'animation must not change travel state');
+        const old=sampleActorPose({id:0,speed:oldSpeed,progress:oldSpeed*i/fps},'walk');
+        for(const shoe of shoes){const p=new THREE.Vector3().setFromMatrixPosition(shoe.matrix);assert.ok(['ankleL','ankleR'].some(key=>p.distanceTo(new THREE.Vector3(...old.points[key]))<1e-8),'feet follow the previous walking pose at the previous cadence');}
+      }
+    }
+  }finally{rig.dispose();}
+});
+
+test('changing walking speed or facing keeps animation phase continuous and vehicles do not advance the walk cycle',()=>{
+  const rig=createPlayerModels(THREE);
+  try{
+    const walker=rig.group.getObjectByName('player-walk');
+    rig.update({mode:'walk',speed:3.2,distance:0},0);
+    rig.update({mode:'walk',speed:3.2,distance:.7},.2);
+    const before=walker.children.map(mesh=>mesh.matrix.clone());
+    rig.update({mode:'walk',speed:5.2,distance:.7,yaw:2.2},0);
+    walker.children.forEach((mesh,i)=>assert.ok(mesh.matrix.equals(before[i]),'Shift and body turn do not jump the leg phase'));
+    rig.update({mode:'walk',speed:0,distance:.7},.1);const stopped=walker.children.map(mesh=>mesh.matrix.clone());
+    rig.update({mode:'walk',speed:0,distance:.7},10);walker.children.forEach((mesh,i)=>assert.ok(mesh.matrix.equals(stopped[i]),'idle animation stays still'));
+    rig.update({mode:'scooter',speed:7.5,distance:500},1);
+    rig.update({mode:'walk',speed:3.2,distance:500},0);
+    const reference=sampleActorPose({id:0,speed:2.2,progress:0},'walk');
+    for(const shoe of walker.children.filter(mesh=>mesh.name.endsWith('-shoe'))){const p=new THREE.Vector3().setFromMatrixPosition(shoe.matrix);assert.ok(['ankleL','ankleR'].some(key=>p.distanceTo(new THREE.Vector3(...reference.points[key]))<1e-8));}
+  }finally{rig.dispose();}
+});
 
 test('player modes share one world origin and visible contact surfaces stay on ground',()=>{
   const rig=createPlayerModels(THREE);

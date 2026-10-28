@@ -169,7 +169,10 @@ export function createPlayerModels(THREE){
     const updateWorld=root.updateMatrixWorld;
     root.updateMatrixWorld=function(force){if(this.visible)return updateWorld.call(this,force);};
   }
-  let rotorAngle=0,disposed=false;
+  let rotorAngle=0,disposed=false,walkProgress=0,previousWalkDistance=null,previousWalkSpeed=0;
+  // Keep the original leg/arm poses and their pre-speed-up cadence. Travel is
+  // faster now, but that must not fast-forward the familiar walking animation.
+  const walkingAnimationSpeed=speed=>speed<=3.2?speed*2.2/3.2:2.2+(Math.min(speed,5.2)-3.2)*1.6/2;
   function update(state={},dt=0){
     if(disposed)return;
     const mode=state.mode??'walk';
@@ -185,8 +188,18 @@ export function createPlayerModels(THREE){
     if(mode==='roadster')roadster.update(state,dt);
     if(mode==='boat')boat.update(state,dt);
     const speed=Math.abs(finite(state.speed));
+    if(mode==='walk'){
+      const distance=finite(state.distance);
+      if(previousWalkDistance!==null&&distance>=previousWalkDistance){
+        const averageSpeed=(previousWalkSpeed+speed)/2;
+        // Integrate distance deltas: multiplying total distance by a changing
+        // speed ratio would snap the feet every time Shift is pressed/released.
+        walkProgress+=(distance-previousWalkDistance)*(averageSpeed>1e-6?walkingAnimationSpeed(averageSpeed)/averageSpeed:2.2/3.2);
+      }else walkProgress=0;
+      previousWalkDistance=distance;previousWalkSpeed=speed;
+    }else{previousWalkDistance=null;previousWalkSpeed=0;}
     if(mode==='walk'||mode==='scooter'){
-      const agent={...character,speed,progress:finite(state.distance),steeringAngle:finite(state.steeringAngle),lean:finite(state.lean),footDown:clamp(1-speed/.75,0,1)};
+      const agent={...character,speed:mode==='walk'?walkingAnimationSpeed(speed):speed,progress:mode==='walk'?walkProgress:finite(state.distance),steeringAngle:finite(state.steeringAngle),lean:finite(state.lean),footDown:clamp(1-speed/.75,0,1)};
       const pose=library.samplePose(agent,mode);
       for(const {mesh,part}of mode==='walk'?walkingParts:ridingParts){library.partMatrix(part,agent,pose,mesh.matrix);mesh.matrixWorldNeedsUpdate=true;}
     }
