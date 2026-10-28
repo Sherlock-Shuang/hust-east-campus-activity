@@ -18,6 +18,8 @@ import { createSurfaceMaterials, createMorningEnvironment, applyWorldUV } from "
 import "./survey.css";
 import "./transport-ui.css";
 import { createLiveExperience } from './live-experience.js';
+import { createMobileRenderProfile } from './mobile-render-profile.js';
+import './mobile-controls.css';
 // Rendering no longer depends on the removed sidebar controls.
 const layerSettings = { symbolic: true, building: true, road: true, water: true };
 const $ = (id) => document.getElementById(id),
@@ -29,8 +31,9 @@ const renderer = new THREE.WebGLRenderer({
   logarithmicDepthBuffer: true,
   powerPreference: "high-performance",
 });
-let renderPixelRatio = Math.min(devicePixelRatio, 1.75);
-const traversalResolution = createTraversalResolution({deviceRatio:devicePixelRatio});
+const renderProfile=createMobileRenderProfile({coarsePointer:window.matchMedia('(any-pointer: coarse)').matches,maxTouchPoints:navigator.maxTouchPoints,width:innerWidth,height:innerHeight,devicePixelRatio});
+let renderPixelRatio = renderProfile.deviceRatio;
+const traversalResolution = createTraversalResolution({deviceRatio:renderProfile.deviceRatio});
 renderer.setPixelRatio(renderPixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -64,7 +67,7 @@ const shadowUp=new THREE.Vector3().crossVectors(shadowDirection,shadowRight).nor
 const shadowTarget=new THREE.Vector3();
 sun.position.copy(sunOffset);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(renderProfile.shadowMapSize, renderProfile.shadowMapSize);
 Object.assign(sun.shadow.camera, {
   left: -1800,
   right: 1800,
@@ -130,14 +133,16 @@ function toast(text) {
 let viewportHeight = 800, viewportWidth = 1200;
 function resize() {
   const r = container.getBoundingClientRect();
-  viewportHeight = r.height;
-  viewportWidth = r.width;
-  renderer.setSize(r.width, r.height);
-  camera.aspect = r.width / r.height;
+  viewportHeight = Math.max(1,r.height);
+  viewportWidth = Math.max(1,r.width);
+  renderer.setSize(viewportWidth, viewportHeight);
+  camera.aspect = viewportWidth / viewportHeight;
   camera.updateProjectionMatrix();
   needsRender = true;
 }
 window.addEventListener("resize", resize);
+window.visualViewport?.addEventListener('resize',resize);
+if(typeof ResizeObserver==='function')new ResizeObserver(resize).observe(container);
 resize();
 function updateScale() {
   const distance = camera.position.distanceTo(controls.target),
@@ -579,7 +584,7 @@ function loadDataset(data, manifest = {}) {
   scene.add(campus.group);
   riverTerrain=applyRiverTerrain(THREE,{model,datum,surfaces});
   scene.add(riverTerrain.group);
-  waterDetails=createWaterDetails(THREE,{records:model.water});
+  waterDetails=createWaterDetails(THREE,{records:model.water,reflection:renderProfile.reflection});
   scene.add(waterDetails.group);
   applyLayers();
   canvas.dataset.staticTransformCount = String([campus.group,campusSports.group,riverTerrain.group]

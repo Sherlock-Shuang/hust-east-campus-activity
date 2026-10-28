@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
     <meta name="theme-color" content="#e9eeeb" />
     <title>东九早八 · 三维校园通勤</title>
     <meta
@@ -95,6 +95,44 @@
         <span id="player-mode-label"></span>
         <p id="player-help"></p>
       </section>
+      <button id="mobile-enable-touch" type="button" aria-label="启用触屏操作">触控</button>
+      <div id="mobile-controls" aria-label="触屏操作" hidden>
+        <nav class="mobile-toolbar" aria-label="视角与显示">
+          <button type="button" data-mobile-action="view" aria-label="切换第一或第三人称视角">视角</button>
+          <button type="button" data-mobile-action="recenter" aria-label="镜头回到角色前方">回正</button>
+          <button type="button" data-mobile-action="fullscreen" aria-label="进入全屏">全屏</button>
+          <button type="button" data-mobile-action="more" data-mobile-modes="spider" aria-label="更多蜘蛛侠动作" aria-controls="mobile-extra-actions" aria-expanded="false">更多</button>
+        </nav>
+        <p id="mobile-fullscreen-status" class="mobile-status" role="status" aria-live="polite"></p>
+        <div class="mobile-movement">
+          <div id="mobile-joystick" role="group" aria-label="拖动摇杆移动，松开停止">
+            <span class="mobile-joystick-cross" aria-hidden="true"></span>
+            <span id="mobile-stick" aria-hidden="true"></span>
+          </div>
+          <span class="mobile-movement-label" aria-hidden="true">移动</span>
+        </div>
+        <div id="mobile-extra-actions" class="mobile-extra-actions" aria-label="蜘蛛侠进阶动作" hidden>
+          <button type="button" data-mobile-action="point" data-mobile-modes="spider" aria-label="定点弹射">定点弹射</button>
+          <button type="button" data-mobile-hold="reel" data-mobile-modes="spider" aria-label="按住收短蛛丝">收丝</button>
+          <button type="button" data-mobile-hold="dive" data-mobile-modes="spider" aria-label="按住俯冲">俯冲</button>
+          <button type="button" data-mobile-hold="trick" data-mobile-modes="spider" aria-label="按住进行空中特技">空中特技</button>
+        </div>
+        <div class="mobile-actions" aria-label="角色动作">
+          <button type="button" data-mobile-hold="fast" data-mobile-modes="walk scooter roadster helicopter hoverboard boat" aria-label="按住加速">加速</button>
+          <button type="button" data-mobile-hold="brake" data-mobile-modes="scooter roadster helicopter hoverboard boat" aria-label="按住刹车">刹车</button>
+          <button type="button" data-mobile-hold="up" data-mobile-modes="roadster helicopter hoverboard" aria-label="按住升高或喷气">上升</button>
+          <button type="button" data-mobile-hold="down" data-mobile-modes="helicopter hoverboard" aria-label="按住下降">下降</button>
+          <button type="button" data-mobile-action="jump" data-mobile-modes="spider" aria-label="跳跃或起跳">跳跃</button>
+          <button type="button" data-mobile-action="zip" data-mobile-modes="spider" aria-label="蛛丝前冲">前冲</button>
+          <button type="button" class="mobile-swing" data-mobile-hold="swing" data-mobile-modes="spider" aria-label="按住发射蛛丝并摆荡，松开释放">摆荡<span>按住</span></button>
+          <button type="button" class="mobile-interact" data-mobile-action="interact" aria-label="使用附近载具或下车"><span class="mobile-interact-icon" aria-hidden="true">↗</span><span id="mobile-interact-label">附近载具</span></button>
+        </div>
+      </div>
+      <aside id="mobile-orientation-hint" aria-label="横屏提示" hidden>
+        <span class="mobile-rotate-icon" aria-hidden="true">↻</span>
+        <div><strong>横过来，视野更开阔</strong><p>左手移动，右侧空白处滑动看向四周。</p></div>
+        <button type="button" data-mobile-action="continue-portrait">继续竖屏</button>
+      </aside>
       <footer>
         <div>
           <span id="scale-bar"></span><span id="scale-label">100 m</span>

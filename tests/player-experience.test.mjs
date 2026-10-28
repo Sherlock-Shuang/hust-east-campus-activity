@@ -8,29 +8,36 @@ import {createPlayerExperience} from '../src/player-experience.js';
 // Three.js models and camera calculations below are the production modules.
 class Element {
   constructor(tag='div'){
-    this.tagName=tag.toUpperCase();this.handlers=new Map();this.dataset={};this.style={};this.attrs={};this.hidden=false;this.textContent='';this.children=[];
+    this.tagName=tag.toUpperCase();this.handlers=new Map();this.dataset={};this.style={};this.attrs={};this.hidden=false;this.textContent='';this.children=[];this.captures=new Set();
     const classes=new Set();this.classList={add:(...v)=>v.forEach(x=>classes.add(x)),remove:(...v)=>v.forEach(x=>classes.delete(x)),contains:x=>classes.has(x),toggle:(x,value)=>{const next=value??!classes.has(x);next?classes.add(x):classes.delete(x);return next;}};
   }
   addEventListener(type,fn){if(!this.handlers.has(type))this.handlers.set(type,new Set());this.handlers.get(type).add(fn);}
   removeEventListener(type,fn){this.handlers.get(type)?.delete(fn);}
   dispatchEvent(event){return this.emit(event.type,event);}
-  emit(type,values={}){const event={target:this,code:'',repeat:false,button:0,buttons:0,pointerId:1,pointerType:'mouse',clientX:0,clientY:0,detail:1,preventDefault(){this.defaultPrevented=true;},...values};for(const fn of this.handlers.get(type)||[])fn(event);return event;}
+  emit(type,values={}){const event={type,target:this,code:'',repeat:false,button:0,buttons:0,pointerId:1,pointerType:'mouse',clientX:0,clientY:0,detail:1,preventDefault(){this.defaultPrevented=true;},stopPropagation(){},...values};for(const fn of this.handlers.get(type)||[])fn(event);return event;}
   setAttribute(name,value){this.attrs[name]=String(value);}
   getAttribute(name){return this.attrs[name]??null;}
   append(child){this.children.push(child);child.parent=this;}
   remove(){if(this.parent)this.parent.children=this.parent.children.filter(c=>c!==this);}
   closest(selector){return selector.split(',').some(tag=>tag.trim().toUpperCase()===this.tagName)?this:this.parent?.closest(selector)||null;}
   focus(){}
-  setPointerCapture(){}
+  setPointerCapture(id){this.captures.add(id);}
+  hasPointerCapture(id){return this.captures.has(id);}
+  releasePointerCapture(id){this.captures.delete(id);}
+  getBoundingClientRect(){return this.rect||{left:0,top:0,width:120,height:120};}
   showModal(){this.open=true;}
   close(){this.open=false;}
-  querySelector(selector){if(selector==='button')return this.button??=new Element('button');return null;}
-  querySelectorAll(){return [];}
+  querySelector(selector){if(selector==='button')return this.button??=new Element('button');return this.querySelectorAll(selector)[0]||null;}
+  querySelectorAll(selector){
+    const attribute=selector.match(/^\[([^=\]]+)(?:="([^"]*)")?\]$/),result=[];
+    const visit=element=>{for(const child of element.children){if(attribute&&child.getAttribute(attribute[1])!==null&&(attribute[2]===undefined||child.getAttribute(attribute[1])===attribute[2]))result.push(child);visit(child);}};
+    visit(this);return result;
+  }
 }
 
-// Optional controls belong to an embedding host; the shipped page now exposes
-// only the transport selector and short guidance. Keep the old input fixture
-// solely to exercise its supported button/touch event paths.
+// Optional legacy controls belong to an embedding host. Parse the shipped
+// mobile buttons below and retain this separate legacy fixture solely to
+// exercise the older embedding host's supported input paths.
 const LEGACY_CONTROL_IDS = [
   'player-mouse-toggle','look-sensitivity','look-sensitivity-value','player-side-view',
   'exit-player','player-recenter','walk-controls','player-cruise','player-flight-toggle',
@@ -43,19 +50,37 @@ const REMOVED_HUD_IDS = new Set([
   'web-phase','web-length','web-chain','web-actions','web-release-hint','web-zip-status',
   'web-maneuvers','web-point-status','web-trick-status','web-launch-meter','web-launch-fill','web-launch-hint',
 ]);
-function fixture(t,{buildings=true,legacyControls=true,transportSources}={}){
+function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePointer=false,joystickRect={left:24,top:190,width:120,height:120}}={}){
   const previous={document:globalThis.document,window:globalThis.window};
   const doc=new Element(),win=new Element(),ids=new Map(),html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-  for(const match of html.matchAll(/\bid="([^"]+)"/g)){const el=new Element();el.id=match[1];ids.set(el.id,el);}
+  const fromHTML=(tag,attributes)=>{
+    const el=new Element(tag);
+    for(const match of attributes.matchAll(/([\w-]+)="([^"]*)"/g)){
+      const [,name,value]=match;el.setAttribute(name,value);
+      if(name==='id')el.id=value;
+      if(name.startsWith('data-'))el.dataset[name.slice(5).replace(/-([a-z])/g,(_,c)=>c.toUpperCase())]=value;
+    }
+    el.hidden=/\bhidden(?:\s|$|=)/.test(attributes);return el;
+  };
+  for(const match of html.matchAll(/<([a-z][\w-]*)\b([^>]*\bid="[^"]+"[^>]*)>/g)){const el=fromHTML(match[1],match[2]);ids.set(el.id,el);}
+  const mobileButtons=[];
+  for(const match of html.matchAll(/<button\b([^>]*\bdata-mobile-(?:action|hold)="[^"]+"[^>]*)>/g)){
+    const el=fromHTML('button',match[1]);mobileButtons.push(el);
+    ids.get(el.dataset.mobileAction==='continue-portrait'?'mobile-orientation-hint':'mobile-controls').append(el);
+  }
+  ids.get('mobile-joystick').rect=joystickRect;
   for(const id of REMOVED_HUD_IDS)ids.delete(id);
   if(legacyControls)for(const id of LEGACY_CONTROL_IDS){const el=new Element(id==='look-sensitivity'?'input':'button');el.id=id;ids.set(id,el);}
   const mode=['walk','scooter','helicopter','roadster','hoverboard','spider'].map(playerMode=>Object.assign(new Element('button'),{dataset:{playerMode}}));
   const cameras=(legacyControls?['third','first']:[]).map(playerCamera=>Object.assign(new Element('button'),{dataset:{playerCamera}}));
   const inputs=(legacyControls?['left','forward','right','brake','back','swing','jump','zip','dive','reel','point','trick','up','down','fast']:[]).map(playerInput=>Object.assign(new Element('button'),{dataset:{playerInput}}));
   const optionalReferenceButtons=new Set(['roadster-references','hoverboard-references']);
-  doc.body=new Element('body');doc.hidden=false;doc.createElement=tag=>new Element(tag);doc.getElementById=id=>{if(!ids.has(id)&&(optionalReferenceButtons.has(id)||REMOVED_HUD_IDS.has(id)))return null;assert.ok(ids.has(id),`fixture missing actual HTML id ${id}`);return ids.get(id);};
+  doc.body=new Element('body');doc.documentElement=new Element('html');doc.hidden=false;doc.createElement=tag=>new Element(tag);doc.getElementById=id=>{if(!ids.has(id)&&(optionalReferenceButtons.has(id)||REMOVED_HUD_IDS.has(id)))return null;assert.ok(ids.has(id),`fixture missing actual HTML id ${id}`);return ids.get(id);};
   doc.querySelectorAll=selector=>({'[data-player-mode]':mode,'[data-player-camera]':cameras,'[data-player-input]':inputs,'.web-input':inputs.filter(b=>['swing','jump','zip','dive','reel','point','trick'].includes(b.dataset.playerInput)),'.flight-input':inputs.filter(b=>['up','down','fast'].includes(b.dataset.playerInput))}[selector]||[]);
   doc.querySelector=selector=>selector==='dialog[open]'?doc.body.children.find(el=>el.open)||null:selector==='[data-player-input=brake]'?inputs.find(el=>el.dataset.playerInput==='brake'):null;
+  const coarseMedia=Object.assign(new Element(),{matches:coarsePointer}),landscapeMedia=Object.assign(new Element(),{matches:true}),reducedMedia=Object.assign(new Element(),{matches:false});
+  win.matchMedia=query=>query.includes('coarse')?coarseMedia:query.includes('orientation')?landscapeMedia:reducedMedia;
+  win.innerWidth=844;win.innerHeight=390;win.screen={orientation:new Element()};win.visualViewport=new Element();
   globalThis.document=doc;globalThis.window=win;
   const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(44,16/9,.3,2000),canvas=new Element('canvas');canvas.clientWidth=1280;canvas.clientHeight=720;
   const controls=Object.assign(new THREE.EventDispatcher(),{target:new THREE.Vector3(),enabled:true,enableDamping:true,update(){}});
@@ -66,7 +91,7 @@ function fixture(t,{buildings=true,legacyControls=true,transportSources}={}){
   t.after(()=>{experience.dispose();globalThis.document=previous.document;globalThis.window=previous.window;});
   const tick=seconds=>{for(let remaining=seconds;remaining>1e-9;remaining-=1/60)experience.tick(Math.min(remaining,1/60));};
   const key=(code,type='keydown',extra={})=>win.emit(type,{code,target:canvas,...extra});
-  return {experience,scene,camera,controls,canvas,doc,win,notices,tick,key,el:id=>ids.get(id),input:name=>inputs.find(el=>el.dataset.playerInput===name)};
+  return {experience,scene,camera,controls,canvas,doc,win,notices,tick,key,coarseMedia,landscapeMedia,el:id=>ids.get(id),input:name=>inputs.find(el=>el.dataset.playerInput===name),mobileHold:name=>mobileButtons.find(el=>el.dataset.mobileHold===name),mobileAction:name=>mobileButtons.find(el=>el.dataset.mobileAction===name)};
 }
 
 test('street inspection enters at the requested location with a stable eye-level camera',t=>{
@@ -626,4 +651,105 @@ test('failed refreshed vehicle placement returns its inventory item instead of l
   const source=inventory('helicopter',{x:12,z:0}),f=fixture(t,{transportSources:[source],legacyControls:false});f.experience.enter('walk');
   assert.equal(f.experience.restoreActivityPose({mode:'helicopter',transport:{id:'scene-helicopter',mode:'helicopter'},view:'third',state:{x:12,y:.14,z:0,yaw:0,grounded:true}}),false);
   assert.equal(source.items[0].taken,false);assert.equal(f.experience.state.mode,'walk');
+});
+
+function touch(element,type,pointerId,values={}){return element.emit(type,{pointerType:'touch',pointerId,...values});}
+function pushJoystick(f,pointerId=10){
+  const joystick=f.el('mobile-joystick'),rect=joystick.getBoundingClientRect(),clientX=rect.left+rect.width/2,clientY=rect.top+rect.height/2;
+  touch(joystick,'pointerdown',pointerId,{clientX,clientY});
+  touch(f.win,'pointermove',pointerId,{clientX,clientY:clientY-rect.height*.45});
+  return {clientX,clientY};
+}
+
+test('shipped mobile joystick moves the real walker while an independent finger turns the camera',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true,joystickRect:{left:32,top:170,width:132,height:132}});
+  f.experience.enter('walk');f.tick(.6);
+  assert.equal(f.el('mobile-controls').hidden,false);
+  const start={x:f.experience.state.x,z:f.experience.state.z};
+  pushJoystick(f,10);f.tick(1);
+  assert.ok(Math.hypot(f.experience.state.x-start.x,f.experience.state.z-start.z)>1,'the actual joystick drives production walking physics');
+  touch(f.canvas,'pointerdown',20,{clientX:600,clientY:150});
+  const looking=f.camera.quaternion.clone();
+  touch(f.canvas,'pointermove',20,{clientX:700,clientY:170});f.tick(.3);
+  assert.ok(looking.angleTo(f.camera.quaternion)>.05,'the camera finger turns independently of the joystick');
+  touch(f.win,'pointerup',30);f.tick(.2);
+  assert.ok(f.experience.state.speed>1,'releasing an unrelated finger must not stop movement');
+  touch(f.win,'pointerup',10);f.tick(1);
+  assert.ok(Math.abs(f.experience.state.speed)<.01,'releasing the joystick decelerates to rest');
+  const stillLooking=f.camera.quaternion.clone();
+  touch(f.canvas,'pointermove',20,{clientX:800,clientY:170});f.tick(.3);
+  assert.ok(stillLooking.angleTo(f.camera.quaternion)>.05,'releasing the joystick must not release the camera finger');
+  touch(f.canvas,'pointerup',20);
+});
+
+for(const boundary of ['pause','rotation'])test(`mobile ${boundary} clears the joystick and old camera contact without resetting the player`,t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('walk');f.tick(.5);
+  const joystickPoint=pushJoystick(f,10);f.tick(.5);
+  touch(f.canvas,'pointerdown',20,{clientX:600,clientY:150});
+  const before=structuredClone(f.experience.state),orientation=f.camera.quaternion.clone();
+  if(boundary==='pause'){
+    f.experience.setSuspended(true);assert.equal(f.el('mobile-controls').hidden,true);
+    touch(f.win,'pointermove',10,{...joystickPoint,clientY:0});touch(f.canvas,'pointermove',20,{clientX:800,clientY:250});
+    f.tick(.5);assert.deepEqual(f.experience.state,before);assert.ok(f.camera.quaternion.equals(orientation));
+    f.experience.setSuspended(false);assert.equal(f.el('mobile-controls').hidden,false);
+  }else{
+    f.win.innerWidth=390;f.win.innerHeight=844;f.landscapeMedia.matches=false;f.win.emit('orientationchange');
+    assert.deepEqual(f.experience.state,before,'rotation clears gestures without teleporting or zeroing physical velocity');
+  }
+  assert.equal(f.el('mobile-stick').style.transform,'translate(0px, 0px)');
+  assert.equal(f.el('mobile-joystick').captures.size,0);
+  f.tick(1);assert.ok(Math.abs(f.experience.state.speed)<.01);
+  const rest={x:f.experience.state.x,z:f.experience.state.z},camera=f.camera.quaternion.clone();
+  touch(f.win,'pointermove',10,{...joystickPoint,clientY:0});touch(f.canvas,'pointermove',20,{clientX:1200,clientY:600});f.tick(.3);
+  assert.equal(f.experience.state.x,rest.x);assert.equal(f.experience.state.z,rest.z);
+  assert.ok(camera.angleTo(f.camera.quaternion)<.01,'stale camera contacts cannot jump the viewpoint after the boundary');
+  pushJoystick(f,11);f.tick(.4);assert.ok(f.experience.state.speed>1,'a fresh gesture works after the boundary');
+});
+
+test('mobile rotation discards a queued Spider jump before the first physics tick',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('spider');
+  const jump=f.mobileAction('jump'),height=f.experience.state.y;
+  touch(jump,'pointerdown',30);f.win.emit('orientationchange');f.tick(.3);
+  assert.equal(f.experience.state.grounded,true);assert.equal(f.experience.state.y,height,'an interrupted gesture must not jump after rotation');
+  touch(jump,'pointerdown',31);f.tick(.2);
+  assert.equal(f.experience.state.grounded,false);assert.ok(f.experience.state.y>height+.5,'a new deliberate jump still works');
+});
+
+test('the shipped mobile swing button keeps one anchor until release and never reattaches from its synthetic click',t=>{
+  const f=fixture(t,{legacyControls:false,coarsePointer:true});f.experience.enter('spider');
+  const swing=f.mobileHold('swing');assert.equal(swing.hidden,false);
+  touch(swing,'pointerdown',30);f.tick(.45);
+  const anchor=structuredClone(f.experience.state.anchor);assert.ok(anchor);assert.equal(f.experience.state.swingCount,1);
+  f.tick(.6);assert.deepEqual(f.experience.state.anchor,anchor,'a held gesture cannot switch to another anchor');
+  touch(f.win,'pointerup',30);swing.emit('click',{detail:1});f.tick(1/60);
+  assert.equal(f.experience.state.anchor,null);f.tick(.3);assert.equal(f.experience.state.swingCount,1);
+  touch(swing,'pointerdown',31);f.tick(.15);
+  assert.equal(f.experience.state.swingCount,2,'only a fresh press casts again');
+  touch(swing,'pointercancel',31);swing.emit('click',{detail:1});f.tick(.3);
+  assert.equal(f.experience.state.anchor,null);assert.equal(f.experience.state.swingCount,2);
+});
+
+test('the shipped mobile Tesla lift button rises while held, falls after release and cannot latch from a click',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('roadster');
+  const up=f.mobileHold('up');assert.equal(up.hidden,false);
+  touch(up,'pointerdown',30);f.tick(4);
+  const state=f.experience.state;assert.equal(state.flightEnabled,true);assert.ok(state.y>3);assert.ok(state.verticalSpeed>0);assert.ok(state.jetPower>.4);
+  touch(up,'pointerup',30);up.emit('click',{detail:1});f.tick(.35);
+  assert.ok(state.jetPower<.05);const speed=state.verticalSpeed;
+  f.tick(.6);assert.ok(state.verticalSpeed<speed-3,'gravity resumes through the real Roadster physics');
+  f.tick(.6);assert.ok(state.verticalSpeed<0);const fallingHeight=state.y;
+  f.tick(.2);assert.ok(state.y<fallingHeight,'the car physically falls after releasing thrust');
+  f.tick(6);assert.equal(state.grounded,true);assert.equal(state.verticalSpeed,0);
+});
+
+test('the shipped mobile nearby-vehicle action mounts and dismounts once per gesture',t=>{
+  const source=inventory('roadster'),f=fixture(t,{buildings:false,transportSources:[source],legacyControls:false,coarsePointer:true});
+  f.experience.enter('walk');f.tick(.2);const interact=f.mobileAction('interact');
+  assert.equal(interact.hidden,false);assert.match(f.el('mobile-interact-label').textContent,/roadster/);
+  touch(interact,'pointerdown',30);touch(f.win,'pointerup',30);interact.emit('click',{detail:1});
+  assert.equal(f.experience.state.mode,'roadster');assert.equal(source.items[0].taken,true);assert.equal(f.experience.state.flightEnabled,false);
+  assert.equal(interact.hidden,false);assert.match(f.el('mobile-interact-label').textContent,/下车/);
+  touch(interact,'pointerdown',31);touch(f.win,'pointerup',31);interact.emit('click',{detail:1});
+  assert.equal(f.experience.state.mode,'walk');assert.equal(source.items[0].taken,false);
+  assert.equal(source.items.length,1,'dismount returns the leased scene vehicle instead of creating another one');
 });

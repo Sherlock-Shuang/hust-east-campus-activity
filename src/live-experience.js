@@ -22,7 +22,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   let restoreFocus=null,wasPaused=false;
   const projected=new THREE.Vector3();
   const reduced=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
-  const interactionRoots=[document.querySelector('body > header'),document.querySelector('.transport-selector'),canvas,...container.querySelectorAll('.view-toolbar,#inspect,#measurement')].filter(Boolean);
+  const interactionRoots=[document.querySelector('body > header'),document.querySelector('.transport-selector'),canvas,...container.querySelectorAll('.view-toolbar,#inspect,#measurement,#mobile-controls,#mobile-orientation-hint,#mobile-enable-touch,#transport-interact,#resume-exploration')].filter(Boolean);
   const setInert=frozen=>interactionRoots.forEach(el=>{el.inert=frozen;});
   function updateFrozen(){
     const frozen=!!client?.state.paused||!!opened||!audienceUI?.registered;

@@ -4,6 +4,10 @@
 
 已发布试用站点：[观众入口](https://hust-east-campus-activity.vercel.app/) · [主持人控制端](https://hust-east-campus-activity.vercel.app/admin)。本机直连 Vercel 存在超时；开启现有代理后，公网接口、真实作品进入／返回、双浏览器观众和主持人联动已验证，现场网络与物理手柄仍未验收，具体边界见 [部署验收记录](docs/VERCEL-ACCEPTANCE.md)。
 
+## 手机横屏
+
+手机横放后自动显示摇杆、触屏视角与载具动作；蜘蛛侠保留按住挂丝、松开再按换点。支持刘海安全区、可选全屏和手机渲染预算。[操作与验证范围](docs/MOBILE-CONTROLS.md)。
+
 ## 本地运行
 
 使用 Node.js 24 与 npm：
