@@ -149,6 +149,32 @@
   font-size: 14px;
 }
 .mobile-swing span { display: block; margin-top: 3px; font-size: 9px; font-weight: 400; opacity: .8; }
+/* The G action is a first-level control, beside Jump and Swing. Its two-line
+   label also explains when the visible roof marker can be used. */
+#mobile-controls[data-mode="spider"] .mobile-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+}
+#mobile-controls[data-mode="spider"] .mobile-actions > button { width: 100%; min-width: 0; }
+#mobile-controls[data-mode="spider"] .mobile-actions > .mobile-point {
+  grid-column: 1 / 3;
+  grid-row: 1;
+  border-radius: 16px;
+  border-color: #f2ddac90;
+  background: #283c39b8;
+  font-size: 13px;
+}
+.mobile-point small { display: block; margin-top: 3px; font-size: 10px; font-weight: 400; opacity: .8; }
+#mobile-controls[data-mode="spider"] .mobile-point[data-ready="true"] { background: #5f5933cf; border-color: #ffe5a6; }
+#mobile-controls[data-mode="spider"] [data-mobile-action="jump"] { grid-column: 1; grid-row: 2; }
+#mobile-controls[data-mode="spider"] [data-mobile-action="zip"] { grid-column: 2; grid-row: 2; }
+#mobile-controls[data-mode="spider"] .mobile-actions > .mobile-swing {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  height: auto;
+  border-radius: 24px;
+}
 #mobile-controls .mobile-actions > .mobile-interact {
   display: flex;
   align-items: center;
@@ -163,6 +189,7 @@
   font-size: 12px;
 }
 .mobile-interact-icon { font-size: 18px; line-height: 1; opacity: .8; }
+#mobile-controls[data-mode="spider"] .mobile-actions > .mobile-interact { grid-column: 1 / -1; min-width: 0; }
 #mobile-interact-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mobile-extra-actions {
   position: absolute;
@@ -175,6 +202,8 @@
   pointer-events: auto;
 }
 #mobile-controls .mobile-extra-actions button { min-height: 44px; background: #153c37b3; font-size: 11px; border-radius: 12px; }
+#mobile-controls[data-mode="spider"] .mobile-extra-actions { bottom: calc(var(--mobile-edge-bottom) + 180px); }
+#mobile-controls .mobile-extra-actions > :last-child { grid-column: 1 / -1; }
 #mobile-orientation-hint {
   position: absolute;
   z-index: 14;
@@ -222,6 +251,7 @@ body.touch-controls {
 }
 .touch-controls.transport-layout #player-mode-label { font-size: 11px; }
 .touch-controls.transport-layout #player-help { margin-top: 4px; font-size: 10px; line-height: 1.65; }
+.touch-controls #player-hud #performance-mode { font-size: 16px; max-width: 160px; }
 .touch-controls.transport-layout .audience-badge {
   top: max(15px, env(safe-area-inset-top));
   right: max(18px, env(safe-area-inset-right));
@@ -239,7 +269,8 @@ body.touch-controls {
   max-width: 36%;
   font-size: 10px;
 }
-.touch-controls #web-point-aim span { display: none; }
+.touch-controls #web-point-aim span { display: block; font-size: 10px; padding: 3px 6px; }
+.touch-controls #web-target-status { white-space: normal; text-align: center; line-height: 1.5; }
 .touch-controls #resume-exploration {
   min-height: 44px;
   top: max(132px, calc(env(safe-area-inset-top) + 120px));
@@ -336,6 +367,17 @@ body.touch-controls {
   .touch-controls .audience-welcome label { margin-top: 12px; }
   .touch-controls .audience-welcome footer { margin-top: 8px; }
   .touch-controls .audience-welcome p { margin: 6px 0; }
+  /* Open advanced actions below the left toolbar rather than on top of the
+     right-side aiming/status HUD on a short landscape screen. */
+  #mobile-controls[data-mode="spider"] .mobile-extra-actions {
+    left: var(--mobile-edge-left);
+    right: auto;
+    top: calc(var(--mobile-edge-top) + 52px);
+    bottom: auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  #mobile-controls .mobile-extra-actions > :last-child { grid-column: auto; }
+  #mobile-controls .mobile-extra-actions button { padding: 6px; font-size: 11px; }
 }
 @media (orientation: landscape) and (max-width: 740px) {
   .touch-controls.transport-layout #player-hud { width: 220px; max-width: 35%; }
@@ -348,20 +390,20 @@ body.touch-controls {
 }
 @media (orientation: portrait) {
   .touch-controls.transport-layout #player-hud { top: max(68px, calc(env(safe-area-inset-top) + 54px)); width: 230px; max-width: calc(100% - 34px); }
-  .touch-controls.transport-layout .audience-badge { max-width: 120px; }
-  .touch-controls.transport-layout #web-target-status { top: 132px; max-width: calc(100% - 36px); }
+  .touch-controls.transport-layout .audience-badge { max-width: min(120px, calc(100% - 232px)); }
+  .touch-controls.transport-layout #web-target-status { top: max(188px, calc(env(safe-area-inset-top) + 174px)); max-width: calc(100% - 36px); }
   #mobile-controls { --mobile-edge-left: max(14px, env(safe-area-inset-left)); --mobile-edge-right: max(14px, env(safe-area-inset-right)); }
   #mobile-joystick { width: 104px; height: 104px; }
   .mobile-actions { width: 184px; gap: 6px; }
   .mobile-extra-actions { width: 184px; }
-  .touch-controls .audience-phase { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 146px); max-width: calc(100% - 36px); width: 80%; }
+  .touch-controls .audience-phase { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 184px); max-width: calc(100% - 36px); width: 80%; }
   .touch-controls .audience-phase strong { font-size: 11px; }
   .touch-controls .audience-phase span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 10px; line-height: 1.5; max-height: 30px; overflow: hidden; }
-  .touch-controls .live-portal-prompt { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 203px); max-width: calc(100% - 36px); }
+  .touch-controls .live-portal-prompt { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 241px); max-width: calc(100% - 36px); }
   /* Extra actions occupy 94px above the main buttons. Keep stage guidance
      and entry prompts above that drawer, including the home-indicator inset. */
-  .touch-controls:has(#mobile-controls[data-more="true"]:not([hidden])) .audience-phase { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 244px); }
-  .touch-controls:has(#mobile-controls[data-more="true"]:not([hidden])) .live-portal-prompt { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 301px); }
+  .touch-controls:has(#mobile-controls[data-more="true"]:not([hidden])) .audience-phase { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 284px); }
+  .touch-controls:has(#mobile-controls[data-more="true"]:not([hidden])) .live-portal-prompt { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 341px); }
   .touch-controls .live-announcement,
   .touch-controls .is-paused .live-announcement { top: max(72px, calc(env(safe-area-inset-top) + 58px)); width: calc(100% - 28px); max-height: calc(100% - 240px); }
   .touch-controls .live-announcement p { max-height: 32vh; }

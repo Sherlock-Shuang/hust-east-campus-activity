@@ -21,7 +21,7 @@ node --test integration/library/integration.test.mjs
 | 两款书中游戏可用性 | `/works/library/api/games` |
 | 模型、角色、模块、字体与剧情 | `/works/library/model.glb`、`hero.glb`、`hub/`、`vendor/`、`story/config.json` |
 
-仅复制正式运行引用的 65 个文件，约 360 MB。图书馆模型约 122 MB，人物约 25 MB，Unity WebGL 的 data 约 99 MB、wasm 约 41 MB；按进入作品时加载。没有复制 Unity 工程、Blender 制作文件、照片目录、历史构建、QA 页面或测试夹具。以撒保留原游戏 HTML、Ruffle 运行时、剧情桥与两种已有 SWF 选择；不复制整个以撒工作区。
+仅复制正式运行引用的 71 个文件，约 360 MB。图书馆模型约 122 MB，人物约 25 MB，Unity WebGL 的 data 约 99 MB、wasm 约 41 MB；按进入作品时加载。没有复制 Unity 工程、Blender 制作文件、照片目录、历史构建、QA 页面或测试夹具。以撒保留原游戏 HTML、Ruffle 运行时、剧情桥与两种已有 SWF 选择；不复制整个以撒工作区。
 
 manifest 的 `entries` 给出每条 URL、相对运行包路径、长度、SHA-256 和 MIME。Node handler 按该白名单提供资源，支持 HEAD、ETag 和单段 Range 请求。Worker 部署可读取同一 entries；大文件分块／合并由校园部署工具负责，本目录不假装这些文件能直接满足所有静态托管单文件限额。
 
@@ -52,3 +52,18 @@ manifest 的 `entries` 给出每条 URL、相对运行包路径、长度、SHA-2
 `integration.test.mjs` 校验运行包哈希、白名单排除、公共剧情节点、真实资源路由、MIME、Range、SDK 来源／attempt 校验、暂停和按键边界。实际三维与 Unity 浏览器验收由校园总流程单独记录，不能用这些接口测试替代。
 
 因为生日礼物原运行源码和平台包没有被修改，本接入不重写原三平台桌面交付；原工程测试由 `python3 -B tools/project.py test` 回归，原 Windows 真机与签名状态保持原项目的已知边界。
+
+## 2026-10-28 手机适配
+
+触屏设备和 900px 以下窗口使用活动副本的触控层，电脑键鼠／手柄保留。
+
+- 图书馆：左摇杆移动，画面拖动镜头，右侧翻书／闪避，顶部切视角与查看手机。直接调用原移动、碰撞和翻书函数，不跳过找书或通关条件。
+- 剧情手机：移动端去掉装饰性手机外壳／手臂，改为全屏聊天；使用系统键盘、16px 输入字号和安全区，跟随 visualViewport 调整软键盘空间。
+- 以撒：左摇杆 WASD、右摇杆方向射击，保留道具／炸弹／药丸；触控菜单可打开原书中返回菜单，确认键和返回标题分开。事件发送到原 Ruffle 容器，没有改写 SWF 状态。
+- 晚言：按原游戏已有键位映射攻击 J、重击 F、技能 Q、回血 E、闪避空格、锁定 Tab。开始／暂停／强化／重开根据引擎原只读状态显示；战斗阶段才显示移动摇杆和拦截镜头拖动，阶段切换释放所有按住状态。没有替换 Unity 编译包。
+- 触点取消、丢失 capture、旋转、后台和暂停均释放按住状态，双摇杆独立工作，软键盘期间不继续移动。
+- 图书馆和晚言移动端 DPR 限制为 1.1；图书馆跳过首次强制加载整包中文字体，使用系统字体，打开全屏剧情手机时停止被遮住的三维背景渲染。模型和游戏数据仍按原包加载，大文件没有宣称已压缩。
+
+实现源文件是本目录的 `touch-controls.mjs/css`、`library-touch-hooks.txt`、`isaac-touch.mjs`、`wanyan-touch.mjs`，由 `build.mjs` 注入并写入白名单。原生日礼物源文件和三平台桌面包均未修改，因此本轮不替它们重新打包。
+
+`node --test integration/library/integration.test.mjs integration/library/touch-controls.test.mjs` 共 16 项通过，包含真实资源哈希不变、并行触点、取消和恢复、阶段切换、窄屏鼠标拖动、原生菜单输入、输出白名单及原暂停协议。根任务在 844×390 浏览器验收晚言：触控开始进入真实战斗、摇杆移动人物／场景、攻击触发蓝色挥击、暂停进入原菜单、重新开始回到开场；以撒：开始／确认进入选人和真实关卡，左摇杆右移人物、右摇杆向上连续射出泪弹。图书馆实际输入由根任务统一验收；这些测试不等于 iPhone／Android 真机性能验收。

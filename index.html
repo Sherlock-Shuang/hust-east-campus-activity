@@ -85,7 +85,7 @@
       <div id="journey-hud" hidden><span id="journey-stage">韵苑出发</span><b id="journey-progress">0 m</b><small id="journey-detail">跟随车流前进</small><button id="stop-follow">退出跟随</button></div>
       <div id="web-target-status" hidden aria-live="off"><span class="web-target-dot"></span><span id="web-target-label">寻找可挂丝的建筑</span></div>
       <div id="web-aim" hidden aria-hidden="true"><i></i></div>
-      <div id="web-point-aim" hidden aria-hidden="true"><i></i><span>G</span></div>
+      <div id="web-point-aim" hidden aria-hidden="true"><i></i><span id="web-point-label">G</span></div>
       <div id="web-speed-shade" hidden aria-hidden="true"></div>
       <div id="pointer-lock-hint" hidden>鼠标已锁定 · Esc / L 释放鼠标</div>
       <div id="player-look-reticle" hidden aria-hidden="true"></div>
@@ -115,16 +115,16 @@
           <span class="mobile-movement-label" aria-hidden="true">移动</span>
         </div>
         <div id="mobile-extra-actions" class="mobile-extra-actions" aria-label="蜘蛛侠进阶动作" hidden>
-          <button type="button" data-mobile-action="point" data-mobile-modes="spider" aria-label="定点弹射">定点弹射</button>
-          <button type="button" data-mobile-hold="reel" data-mobile-modes="spider" aria-label="按住收短蛛丝">收丝</button>
-          <button type="button" data-mobile-hold="dive" data-mobile-modes="spider" aria-label="按住俯冲">俯冲</button>
-          <button type="button" data-mobile-hold="trick" data-mobile-modes="spider" aria-label="按住进行空中特技">空中特技</button>
+          <button type="button" data-mobile-hold="reel" data-mobile-extra="true" data-mobile-modes="spider" aria-label="按住收短蛛丝">收丝</button>
+          <button type="button" data-mobile-hold="dive" data-mobile-extra="true" data-mobile-modes="spider" aria-label="按住俯冲">俯冲</button>
+          <button type="button" data-mobile-hold="trick" data-mobile-extra="true" data-mobile-modes="spider" aria-label="按住进行空中特技">空中特技</button>
         </div>
         <div class="mobile-actions" aria-label="角色动作">
           <button type="button" data-mobile-hold="fast" data-mobile-modes="walk scooter roadster helicopter hoverboard boat" aria-label="按住加速">加速</button>
           <button type="button" data-mobile-hold="brake" data-mobile-modes="scooter roadster helicopter hoverboard boat" aria-label="按住刹车">刹车</button>
           <button type="button" data-mobile-hold="up" data-mobile-modes="roadster helicopter hoverboard" aria-label="按住升高或喷气">上升</button>
           <button type="button" data-mobile-hold="down" data-mobile-modes="helicopter hoverboard" aria-label="按住下降">下降</button>
+          <button type="button" class="mobile-point" data-mobile-action="point" data-mobile-modes="spider" aria-label="定点弹射，对应电脑 G 键"><span>定点弹射</span><small id="mobile-point-hint">瞄准屋沿</small></button>
           <button type="button" data-mobile-action="jump" data-mobile-modes="spider" aria-label="跳跃或起跳">跳跃</button>
           <button type="button" data-mobile-action="zip" data-mobile-modes="spider" aria-label="蛛丝前冲">前冲</button>
           <button type="button" class="mobile-swing" data-mobile-hold="swing" data-mobile-modes="spider" aria-label="按住发射蛛丝并摆荡，松开释放">摆荡<span>按住</span></button>

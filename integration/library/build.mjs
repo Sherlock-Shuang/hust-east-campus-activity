@@ -19,6 +19,11 @@ function injectAdapter(html,work){
   const prefix=work==='wanyan'?WANYAN:LIBRARY;
   return replaceExactly(html,'</head>',`<script src="${prefix}activity-adapter.js" data-work="${work}"></script></head>`,'document head');
 }
+function mobileAssets(html,prefix){
+  const viewport='<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">';
+  html=/<meta name="viewport"[^>]*>/i.test(html)?html.replace(/<meta name="viewport"[^>]*>/i,viewport):html.replace('</head>',viewport+'</head>');
+  return html.replace(viewport,viewport+`<link rel="stylesheet" href="${prefix}touch-controls.css">`);
+}
 export async function buildLibrary({sourceRoot,outputRoot}){
   if(!sourceRoot)throw new Error('Specify --source or BOOKREALM_SOURCE; it is a build-time path only.');
   sourceRoot=path.resolve(sourceRoot);outputRoot=path.resolve(outputRoot||path.join(here,'../../work-assets'));
@@ -45,13 +50,36 @@ export async function buildLibrary({sourceRoot,outputRoot}){
   }
   const adapter=await readFile(path.join(here,'activity-adapter.js'),'utf8');
   await put('library/activity-adapter.js',adapter);await put('wanyan/activity-adapter.js',adapter);
+  for(const file of ['touch-controls.mjs','touch-controls.css'])for(const work of ['library','wanyan'])await put(`${work}/${file}`,await readFile(path.join(here,file),'utf8'));
+  await put('wanyan/wanyan-touch.mjs',await readFile(path.join(here,'wanyan-touch.mjs'),'utf8'));
+  await put('library/isaac-touch.mjs',await readFile(path.join(here,'isaac-touch.mjs'),'utf8'));
   await put('wanyan/pointer-lock-compat.js',await readFile(path.join(here,'wanyan-pointer-lock.js'),'utf8'));
-  await copy(`${app}/viewer/index.html`,'library/index.html',s=>injectAdapter(rebaseLibraryText(s),'library'));
+  await copy(`${app}/viewer/index.html`,'library/index.html',s=>mobileAssets(injectAdapter(rebaseLibraryText(s),'library'),LIBRARY).replace('src="/works/library/hub/main.mjs"','src="/works/library/hub/main.mjs?v=mobile-20261028"'));
   await tree(`${app}/viewer/hub`,'library/hub',name=>/\.(?:m?js|css)$/.test(name),async source=>{
     let s=rebaseLibraryText(source).replaceAll('library-save-v1','campus-library-save-v1').replaceAll('library-view-mode','campus-library-view-mode');
     if(s.includes('function frame(now){')){
+      s=`import {createTouchControls,isTouchLayout} from '../touch-controls.mjs';\n`+s;
       s=replaceExactly(s,"const $=s=>document.querySelector(s),stage=$('#stage'),loading=$('#loading');", "let campusSuspended=false,campusPhoneSuspended=false,campusAudioRunning=false;\nconst $=s=>document.querySelector(s),stage=$('#stage'),loading=$('#loading');",'library globals');
-      s=replaceExactly(s,'last=now;pollController(now,dt);','last=now;if(campusSuspended)return;pollController(now,dt);','library loop');
+      s=replaceExactly(s,'let campusSuspended=false,','let campusTouch=null,campusTouchMove={x:0,y:0};\nlet campusSuspended=false,','touch globals');
+      s=s.replaceAll('Math.min(devicePixelRatio,1.5)','Math.min(devicePixelRatio,isTouchLayout()?1.1:1.5)');
+      s=replaceExactly(s,"new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'})","new THREE.WebGLRenderer({antialias:!isTouchLayout(),powerPreference:'high-performance'})",'mobile antialias budget');
+      s=replaceExactly(s,'try{await document.fonts.load(\'150px "BookRealm CJK"\');}', 'try{if(!isTouchLayout())await document.fonts.load(\'150px "BookRealm CJK"\');}', 'mobile system font startup');
+      s=replaceExactly(s,'renderer.render(scene,camera);',"if(!isTouchLayout()||!phone.active)renderer.render(scene,camera);",'phone background render suspension');
+      s=replaceExactly(s,'function input(){',"function input(){if(campusTouch?.active&&Math.hypot(campusTouchMove.x,campusTouchMove.y)>.01)return {x:campusTouchMove.x,z:campusTouchMove.y};",'touch movement');
+      s=replaceExactly(s,'function updateControllerHints(){',`function updateControllerHints(){
+ if(isTouchLayout()&&inputMode!=='gamepad'){
+  $('#finding-hint').textContent='唯一的密钥是一个日期';
+  $('#control-hint').innerHTML='左侧摇杆移动 · 拖动画面环顾<br>对准书脊点「翻书」·「闪避」躲开障碍<br>顶部「手机」查看消息 ·「暂停」打开菜单';
+  $('#phone-button').title='查看手机';$('#controller-status').textContent='触屏操作已启用';
+  $('#book-menu-controls').textContent='轻点选项，继续阅读或返回图书馆';return;
+ }`,'mobile control guidance');
+      s=replaceExactly(s,"(!pointerInside&&inputMode!=='gamepad')","(!pointerInside&&inputMode!=='gamepad'&&!campusTouch?.active)",'touch book focus');
+      s=replaceExactly(s,"const centered=document.pointerLockElement===canvas||inputMode==='gamepad';","const centered=document.pointerLockElement===canvas||inputMode==='gamepad'||campusTouch?.active;",'touch book ray');
+      s=replaceExactly(s,"(!pointerLock.locked&&inputMode!=='gamepad')","(!pointerLock.locked&&inputMode!=='gamepad'&&!campusTouch?.active)",'touch crosshair');
+      s=replaceExactly(s,'function capture(event){pointerLock.request(event);}',"function capture(event){if(!campusTouch?.enabled)pointerLock.request(event);}",'touch lock avoidance');
+      s=replaceExactly(s,'function stop(){keys.clear();',"function stop(){campusTouch?.release();keys.clear();",'touch release');
+      s=replaceExactly(s,'function controlBoundary(){pointerLock.release();',"function controlBoundary(){campusTouch?.release();pointerLock.release();",'touch boundary');
+      s=replaceExactly(s,'last=now;pollController(now,dt);','last=now;if(campusSuspended)return;pollController(now,dt);if(campusTouch?.enabled)updateAim();','library loop');
       s=replaceExactly(s,'onUnlock:()=>pause()','onUnlock:()=>{if(!campusSuspended)pause();}','pointer unlock');
       s=replaceExactly(s,"window.addEventListener('blur',()=>{stop();", "window.addEventListener('blur',()=>{if(campusSuspended)return;stop();",'blur boundary');
       s=replaceExactly(s,"document.documentElement.dataset.libraryReady='true';", "document.documentElement.dataset.libraryReady='true';window.campusWorkAdapter?.ready('runtime_ready');",'library readiness');
@@ -59,6 +87,7 @@ export async function buildLibrary({sourceRoot,outputRoot}){
       s=replaceExactly(s,"modelLoadFailed=true;console.error(err);", "modelLoadFailed=true;window.campusWorkAdapter?.fail('图书馆模型未能载入');console.error(err);",'library loading failure');
       s=replaceExactly(s,"throw error;}\nconst gamepads", "window.campusWorkAdapter?.fail('图书馆剧情资源未能载入');throw error;}\nconst gamepads",'library story failure');
       s+=await readFile(path.join(here,'library-hooks.txt'),'utf8');
+      s+=await readFile(path.join(here,'library-touch-hooks.txt'),'utf8');
     }
     return s;
   });
@@ -75,15 +104,23 @@ export async function buildLibrary({sourceRoot,outputRoot}){
     if(file==='birthday.js')s=replaceExactly(s,"else location.replace(location.port==='8194'?'http://127.0.0.1:8195/?from=isaac':'/?from=isaac');",`else location.replace('${LIBRARY}?from=isaac');`,'Isaac standalone return');
     return s;
   });
-  await copy(`${isaac}/运行验证/index.html`,'library/games/isaac/index.html',source=>rebaseLibraryText(source
+  await copy(`${isaac}/运行验证/index.html`,'library/games/isaac/index.html',source=>mobileAssets(rebaseLibraryText(source
     .replace('<meta charset="utf-8">',`<meta charset="utf-8"><base href="${LIBRARY}isaac-source/运行验证/">`)
-    .replaceAll("'../",`'${LIBRARY}isaac-source/`)));
+    .replaceAll("'../",`'${LIBRARY}isaac-source/`)) ,LIBRARY)
+    .replace("import { GamepadInput }",`import { attachIsaacTouch } from '${LIBRARY}isaac-touch.mjs';\nimport { GamepadInput }`)
+    .replace("watchBirthday(player); player.dataset.ready = 'true';", "watchBirthday(player); player.dataset.ready = 'true'; attachIsaacTouch(player, requestMenu);")
+    .replace("else location.assign('/');",`else location.assign('${LIBRARY}');`));
   await tree(`${isaac}/运行验证/node_modules/@ruffle-rs/ruffle`,'library/isaac-source/运行验证/node_modules/@ruffle-rs/ruffle',name=>/\.(?:js|wasm)$/.test(name)||name.startsWith('LICENSE'));
   for(const file of ['剧情扩展/Isaac-High-Damage.swf','SWF运行样本/The Binding of Isaac.swf'])await copy(`${isaac}/${file}`,`library/isaac-source/${file}`);
   await tree(`${app}/games/wanyan/Build`,'wanyan/Build',name=>/\.(?:js|wasm|data)$/.test(name));
   await tree(`${app}/games/wanyan/TemplateData`,'wanyan/TemplateData',name=>/\.(?:css|png|ico)$/.test(name));
   await copy(`${app}/games/wanyan/index.html`,'wanyan/index.html',source=>{
-    let s=injectAdapter(source,'wanyan');
+    let s=mobileAssets(injectAdapter(source,'wanyan'),WANYAN);
+    s=replaceExactly(s,'</head>',`<script type="module" src="${WANYAN}wanyan-touch.mjs"></script></head>`,'Unity touch script');
+    s=replaceExactly(s,'return Math.min(Math.max(1, nativeRatio || 1), 2, budgetRatio);',"var mobile=matchMedia('(pointer: coarse)').matches||navigator.maxTouchPoints>0||innerWidth<=900;return Math.min(Math.max(1, nativeRatio || 1), mobile?1.1:2, budgetRatio);",'Unity mobile pixel budget');
+    s=s.replace("var meta = document.createElement('meta');","var meta = document.querySelector('meta[name=viewport]') || document.createElement('meta');")
+      .replace("meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';","meta.content = 'width=device-width, initial-scale=1.0, viewport-fit=cover';")
+      .replace("document.getElementsByTagName('head')[0].appendChild(meta);","if (!meta.parentNode) document.head.appendChild(meta);");
     s=replaceExactly(s,'</head>',`<script src="${WANYAN}pointer-lock-compat.js"></script></head>`,'pointer lock compatibility script');
     s=replaceExactly(s,'createUnityInstance(canvas, config, (progress) => {',`window.campusPointerLock?.install(canvas);window.campusPointerLock?.install(document.body);
         createUnityInstance(canvas, config, (progress) => {`,'Unity pointer lock compatibility');
@@ -100,6 +137,7 @@ export async function buildLibrary({sourceRoot,outputRoot}){
   }
   const games=entries.find(e=>e.file==='library/api/games.json');entries.push({...games,url:LIBRARY+'api/games'});
   transforms.push('Runtime root URLs rebased to /works/library/ and /works/wanyan/', 'Public neutral story preserves original step types, delays, reply counts and completion conditions; original story/avatars excluded', 'Library save and camera preferences use campus-only storage keys', 'Activity bridge adds pause and real readiness signals; no completion or victory is synthesized', 'Isaac runtime helper personal attribution anonymized; its menu and real victory bridge retained', 'Unity activity canvas catches known pointer-lock platform refusals and keeps ordinary mouse input; unrelated Unity errors still fail');
+  transforms.push('Campus mobile controls share original movement or keyboard inputs, release on pause/cancel/resize, and never modify game completion', 'Mobile library phone uses full viewport and native text input; mobile rendering caps DPR at 1.1 and suspends the library background while the phone is open');
   const manifest={schemaVersion:1,generatedAt:new Date().toISOString(),sourceVersion:project.version,prefixes:[LIBRARY,WANYAN],entries,transforms,sourceChecks};
   await writeFile(path.join(outputRoot,'library-manifest.json'),JSON.stringify(manifest,null,2)+'\n');
   // Re-read source hashes after copying so concurrent edits cannot silently create a mixed release.

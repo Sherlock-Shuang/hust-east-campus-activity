@@ -158,13 +158,14 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     updateElement('transport-interact',{hidden:!nearby});
     updateElement('transport-interact-label',{textContent:nearby?`${nearby.item.mode==='spider'?'穿上':nearby.item.mode==='boat'?'登上':'驾驶'}${nearby.item.label}`:''});
     updateElement('resume-exploration',{hidden:active||suspended||!interaction});
-    mobileControls?.update({active,suspended,mode:s.mode,view,canInteract:!!nearby||!!interaction?.mounted,
+    mobileControls?.update({active,suspended,mode:s.mode,view,pointReady:!!s.candidatePoint,pointPhase:s.pointPhase,canInteract:!!nearby||!!interaction?.mounted,
       interactionLabel:nearby?`${nearby.item.mode==='spider'?'穿上':'使用'}${nearby.item.label}`:s.mode==='spider'?'脱下战衣':s.mode==='boat'?'靠岸下船':'落地 / 停稳下车'});
     if(mobileControls?.enabled){
-      const touchHelp={walk:'左侧摇杆移动 · 右侧空白处拖动视角',scooter:'摇杆骑行 · 按住刹车后下车',roadster:'摇杆驾驶 · 按住喷气飞起，松开下落',helicopter:'摇杆移动 · 按住升降 · 落地后下机',hoverboard:'摇杆移动 · 按住升降 · 落地后退出',boat:'摇杆航行 · 刹车停稳，靠岸下船',spider:'按住挂丝 · 松开后重按换锚点'};
+      const touchHelp={walk:'左侧摇杆移动 · 右侧空白处拖动视角',scooter:'摇杆骑行 · 按住刹车后下车',roadster:'摇杆驾驶 · 按住喷气飞起，松开下落',helicopter:'摇杆移动 · 按住升降 · 落地后下机',hoverboard:'摇杆移动 · 按住升降 · 落地后退出',boat:'摇杆航行 · 刹车停稳，靠岸下船',spider:'按住「摆荡」挂丝 · 松开后重按换点\n「定点弹射」锁定屋沿，再点「跳跃」弹出'};
       updateElement('player-help',{textContent:touchHelp[s.mode]});
-      if(spider){const target=$('web-target-label');if(target)target.textContent=target.textContent.replaceAll('按 E / 左键挂丝','按住「挂丝」').replaceAll('空格','「跳跃」').replaceAll('WASD','摇杆').replaceAll('E 接丝','挂丝').replaceAll('松开 X','松开「俯冲」').replaceAll('松开 T','松开「特技」');}
+      if(spider){const target=$('web-target-label');if(target)target.textContent=target.textContent.replaceAll('按 E / 左键挂丝','按住「摆荡」').replaceAll('空格','「跳跃」').replaceAll('WASD','摇杆').replaceAll('E 接丝','按住「摆荡」').replaceAll('松开 X','松开「俯冲」').replaceAll('松开 T','松开「空中特技」');}
     }
+    updateElement('web-point-label',{textContent:mobileControls?.enabled?'定点':'G'});
   }
   function armRoadsterJet(){
     if(motion.state.mode!=='roadster')return false;

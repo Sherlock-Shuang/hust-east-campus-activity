@@ -818,3 +818,14 @@ test('the shipped mobile nearby-vehicle action mounts and dismounts once per ges
   assert.equal(source.items.length,1,'dismount returns the leased scene vehicle instead of creating another one');
 });
 
+test('the shipped first-level mobile G action reaches a roof and its jump button launches from that point',t=>{
+  const f=fixture(t,{legacyControls:false,coarsePointer:true});f.experience.enter('spider');f.tick(.2);
+  const point=f.mobileAction('point');assert.equal(point.hidden,false);assert.equal(f.el('mobile-extra-actions').hidden,true);
+  assert.match(f.el('player-help').textContent,/定点弹射/);assert.equal(f.el('web-point-label').textContent,'定点');
+  touch(point,'pointerdown',31);f.tick(.12);touch(point,'pointerup',31);point.emit('click',{detail:1});
+  assert.equal(f.experience.state.pointCount,1);assert.equal(f.experience.state.pointPhase,'approach');
+  for(let i=0;i<360&&f.experience.state.pointPhase==='approach';i++)f.tick(1/60);
+  assert.equal(f.experience.state.pointPhase,'perch');
+  touch(f.mobileAction('jump'),'pointerdown',32);f.tick(.05);
+  assert.equal(f.experience.state.pointLaunchCount,1);assert.equal(f.experience.state.pointCount,1);
+});

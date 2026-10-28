@@ -20,7 +20,9 @@ export function createRoutes(manifest){
   const routes=[{src:'^/(.*)$',headers:{'X-Content-Type-Options':'nosniff'},continue:true}];
   for(const [url,entry] of Object.entries(manifest.routes)){
     const source='^'+regexEscape(encodeURI(url))+'$';
-    routes.push({src:source,headers:{'Content-Type':entry.mime,'Cache-Control':entry.mime.startsWith('text/html')||entry.mime.startsWith('application/json')?'no-cache':url.startsWith('/assets/')||url.startsWith('/works/tasay/assets/')?'public, max-age=31536000, immutable':'public, max-age=3600'},continue:true});
+    const hashedAsset=url.startsWith('/assets/')||url.startsWith('/works/tasay/assets/');
+    const mutableDocument=/^(?:text\/(?:html|javascript|css)|application\/json)/.test(entry.mime);
+    routes.push({src:source,headers:{'Content-Type':entry.mime,'Cache-Control':hashedAsset?'public, max-age=31536000, immutable':mutableDocument?'no-cache':'public, max-age=3600'},continue:true});
   }
   routes.push(
     {src:'^/api/games/?$',dest:'/works/library/api/games.json',methods:['GET','HEAD']},

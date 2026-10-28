@@ -17,9 +17,9 @@ class Element {
 }
 function fixture({coarse=true,landscape=true}={}){
   const ids=new Map(),doc=new Element(),win=new Element();
-  for(const id of['mobile-controls','mobile-joystick','mobile-stick','mobile-extra-actions','mobile-orientation-hint','mobile-fullscreen-status','mobile-interact-label','mobile-enable-touch'])ids.set(id,new Element());
+  for(const id of['mobile-controls','mobile-joystick','mobile-stick','mobile-extra-actions','mobile-orientation-hint','mobile-fullscreen-status','mobile-interact-label','mobile-point-hint','mobile-enable-touch'])ids.set(id,new Element());
   const root=ids.get('mobile-controls'),joy=ids.get('mobile-joystick');
-  const holds=Object.fromEntries(['fast','brake','up','down','swing','reel','dive','trick'].map(name=>[name,new Element({mobileHold:name,...(['swing','reel','dive','trick'].includes(name)?{mobileModes:'spider'}:{})})]));
+  const holds=Object.fromEntries(['fast','brake','up','down','swing','reel','dive','trick'].map(name=>[name,new Element({mobileHold:name,...(['swing','reel','dive','trick'].includes(name)?{mobileModes:'spider'}:{}),...(['reel','dive','trick'].includes(name)?{mobileExtra:'true'}:{})})]));
   const actions=Object.fromEntries(['jump','zip','point','interact','view','recenter','fullscreen','more','continue-portrait'].map(name=>[name,new Element({mobileAction:name,...(['jump','zip','point'].includes(name)?{mobileModes:'spider'}:{})})]));
   root.children=[...Object.values(holds),...Object.values(actions).filter(b=>b!==actions['continue-portrait'])];
   ids.get('mobile-orientation-hint').children=[actions['continue-portrait']];
@@ -113,4 +113,29 @@ test('fullscreen waits for its owning pointer release and never activates from a
 test('disposal releases inputs, removes listeners and does not call callbacks after removal',()=>{
   const f=fixture();down(f.holds.swing,1);down(f.joy,2,{clientY:0});f.controls.dispose();const before=JSON.stringify(f.events);
   f.win.emit('pointermove',{pointerId:2,clientX:300});f.holds.swing.emit('pointerdown',{pointerId:3});f.doc.emit('pointerdown',{pointerType:'touch'});f.win.emit('resize');f.controls.dispose();assert.equal(JSON.stringify(f.events),before);assert.equal(f.root.hidden,true);assert.equal(f.doc.body.classList.contains('touch-controls'),false);
+});
+
+test('point launch is available without opening more and reports the current roof targeting state',()=>{
+  const f=fixture();assert.equal(f.el('mobile-extra-actions').hidden,true);assert.equal(f.actions.point.hidden,false);
+  down(f.actions.point,1);f.win.emit('pointerup',{pointerId:1});f.actions.point.emit('click',{detail:1});assert.deepEqual(f.events.actions,['point']);
+  assert.equal(f.el('mobile-point-hint').textContent,'瞄准屋沿');f.controls.update({pointReady:true});assert.equal(f.el('mobile-point-hint').textContent,'屋沿已锁定');
+  f.controls.update({pointPhase:'approach'});assert.equal(f.el('mobile-point-hint').textContent,'点跳跃弹出');f.controls.dispose();
+});
+
+test('closing more releases hidden finger and keyboard holds without interrupting the main swing gesture',()=>{
+  const f=fixture();assert.equal(f.holds.reel.hidden,true);down(f.holds.reel,1);assert.deepEqual(f.events.holds,[]);
+  down(f.actions.more,2);f.win.emit('pointerup',{pointerId:2});assert.equal(f.holds.reel.hidden,false);
+  down(f.holds.reel,3);f.holds.trick.emit('keydown',{code:'Space'});down(f.holds.swing,4);
+  down(f.actions.more,5);f.win.emit('pointerup',{pointerId:5});assert.equal(f.holds.reel.hidden,true);assert.equal(f.el('mobile-extra-actions').hidden,true);
+  assert.ok(f.events.holds.some(([name,held])=>name==='reel'&&!held));assert.ok(f.events.holds.some(([name,held])=>name==='trick'&&!held));
+  assert.equal(f.events.holds.filter(([name,held])=>name==='swing'&&!held).length,0);
+  f.win.emit('pointerup',{pointerId:4});assert.deepEqual(f.events.holds.at(-1),['swing',false]);
+  f.holds.trick.emit('keydown',{code:'Space'});assert.deepEqual(f.events.holds.at(-1),['swing',false]);f.controls.dispose();
+});
+
+test('focusing an editable field releases movement before the phone keyboard can obscure it',()=>{
+  const f=fixture();down(f.joy,10,{clientY:0});down(f.holds.swing,11);
+  f.doc.emit('focusin',{target:{closest:()=>({tagName:'INPUT'})}});
+  assert.deepEqual(f.controls.axes,{forward:0,sideways:0});assert.deepEqual(f.events.holds.at(-1),['swing',false]);
+  f.win.emit('pointermove',{pointerId:10,clientY:-200});assert.deepEqual(f.controls.axes,{forward:0,sideways:0});f.controls.dispose();
 });

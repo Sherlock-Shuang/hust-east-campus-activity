@@ -40,7 +40,7 @@
       "continue": true
     },
     {
-      "src": "^/assets/activity-catalog-CZ1ciLpj\\.js$",
+      "src": "^/assets/activity-catalog-D7mUz9GH\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
         "Cache-Control": "public, max-age=31536000, immutable"
@@ -48,15 +48,7 @@
       "continue": true
     },
     {
-      "src": "^/assets/admin-CyDkU7F9\\.js$",
-      "headers": {
-        "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=31536000, immutable"
-      },
-      "continue": true
-    },
-    {
-      "src": "^/assets/admin-YMlM7ikC\\.css$",
+      "src": "^/assets/admin-DiHz-hWj\\.css$",
       "headers": {
         "Content-Type": "text/css; charset=utf-8",
         "Cache-Control": "public, max-age=31536000, immutable"
@@ -64,7 +56,7 @@
       "continue": true
     },
     {
-      "src": "^/assets/campus-BVE4u7W-\\.js$",
+      "src": "^/assets/admin-DznKx7l0\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
         "Cache-Control": "public, max-age=31536000, immutable"
@@ -72,7 +64,15 @@
       "continue": true
     },
     {
-      "src": "^/assets/campus-j3oWhQCV\\.css$",
+      "src": "^/assets/campus-DRfu-614\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/assets/campus-Gd1K6F-x\\.css$",
       "headers": {
         "Content-Type": "text/css; charset=utf-8",
         "Cache-Control": "public, max-age=31536000, immutable"
@@ -81,6 +81,14 @@
     },
     {
       "src": "^/assets/GLTFExporter-C4V2D00H\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/assets/spider-geometry-worker-B9xzKrQ2\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
         "Cache-Control": "public, max-age=31536000, immutable"
@@ -131,7 +139,7 @@
       "src": "^/experiences/activity-bridge\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -355,7 +363,7 @@
       "src": "^/works/library/activity-adapter\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -403,7 +411,7 @@
       "src": "^/works/library/hub/books\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -411,7 +419,7 @@
       "src": "^/works/library/hub/camera\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -419,7 +427,7 @@
       "src": "^/works/library/hub/fireworks-plan\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -427,7 +435,7 @@
       "src": "^/works/library/hub/fireworks\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -435,7 +443,7 @@
       "src": "^/works/library/hub/gamepad-menu\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -443,7 +451,7 @@
       "src": "^/works/library/hub/gamepad\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -451,7 +459,7 @@
       "src": "^/works/library/hub/journey\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -459,7 +467,7 @@
       "src": "^/works/library/hub/main\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -467,7 +475,7 @@
       "src": "^/works/library/hub/phone\\.css$",
       "headers": {
         "Content-Type": "text/css; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -475,7 +483,7 @@
       "src": "^/works/library/hub/phone\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -483,7 +491,7 @@
       "src": "^/works/library/hub/physics\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -491,7 +499,7 @@
       "src": "^/works/library/hub/pointer-lock\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -499,7 +507,7 @@
       "src": "^/works/library/hub/route-config\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -507,7 +515,7 @@
       "src": "^/works/library/hub/route-geometry\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -515,7 +523,7 @@
       "src": "^/works/library/hub/route-layout\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -523,7 +531,7 @@
       "src": "^/works/library/hub/story-flow\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -531,7 +539,7 @@
       "src": "^/works/library/hub/style\\.css$",
       "headers": {
         "Content-Type": "text/css; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -563,7 +571,7 @@
       "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/birthday\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -571,7 +579,7 @@
       "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/gamepad-controller\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -595,7 +603,7 @@
       "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/node_modules/@ruffle-rs/ruffle/core\\.ruffle\\.c80159b526e567babaf5\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -603,7 +611,7 @@
       "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/node_modules/@ruffle-rs/ruffle/core\\.ruffle\\.f000070ea72f8ae4fe3a\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -627,7 +635,7 @@
       "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/node_modules/@ruffle-rs/ruffle/ruffle\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -635,7 +643,7 @@
       "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/story\\.css$",
       "headers": {
         "Content-Type": "text/css; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -643,7 +651,15 @@
       "src": "^/works/library/isaac-source/%E8%BF%90%E8%A1%8C%E9%AA%8C%E8%AF%81/story\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/isaac-touch\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -672,10 +688,26 @@
       "continue": true
     },
     {
+      "src": "^/works/library/touch-controls\\.css$",
+      "headers": {
+        "Content-Type": "text/css; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/touch-controls\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
       "src": "^/works/library/vendor/controls/OrbitControls\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -683,7 +715,7 @@
       "src": "^/works/library/vendor/environments/RoomEnvironment\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -715,7 +747,7 @@
       "src": "^/works/library/vendor/loaders/GLTFLoader\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -723,7 +755,7 @@
       "src": "^/works/library/vendor/three\\.module\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -731,7 +763,7 @@
       "src": "^/works/library/vendor/utils/BufferGeometryUtils\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -760,7 +792,7 @@
       "continue": true
     },
     {
-      "src": "^/works/tasay/assets/index-Bw7q8Gi5\\.css$",
+      "src": "^/works/tasay/assets/index-B3E7f_dP\\.css$",
       "headers": {
         "Content-Type": "text/css; charset=utf-8",
         "Cache-Control": "public, max-age=31536000, immutable"
@@ -768,7 +800,7 @@
       "continue": true
     },
     {
-      "src": "^/works/tasay/assets/index-dlInCgSp\\.js$",
+      "src": "^/works/tasay/assets/index-CkU62Ha6\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
         "Cache-Control": "public, max-age=31536000, immutable"
@@ -795,7 +827,7 @@
       "src": "^/works/wanyan/activity-adapter\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -811,7 +843,7 @@
       "src": "^/works/wanyan/Build/wanyan\\.framework\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -819,7 +851,7 @@
       "src": "^/works/wanyan/Build/wanyan\\.loader\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -843,7 +875,7 @@
       "src": "^/works/wanyan/pointer-lock-compat\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -907,7 +939,7 @@
       "src": "^/works/wanyan/TemplateData/style\\.css$",
       "headers": {
         "Content-Type": "text/css; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },
@@ -940,6 +972,30 @@
       "headers": {
         "Content-Type": "image/png",
         "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/touch-controls\\.css$",
+      "headers": {
+        "Content-Type": "text/css; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/touch-controls\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/wanyan-touch\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "no-cache"
       },
       "continue": true
     },

@@ -7,7 +7,7 @@
       {"type":"reply","suggestions":["我准备好了。","我先四处看看。"]},
       {"type":"incoming","text":"两段旅程藏在 I921 和 J921。找到书脊，靠近后打开它。","delay":1.1},
       {"type":"reply","suggestions":["记住了，I921 和 J921。","让我自己去寻找。"]},
-      {"type":"incoming","text":"你可以按 V 切换视角，按 P 查看手机，按 Esc 暂停。","delay":1.1},
+      {"type":"incoming","text":"电脑用 V 切换视角、P 查看手机、Esc 暂停。手机用左下摇杆移动，拖动画面环顾，点「翻书」打开书脊。","delay":1.1},
       {"type":"incoming","text":"只有真正完成书中的游戏，图书馆才会记下通关。提前返回也没有关系。","delay":2},
       {"type":"incoming","text":"现在，把手机收好，开始你的旅程吧。","delay":2.8},
       {"type":"close","delay":6}

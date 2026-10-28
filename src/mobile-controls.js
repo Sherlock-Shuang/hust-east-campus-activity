@@ -9,13 +9,13 @@ export function createMobileControls({document,window,canUse=()=>true,onAction=(
   if(portraitContinue&&!actions.includes(portraitContinue))actions.push(portraitContinue);
   const listeners=[],pointers=new Map(),holdOwners=new Map(),keyboardOwners=new Map();
   let disposed=false,resetting=false,joy=null,axes={forward:0,sideways:0},more=false,portraitDismissed=false,pendingFullscreen=false;
-  let state={active:false,suspended:false,mode:'walk',view:'third',canInteract:false,interactionLabel:''};
+  let state={active:false,suspended:false,mode:'walk',view:'third',canInteract:false,interactionLabel:'',pointReady:false,pointPhase:'idle'};
   const coarse=window?.matchMedia?.('(any-pointer: coarse)'),landscape=window?.matchMedia?.('(orientation: landscape)');
   let enabled=!!coarse?.matches;
   const listen=(target,type,handler,options)=>{if(!target?.addEventListener)return;target.addEventListener(type,handler,options);listeners.push(()=>target.removeEventListener(type,handler,options));};
   const visible=()=>enabled&&state.active&&!state.suspended&&!document.hidden;
   const usable=()=>!disposed&&visible()&&canUse();
-  const allowed=button=>{const modes=button?.dataset?.mobileModes;return !modes||modes.split(/[\s,]+/).includes(state.mode);};
+  const allowed=button=>{const modes=button?.dataset?.mobileModes;return (!modes||modes.split(/[\s,]+/).includes(state.mode))&&(!button?.dataset?.mobileExtra||more);};
   const isLandscape=()=>landscape?landscape.matches:(window?.innerWidth??1)>=(window?.innerHeight??0);
   const prevent=e=>{e.preventDefault?.();e.stopPropagation?.();};
   function pressed(button,value){button?.classList?.toggle('is-pressed',value);if(button?.dataset)button.dataset.pressed=String(value);}
@@ -56,6 +56,11 @@ export function createMobileControls({document,window,canUse=()=>true,onAction=(
         button.setAttribute?.('aria-label',state.interactionLabel||'使用附近载具');
       }
       if(button.dataset.mobileAction==='more')button.setAttribute?.('aria-expanded',String(more));
+      if(button.dataset.mobileAction==='point'){
+        const busy=['approach','perch'].includes(state.pointPhase);
+        button.dataset.ready=String(state.pointReady||busy);
+        const hint=$('mobile-point-hint');if(hint)hint.textContent=busy?'点跳跃弹出':state.pointReady?'屋沿已锁定':'瞄准屋沿';
+      }
       if(button.dataset.mobileAction==='view')button.setAttribute?.('aria-label',state.view==='first'?'切换第三人称':'切换第一人称');
       if(button.dataset.mobileHold==='up'){
         const jet=state.mode==='roadster',label=jet?'喷气':'上升';
@@ -123,7 +128,14 @@ export function createMobileControls({document,window,canUse=()=>true,onAction=(
   }
   function action(name){
     if(!usable())return;
-    if(name==='more'){more=!more;render();return;}
+    if(name==='more'){
+      more=!more;
+      if(!more){
+        for(const [id,owner]of pointers)if(owner.button.dataset.mobileExtra)releasePointer(id);
+        for(const [button,owner]of keyboardOwners)if(button.dataset.mobileExtra){setHold(button.dataset.mobileHold,owner,false);pressed(button,false);keyboardOwners.delete(button);}
+      }
+      render();return;
+    }
     if(name==='continue-portrait'){portraitDismissed=true;reset();render();return;}
     if(name==='fullscreen'){void fullscreen();return;}
     onAction(name);
@@ -148,6 +160,9 @@ export function createMobileControls({document,window,canUse=()=>true,onAction=(
   const boundary=()=>{reset();render();};
   const rotate=()=>{portraitDismissed=false;reset();render();onChange();};
   listen(window,'blur',boundary);listen(document,'visibilitychange',boundary);
+  // An input field or dialog taking focus must not leave a finger's movement
+  // active behind a software keyboard or a native dialog.
+  listen(document,'focusin',e=>{if(e.target?.closest?.('input,textarea,select,[contenteditable="true"],dialog[open]'))boundary();});
   listen(window,'orientationchange',rotate);listen(window?.screen?.orientation,'change',rotate);
   listen(window,'resize',boundary);listen(window?.visualViewport,'resize',boundary);
   listen(document,'fullscreenchange',boundary);

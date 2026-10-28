@@ -1,0 +1,12 @@
+
+// Directly shares the library's production movement/camera and interaction paths.
+campusTouch=createTouchControls({kind:'library',canvas,
+ canPlay:()=>ready&&started&&!paused&&!gameActive&&!opening&&!phone.active&&!campusSuspended&&$('#ending-layer').hidden&&!$('#reset-dialog').open,
+ onMove:v=>{campusTouchMove=v;pointerInside=true;},
+ onLook:(dx,dy)=>{pointerInside=true;look(dx,dy);},
+ onPress:id=>{if(id==='dodge')startDodge(player,input(),yaw);if(id==='book'){updateCamera();inspectBook();if(hovered)openBook(hovered);else notice('靠近书架，将准星对准书脊后翻书。');}if(id==='view')setView(viewMode==='first'?'third':'first');if(id==='phone')viewPhone();if(id==='pause')pause();},
+ actions:[{id:'dodge',label:'闪避'},{id:'book',label:'翻书'}],toolbar:[{id:'view',label:'视角'},{id:'phone',label:'手机'},{id:'pause',label:'暂停'}],
+});
+function campusViewport(){const v=window.visualViewport;document.documentElement.style.setProperty('--work-visual-height',(v?.height||innerHeight)+'px');document.documentElement.style.setProperty('--work-visual-top',(v?.offsetTop||0)+'px');}
+window.visualViewport?.addEventListener('resize',campusViewport);window.visualViewport?.addEventListener('scroll',campusViewport);campusViewport();
+window.addEventListener('resize',updateControllerHints);updateControllerHints();

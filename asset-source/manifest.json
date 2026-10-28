@@ -5,44 +5,44 @@
     "/": {
       "chunks": [
         {
-          "url": "/_activity_assets/cdd2a41d025fdee0cdad204fb168de6fb0d38149bbc41acfa230866190be23bd.bin",
+          "url": "/_activity_assets/229538764735b2460fc4f98e0b2d61c52fc29424610fee3e260cc05fce2e0f81.bin",
           "encoding": "gzip",
-          "bytes": 14216,
-          "storedBytes": 5930,
-          "sha256": "cec036272f6c9636f0427184a60651c3ed1961b1914e98a44cf9d77e38ab95b2"
+          "bytes": 16362,
+          "storedBytes": 6389,
+          "sha256": "21e01a912a598b34c8e73c8b28d855f2eaca68b809fd6e88466639b70126f406"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 14216,
-      "sha256": "cec036272f6c9636f0427184a60651c3ed1961b1914e98a44cf9d77e38ab95b2"
+      "bytes": 16362,
+      "sha256": "21e01a912a598b34c8e73c8b28d855f2eaca68b809fd6e88466639b70126f406"
     },
     "/admin": {
       "chunks": [
         {
-          "url": "/_activity_assets/dded324002bb17111a0786f1525887d8d35eb94300538cff1654638f12a6f31a.bin",
+          "url": "/_activity_assets/b551994346882bc9e9b596a7d703a7f7d6fed76af6687578f1f9c78494d8fee5.bin",
           "encoding": "gzip",
-          "bytes": 14409,
-          "storedBytes": 4725,
-          "sha256": "83e25b716ef67654d06d78dd7d599322613531be653d9847d7e56c3c6a22a11f"
+          "bytes": 15529,
+          "storedBytes": 5057,
+          "sha256": "56f770d38cb2c6ddafcdf5a1226e94b51d2b752448da9bab7992cec7beb116b8"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 14409,
-      "sha256": "83e25b716ef67654d06d78dd7d599322613531be653d9847d7e56c3c6a22a11f"
+      "bytes": 15529,
+      "sha256": "56f770d38cb2c6ddafcdf5a1226e94b51d2b752448da9bab7992cec7beb116b8"
     },
     "/admin.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/dded324002bb17111a0786f1525887d8d35eb94300538cff1654638f12a6f31a.bin",
+          "url": "/_activity_assets/b551994346882bc9e9b596a7d703a7f7d6fed76af6687578f1f9c78494d8fee5.bin",
           "encoding": "gzip",
-          "bytes": 14409,
-          "storedBytes": 4725,
-          "sha256": "83e25b716ef67654d06d78dd7d599322613531be653d9847d7e56c3c6a22a11f"
+          "bytes": 15529,
+          "storedBytes": 5057,
+          "sha256": "56f770d38cb2c6ddafcdf5a1226e94b51d2b752448da9bab7992cec7beb116b8"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 14409,
-      "sha256": "83e25b716ef67654d06d78dd7d599322613531be653d9847d7e56c3c6a22a11f"
+      "bytes": 15529,
+      "sha256": "56f770d38cb2c6ddafcdf5a1226e94b51d2b752448da9bab7992cec7beb116b8"
     },
     "/api/games": {
       "chunks": [
@@ -58,75 +58,75 @@
       "bytes": 81,
       "sha256": "34e07b9d1e2139082a854257006bb724a103806ea8ca89c5707b8ac60c6e3619"
     },
-    "/assets/activity-catalog-CZ1ciLpj.js": {
+    "/assets/activity-catalog-D7mUz9GH.js": {
       "chunks": [
         {
-          "url": "/_activity_assets/493b027193e71e298fd4c9d27ba3fb2c58a3f9aa5134bce3a204d8b2ef13446a.bin",
+          "url": "/_activity_assets/479909dca8665e5f2a94458d225c57d89edbc19bff1ddac5a7ed139777a009eb.bin",
           "encoding": "gzip",
-          "bytes": 6929,
-          "storedBytes": 3134,
-          "sha256": "046c79a347c4cb5419bacf2cf2dda28097c95ecca307fb1b390b25e7b0034e45"
+          "bytes": 6956,
+          "storedBytes": 3148,
+          "sha256": "447c266a3a6b75c2bf3ae5750908d883dfbf2b5edb2560ed39dc5f06e4454804"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 6929,
-      "sha256": "046c79a347c4cb5419bacf2cf2dda28097c95ecca307fb1b390b25e7b0034e45"
+      "bytes": 6956,
+      "sha256": "447c266a3a6b75c2bf3ae5750908d883dfbf2b5edb2560ed39dc5f06e4454804"
     },
-    "/assets/admin-CyDkU7F9.js": {
+    "/assets/admin-DiHz-hWj.css": {
       "chunks": [
         {
-          "url": "/_activity_assets/c1c578fc21135e53da5a4a836ea7dc18246c715150a1e61ca4d4a22f0a395e6d.bin",
+          "url": "/_activity_assets/8d572042f5da1817d8964762efd91c62c1b93ad9e5585e91bd087d79d47d2412.bin",
           "encoding": "gzip",
-          "bytes": 25570,
-          "storedBytes": 9834,
-          "sha256": "a3ac2e2949a8cb2573a14c0f3519b817b01fdb145ff5213490c418c5cfb85098"
-        }
-      ],
-      "mime": "text/javascript; charset=utf-8",
-      "bytes": 25570,
-      "sha256": "a3ac2e2949a8cb2573a14c0f3519b817b01fdb145ff5213490c418c5cfb85098"
-    },
-    "/assets/admin-YMlM7ikC.css": {
-      "chunks": [
-        {
-          "url": "/_activity_assets/1ea9e7dc87bb530c73e84c9681658921526fe8f99e5a2a8a24b35cb05cb45211.bin",
-          "encoding": "gzip",
-          "bytes": 18842,
-          "storedBytes": 4878,
-          "sha256": "f81a09039daf6277480ef952a74010564985b005fc92f1e6be82fbb4927c3427"
+          "bytes": 20129,
+          "storedBytes": 5116,
+          "sha256": "781497cfd8fc9bc22b9ed4d9ff680ebdfdaf41198982e9cccacdfcd1359d7d4c"
         }
       ],
       "mime": "text/css; charset=utf-8",
-      "bytes": 18842,
-      "sha256": "f81a09039daf6277480ef952a74010564985b005fc92f1e6be82fbb4927c3427"
+      "bytes": 20129,
+      "sha256": "781497cfd8fc9bc22b9ed4d9ff680ebdfdaf41198982e9cccacdfcd1359d7d4c"
     },
-    "/assets/campus-BVE4u7W-.js": {
+    "/assets/admin-DznKx7l0.js": {
       "chunks": [
         {
-          "url": "/_activity_assets/e58d75fc8dbbb1aa53530deca6045da85e50fee5599758801d82c24725101baf.bin",
+          "url": "/_activity_assets/106822061384ca5a67d5b2e2de01585605138f863461880d5eaff8b051a9015f.bin",
           "encoding": "gzip",
-          "bytes": 690352,
-          "storedBytes": 256963,
-          "sha256": "38a714282d905a7400a6a9b31862482c7537a357f7666ec822887299c58fb2b8"
+          "bytes": 29089,
+          "storedBytes": 11088,
+          "sha256": "b05c364732d7dca911faac8efb94ba5a0d4b99a249c47086b6ead04b9778195d"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 690352,
-      "sha256": "38a714282d905a7400a6a9b31862482c7537a357f7666ec822887299c58fb2b8"
+      "bytes": 29089,
+      "sha256": "b05c364732d7dca911faac8efb94ba5a0d4b99a249c47086b6ead04b9778195d"
     },
-    "/assets/campus-j3oWhQCV.css": {
+    "/assets/campus-DRfu-614.js": {
       "chunks": [
         {
-          "url": "/_activity_assets/1e4b8211de301096f535174b56c54decca0eb82fcecb3a31c8e8dafe827de377.bin",
+          "url": "/_activity_assets/ed4c67085a54f7f253e1710c83d15bdbae3d66f803dd2bfb7db91d102be400cd.bin",
           "encoding": "gzip",
-          "bytes": 55140,
-          "storedBytes": 12155,
-          "sha256": "df7425722b009cb758f88b69a4e3cf6b128ed4e23c4596e8485377fcd8bff65b"
+          "bytes": 740193,
+          "storedBytes": 275760,
+          "sha256": "f7a246276f0cf9ff94c17151888d438854837768278c144498dfe04142407dbd"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 740193,
+      "sha256": "f7a246276f0cf9ff94c17151888d438854837768278c144498dfe04142407dbd"
+    },
+    "/assets/campus-Gd1K6F-x.css": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/2fb9925ee3ab0e1985c3a9525f7445ca0192dfc06ba5b74713791a1ed3a39cac.bin",
+          "encoding": "gzip",
+          "bytes": 73526,
+          "storedBytes": 15078,
+          "sha256": "9d0bbe592af26ebbd256152cf8a91c193c19a612f210a55254e533e1237eb775"
         }
       ],
       "mime": "text/css; charset=utf-8",
-      "bytes": 55140,
-      "sha256": "df7425722b009cb758f88b69a4e3cf6b128ed4e23c4596e8485377fcd8bff65b"
+      "bytes": 73526,
+      "sha256": "9d0bbe592af26ebbd256152cf8a91c193c19a612f210a55254e533e1237eb775"
     },
     "/assets/GLTFExporter-C4V2D00H.js": {
       "chunks": [
@@ -141,6 +141,20 @@
       "mime": "text/javascript; charset=utf-8",
       "bytes": 35255,
       "sha256": "891aee13ddf5c926a1b337734b9d9c99bb70afb3d79aa1d4cd7d7e87ce863835"
+    },
+    "/assets/spider-geometry-worker-B9xzKrQ2.js": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/4c35be022472e9665c083bac65c94488181601eb7a1b0bc2cd3d78d6fee0cebc.bin",
+          "encoding": "gzip",
+          "bytes": 41840,
+          "storedBytes": 14648,
+          "sha256": "d568c8011711d6d241825bd71ba28d42e1e44944eaf000de1842b3118e4e15ba"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 41840,
+      "sha256": "d568c8011711d6d241825bd71ba28d42e1e44944eaf000de1842b3118e4e15ba"
     },
     "/assets/three.module-Csv-DIJu.js": {
       "chunks": [
@@ -243,16 +257,16 @@
     "/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/cdd2a41d025fdee0cdad204fb168de6fb0d38149bbc41acfa230866190be23bd.bin",
+          "url": "/_activity_assets/229538764735b2460fc4f98e0b2d61c52fc29424610fee3e260cc05fce2e0f81.bin",
           "encoding": "gzip",
-          "bytes": 14216,
-          "storedBytes": 5930,
-          "sha256": "cec036272f6c9636f0427184a60651c3ed1961b1914e98a44cf9d77e38ab95b2"
+          "bytes": 16362,
+          "storedBytes": 6389,
+          "sha256": "21e01a912a598b34c8e73c8b28d855f2eaca68b809fd6e88466639b70126f406"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 14216,
-      "sha256": "cec036272f6c9636f0427184a60651c3ed1961b1914e98a44cf9d77e38ab95b2"
+      "bytes": 16362,
+      "sha256": "21e01a912a598b34c8e73c8b28d855f2eaca68b809fd6e88466639b70126f406"
     },
     "/references/local-campus/campus-stone-lawn.webp": {
       "chunks": [
@@ -593,16 +607,16 @@
     "/works/library/": {
       "chunks": [
         {
-          "url": "/_activity_assets/acb7cb79c48f8a06f8b58b78358e849bb6723b1bd074ebb93a5f0185a91cdec5.bin",
+          "url": "/_activity_assets/bda89aafbf37b8188fb067bdbe7c5d272ae88916ce75b830125cfc48c3105f62.bin",
           "encoding": "gzip",
-          "bytes": 4205,
-          "storedBytes": 1826,
-          "sha256": "5d4b0777044dd49b65ef2c131d3015ea7b50bf84ab4487878e7e1111ed5c156c"
+          "bytes": 4306,
+          "storedBytes": 1867,
+          "sha256": "5682296b1c94856e576bebb1f626b0a43b1f268849e00c83d3e700b9fb9f4d0e"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 4205,
-      "sha256": "5d4b0777044dd49b65ef2c131d3015ea7b50bf84ab4487878e7e1111ed5c156c"
+      "bytes": 4306,
+      "sha256": "5682296b1c94856e576bebb1f626b0a43b1f268849e00c83d3e700b9fb9f4d0e"
     },
     "/works/library/activity-adapter.js": {
       "chunks": [
@@ -649,30 +663,30 @@
     "/works/library/games/isaac/": {
       "chunks": [
         {
-          "url": "/_activity_assets/1552dbf64896beeecb146b4233f4bb32ec9bce30a326ab62feda74fb3d91d659.bin",
+          "url": "/_activity_assets/a9012a4b6e1e6d8cb767aea31ec58defc77bedb00f4706070c882a403a4e2803.bin",
           "encoding": "gzip",
-          "bytes": 5324,
-          "storedBytes": 2084,
-          "sha256": "10b3b47fa5936e5176313a7df159bf249c77ed8528ce02296debd0d34ebb7c53"
+          "bytes": 5527,
+          "storedBytes": 2132,
+          "sha256": "be910bb353a87268ec6621595f0d6e9bcd9a2f32267fb1ce1688ef1fdde59ba4"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 5324,
-      "sha256": "10b3b47fa5936e5176313a7df159bf249c77ed8528ce02296debd0d34ebb7c53"
+      "bytes": 5527,
+      "sha256": "be910bb353a87268ec6621595f0d6e9bcd9a2f32267fb1ce1688ef1fdde59ba4"
     },
     "/works/library/games/isaac/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/1552dbf64896beeecb146b4233f4bb32ec9bce30a326ab62feda74fb3d91d659.bin",
+          "url": "/_activity_assets/a9012a4b6e1e6d8cb767aea31ec58defc77bedb00f4706070c882a403a4e2803.bin",
           "encoding": "gzip",
-          "bytes": 5324,
-          "storedBytes": 2084,
-          "sha256": "10b3b47fa5936e5176313a7df159bf249c77ed8528ce02296debd0d34ebb7c53"
+          "bytes": 5527,
+          "storedBytes": 2132,
+          "sha256": "be910bb353a87268ec6621595f0d6e9bcd9a2f32267fb1ce1688ef1fdde59ba4"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 5324,
-      "sha256": "10b3b47fa5936e5176313a7df159bf249c77ed8528ce02296debd0d34ebb7c53"
+      "bytes": 5527,
+      "sha256": "be910bb353a87268ec6621595f0d6e9bcd9a2f32267fb1ce1688ef1fdde59ba4"
     },
     "/works/library/hero.glb": {
       "chunks": [
@@ -796,16 +810,16 @@
     "/works/library/hub/main.mjs": {
       "chunks": [
         {
-          "url": "/_activity_assets/a22b49a1695b91ba2c40180d6c4355a7dd758dbaaa0a8883c477ed373d25696a.bin",
+          "url": "/_activity_assets/55b01291468d0fe981803de5412b31345ae1690b5617cd778a817dceca67bfc5.bin",
           "encoding": "gzip",
-          "bytes": 34863,
-          "storedBytes": 11267,
-          "sha256": "7cbfa40dec32a07099dbb98559f822306c8fdf42f5588662377004539c9bf41c"
+          "bytes": 37234,
+          "storedBytes": 11958,
+          "sha256": "4725dae49e474a5bfdb121dec0ee6c3ea8fc162bc71709a43e83d39cc7f34461"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 34863,
-      "sha256": "7cbfa40dec32a07099dbb98559f822306c8fdf42f5588662377004539c9bf41c"
+      "bytes": 37234,
+      "sha256": "4725dae49e474a5bfdb121dec0ee6c3ea8fc162bc71709a43e83d39cc7f34461"
     },
     "/works/library/hub/phone.css": {
       "chunks": [
@@ -936,16 +950,16 @@
     "/works/library/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/acb7cb79c48f8a06f8b58b78358e849bb6723b1bd074ebb93a5f0185a91cdec5.bin",
+          "url": "/_activity_assets/bda89aafbf37b8188fb067bdbe7c5d272ae88916ce75b830125cfc48c3105f62.bin",
           "encoding": "gzip",
-          "bytes": 4205,
-          "storedBytes": 1826,
-          "sha256": "5d4b0777044dd49b65ef2c131d3015ea7b50bf84ab4487878e7e1111ed5c156c"
+          "bytes": 4306,
+          "storedBytes": 1867,
+          "sha256": "5682296b1c94856e576bebb1f626b0a43b1f268849e00c83d3e700b9fb9f4d0e"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 4205,
-      "sha256": "5d4b0777044dd49b65ef2c131d3015ea7b50bf84ab4487878e7e1111ed5c156c"
+      "bytes": 4306,
+      "sha256": "5682296b1c94856e576bebb1f626b0a43b1f268849e00c83d3e700b9fb9f4d0e"
     },
     "/works/library/isaac-source/SWF运行样本/The Binding of Isaac.swf": {
       "chunks": [
@@ -1129,6 +1143,20 @@
       "bytes": 3691,
       "sha256": "594262af0dc267393a1ac96b6c56db0d2384dba33f05e43470343e185e6cccc3"
     },
+    "/works/library/isaac-touch.mjs": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/ddf5b1d52bd365141933d2bc566b713366d850e51dcfb173b876db027dec3730.bin",
+          "encoding": "gzip",
+          "bytes": 1089,
+          "storedBytes": 646,
+          "sha256": "173dbdeada545a0a718ddab386b16f5d8e154d85eb1b37a74a0853a8a3c23e23"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 1089,
+      "sha256": "173dbdeada545a0a718ddab386b16f5d8e154d85eb1b37a74a0853a8a3c23e23"
+    },
     "/works/library/model.glb": {
       "chunks": [
         {
@@ -1209,16 +1237,44 @@
     "/works/library/story/config.json": {
       "chunks": [
         {
-          "url": "/_activity_assets/ed2cae421cd06ea3887387a7e9784f2ce14e17bdfe61aad1f393bb4a7706e58b.bin",
+          "url": "/_activity_assets/1f48828a1384a5c313e68ab06aba1167c8fc71a67db04c94d92ff88bb4fdfbc2.bin",
           "encoding": "gzip",
-          "bytes": 1467,
-          "storedBytes": 763,
-          "sha256": "a3658ffde690ec699cdb7e7eb0ce3b344e0349040e825e142afb01e5091635fe"
+          "bytes": 1537,
+          "storedBytes": 814,
+          "sha256": "d899e0c04a66cfac95ad56a5487c1fabdaf00af70a261ed7b8fa3c6301bc1dbf"
         }
       ],
       "mime": "application/json; charset=utf-8",
-      "bytes": 1467,
-      "sha256": "a3658ffde690ec699cdb7e7eb0ce3b344e0349040e825e142afb01e5091635fe"
+      "bytes": 1537,
+      "sha256": "d899e0c04a66cfac95ad56a5487c1fabdaf00af70a261ed7b8fa3c6301bc1dbf"
+    },
+    "/works/library/touch-controls.css": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/d8f7884582682bcffa5423c18928d234b1e7b0fb1c39ddc210ccd908c5f56a03.bin",
+          "encoding": "gzip",
+          "bytes": 6913,
+          "storedBytes": 1864,
+          "sha256": "55ca03d83134498e4a4ddec3ecea394ee2149a6fae2d221bc8c8ccbfbe87d983"
+        }
+      ],
+      "mime": "text/css; charset=utf-8",
+      "bytes": 6913,
+      "sha256": "55ca03d83134498e4a4ddec3ecea394ee2149a6fae2d221bc8c8ccbfbe87d983"
+    },
+    "/works/library/touch-controls.mjs": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/a615fdba2d7707fb7d71879839a980a1b494f7e1a2f7942c8f0d5a2312e030f3.bin",
+          "encoding": "gzip",
+          "bytes": 7789,
+          "storedBytes": 3026,
+          "sha256": "53f513262236ff485b1394788002b8c9c4050eb2635faeadbd18e944ea2da0e0"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 7789,
+      "sha256": "53f513262236ff485b1394788002b8c9c4050eb2635faeadbd18e944ea2da0e0"
     },
     "/works/library/vendor/controls/OrbitControls.js": {
       "chunks": [
@@ -1335,16 +1391,16 @@
     "/works/tasay/": {
       "chunks": [
         {
-          "url": "/_activity_assets/babb6b6304fab7e61ec9d92faa7f6b5eedc33f7ff47929eed154098aa245557a.bin",
+          "url": "/_activity_assets/e6112cedfe08301e3d819bb5eda9562c36d06d91612569ba46b017cf7c59ba25.bin",
           "encoding": "gzip",
-          "bytes": 427,
-          "storedBytes": 302,
-          "sha256": "8c3caf8821c985284542fe9b739ad37211c917c350e9f78431396f5d93e2230b"
+          "bytes": 483,
+          "storedBytes": 333,
+          "sha256": "4a6a616efdde1771d0206bdc813078f0dcc597e40b8051495a162d3dcd1aa87c"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 427,
-      "sha256": "8c3caf8821c985284542fe9b739ad37211c917c350e9f78431396f5d93e2230b"
+      "bytes": 483,
+      "sha256": "4a6a616efdde1771d0206bdc813078f0dcc597e40b8051495a162d3dcd1aa87c"
     },
     "/works/tasay/assets/66c8ec9cf7b1f1e882d92c7f0c2e8d73-B7Cr3f9M.png": {
       "chunks": [
@@ -1374,61 +1430,61 @@
       "bytes": 1432436,
       "sha256": "240d1088f608ffde16703305652611e55645446dc61cfd7f0d879cd4a20f2d33"
     },
-    "/works/tasay/assets/index-Bw7q8Gi5.css": {
+    "/works/tasay/assets/index-B3E7f_dP.css": {
       "chunks": [
         {
-          "url": "/_activity_assets/4166f697f965842cd90cad2a76dd9cd520012379d87ba319a232ebc2b69021f5.bin",
+          "url": "/_activity_assets/031d35a59e42922c05655735b7a2645850ee67f98a82f8203eb9a1b73d27b837.bin",
           "encoding": "gzip",
-          "bytes": 39456,
-          "storedBytes": 8513,
-          "sha256": "c61947278c841dfd39d50a520ed8607d0d08b6b0c74115400cf1a501d662a476"
+          "bytes": 72944,
+          "storedBytes": 14662,
+          "sha256": "f7f9c2aa4621ce04badc128936c9462ea680f346d0fa327f1998c7ffef111170"
         }
       ],
       "mime": "text/css; charset=utf-8",
-      "bytes": 39456,
-      "sha256": "c61947278c841dfd39d50a520ed8607d0d08b6b0c74115400cf1a501d662a476"
+      "bytes": 72944,
+      "sha256": "f7f9c2aa4621ce04badc128936c9462ea680f346d0fa327f1998c7ffef111170"
     },
-    "/works/tasay/assets/index-dlInCgSp.js": {
+    "/works/tasay/assets/index-CkU62Ha6.js": {
       "chunks": [
         {
-          "url": "/_activity_assets/4b8726190d32d06dbcbfff1aeebc749102d5edb30046922760f1469c430f1580.bin",
+          "url": "/_activity_assets/cc5a5996278e54abd719c557b55a261e77f87ce35aa8e1a298ec990692a57d42.bin",
           "encoding": "gzip",
-          "bytes": 332036,
-          "storedBytes": 107720,
-          "sha256": "127b31937d2854554e747233f5cf6a422fb0fc7c6667381d50b861c250aaee93"
+          "bytes": 258720,
+          "storedBytes": 83086,
+          "sha256": "7ed3731785788990dd1ffcf4184c29c46fbbf92898d412897c801b65481f8cb3"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 332036,
-      "sha256": "127b31937d2854554e747233f5cf6a422fb0fc7c6667381d50b861c250aaee93"
+      "bytes": 258720,
+      "sha256": "7ed3731785788990dd1ffcf4184c29c46fbbf92898d412897c801b65481f8cb3"
     },
     "/works/tasay/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/babb6b6304fab7e61ec9d92faa7f6b5eedc33f7ff47929eed154098aa245557a.bin",
+          "url": "/_activity_assets/e6112cedfe08301e3d819bb5eda9562c36d06d91612569ba46b017cf7c59ba25.bin",
           "encoding": "gzip",
-          "bytes": 427,
-          "storedBytes": 302,
-          "sha256": "8c3caf8821c985284542fe9b739ad37211c917c350e9f78431396f5d93e2230b"
+          "bytes": 483,
+          "storedBytes": 333,
+          "sha256": "4a6a616efdde1771d0206bdc813078f0dcc597e40b8051495a162d3dcd1aa87c"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 427,
-      "sha256": "8c3caf8821c985284542fe9b739ad37211c917c350e9f78431396f5d93e2230b"
+      "bytes": 483,
+      "sha256": "4a6a616efdde1771d0206bdc813078f0dcc597e40b8051495a162d3dcd1aa87c"
     },
     "/works/wanyan/": {
       "chunks": [
         {
-          "url": "/_activity_assets/f9eba3ecf7a001d2c458c977f756f28a3bdccc4993213551ce568a7bdc2a4868.bin",
+          "url": "/_activity_assets/b923b520c1502143c6d7c84440826b94f205a8f64230eb10fafbe375610a02cd.bin",
           "encoding": "gzip",
-          "bytes": 11123,
-          "storedBytes": 3973,
-          "sha256": "3792f02245bb61f880853e4a191452129960e565d495d85751938765c74d737d"
+          "bytes": 11452,
+          "storedBytes": 4093,
+          "sha256": "0e2d00f71d1ccb6dcee5849dd2c4779eec0490873be184bce3f49c3a2fc13fb2"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 11123,
-      "sha256": "3792f02245bb61f880853e4a191452129960e565d495d85751938765c74d737d"
+      "bytes": 11452,
+      "sha256": "0e2d00f71d1ccb6dcee5849dd2c4779eec0490873be184bce3f49c3a2fc13fb2"
     },
     "/works/wanyan/activity-adapter.js": {
       "chunks": [
@@ -1559,16 +1615,16 @@
     "/works/wanyan/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/f9eba3ecf7a001d2c458c977f756f28a3bdccc4993213551ce568a7bdc2a4868.bin",
+          "url": "/_activity_assets/b923b520c1502143c6d7c84440826b94f205a8f64230eb10fafbe375610a02cd.bin",
           "encoding": "gzip",
-          "bytes": 11123,
-          "storedBytes": 3973,
-          "sha256": "3792f02245bb61f880853e4a191452129960e565d495d85751938765c74d737d"
+          "bytes": 11452,
+          "storedBytes": 4093,
+          "sha256": "0e2d00f71d1ccb6dcee5849dd2c4779eec0490873be184bce3f49c3a2fc13fb2"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 11123,
-      "sha256": "3792f02245bb61f880853e4a191452129960e565d495d85751938765c74d737d"
+      "bytes": 11452,
+      "sha256": "0e2d00f71d1ccb6dcee5849dd2c4779eec0490873be184bce3f49c3a2fc13fb2"
     },
     "/works/wanyan/pointer-lock-compat.js": {
       "chunks": [
@@ -1751,6 +1807,48 @@
       "mime": "image/png",
       "bytes": 1670,
       "sha256": "c56f5494640cedda273aad38d58e6ab9da625d5b3f4d875c0ff92c6192a569c2"
+    },
+    "/works/wanyan/touch-controls.css": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/d8f7884582682bcffa5423c18928d234b1e7b0fb1c39ddc210ccd908c5f56a03.bin",
+          "encoding": "gzip",
+          "bytes": 6913,
+          "storedBytes": 1864,
+          "sha256": "55ca03d83134498e4a4ddec3ecea394ee2149a6fae2d221bc8c8ccbfbe87d983"
+        }
+      ],
+      "mime": "text/css; charset=utf-8",
+      "bytes": 6913,
+      "sha256": "55ca03d83134498e4a4ddec3ecea394ee2149a6fae2d221bc8c8ccbfbe87d983"
+    },
+    "/works/wanyan/touch-controls.mjs": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/a615fdba2d7707fb7d71879839a980a1b494f7e1a2f7942c8f0d5a2312e030f3.bin",
+          "encoding": "gzip",
+          "bytes": 7789,
+          "storedBytes": 3026,
+          "sha256": "53f513262236ff485b1394788002b8c9c4050eb2635faeadbd18e944ea2da0e0"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 7789,
+      "sha256": "53f513262236ff485b1394788002b8c9c4050eb2635faeadbd18e944ea2da0e0"
+    },
+    "/works/wanyan/wanyan-touch.mjs": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/d4020dbcb29e6fadc9e26436f6c834c44aa416d752917bf30964676a500c40d3.bin",
+          "encoding": "gzip",
+          "bytes": 2225,
+          "storedBytes": 1086,
+          "sha256": "547867b7f624dab36eb3107770128335c1706825d207224cedc9a97808e8b3c2"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 2225,
+      "sha256": "547867b7f624dab36eb3107770128335c1706825d207224cedc9a97808e8b3c2"
     }
   },
   "spa": [

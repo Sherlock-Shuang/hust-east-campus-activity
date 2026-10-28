@@ -2,9 +2,11 @@ import {createLiveClient} from './live-client.js';
 import {isEventActive} from './live-state.js';
 import {mountAudienceUI} from './audience-ui.js';
 import {ACTIVITY_WORKS} from './activity-catalog.js';
+import {mountMobileViewport} from './mobile-viewport.js';
 import './live-experience.css';
 
 export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,setSuspended,invalidate,notify}) {
+  const disposeMobileViewport=mountMobileViewport();
   const root=document.createElement('div');root.id='live-experience';
   root.innerHTML=`
     <div class="live-connection" role="status">正在连接活动</div>
@@ -197,6 +199,6 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       if(client.state.paused||reduced?.matches)return false;
       if(now-lastPaint>=100){lastPaint=now;return true;}return false;
     },
-    dispose(){disposed=true;clearInterval(timer);client.dispose();closePortal();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},
+    dispose(){disposed=true;disposeMobileViewport();clearInterval(timer);client.dispose();closePortal();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},
   };
 }
