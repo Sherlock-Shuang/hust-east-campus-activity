@@ -137,6 +137,16 @@ export function createCrossingDetails(THREE,route,surfaces) {
     component:'source-crossing-details',locationEvidence:'source crossing nodes',dimensionsEvidence:'estimated',units:'metres',
   });
   const paint=layer.own(surfaces.paint.clone());paint.polygonOffset=true;paint.polygonOffsetFactor=-1;paint.polygonOffsetUnits=-1;
+  // Shader-written logarithmic depth overrides hardware polygon offset. Give
+  // the paint four 24-bit depth steps of separation, while retaining depth
+  // testing/writing so shoes, wheels and vehicles still occlude the stripes.
+  paint.onBeforeCompile=shader=>{
+    shader.fragmentShader=shader.fragmentShader.replace('#include <logdepthbuf_fragment>',`#include <logdepthbuf_fragment>
+      #if defined( USE_LOGARITHMIC_DEPTH_BUFFER )
+        gl_FragDepth = max(0.0, gl_FragDepth - 0.0000002384185791015625);
+      #endif`);
+  };
+  paint.customProgramCacheKey=()=>'crossing-paint-log-depth-v1';
   const stone=layer.own(surfaces.concrete.clone());stone.color.set('#a6a99d');
   const tactile=layer.own(new THREE.MeshStandardMaterial({color:'#b6a16c',roughness:.96}));
   const dummy=new THREE.Object3D(),matrix=new THREE.Matrix4(),local=new THREE.Object3D();
@@ -154,8 +164,10 @@ export function createCrossingDetails(THREE,route,surfaces) {
       const shrink=(stripeIndex%4)*.017,shape=new THREE.Shape();
       shape.moveTo(-.21,-1.5+shrink);shape.lineTo(.20,-1.5);shape.lineTo(.215,.93);shape.lineTo(.197,1.5-shrink);
       shape.lineTo(-.205,1.5);shape.lineTo(-.217,-.68);shape.closePath();
-      const g=new THREE.ExtrudeGeometry(shape,{depth:.003,bevelEnabled:false,steps:1,curveSegments:1});g.rotateX(-Math.PI/2);
-      put(g,paint,x,.003,0);stripes++;
+      // A single upward-facing painted surface keeps the existing top height
+      // without almost coincident underside/side faces at shallow view angles.
+      const g=new THREE.ShapeGeometry(shape);g.rotateX(-Math.PI/2);
+      put(g,paint,x,.006,0);stripes++;
     }
     // Flush dropped kerbs are authored only beside a mapped marked crossing.
     // No new crossing or signal is inferred from these small construction parts.
