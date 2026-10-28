@@ -2,6 +2,7 @@ import {readFile,writeFile,mkdir,copyFile,readdir,stat} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
+import {publicWanyanData} from './wanyan-public-text.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const LIBRARY='/works/library/',WANYAN='/works/wanyan/';
@@ -27,6 +28,8 @@ function mobileAssets(html,prefix){
 export async function buildLibrary({sourceRoot,outputRoot}){
   if(!sourceRoot)throw new Error('Specify --source or BOOKREALM_SOURCE; it is a build-time path only.');
   sourceRoot=path.resolve(sourceRoot);outputRoot=path.resolve(outputRoot||path.join(here,'../../work-assets'));
+  const outputRelative=path.relative(sourceRoot,outputRoot);
+  if(!outputRelative||(!outputRelative.startsWith(`..${path.sep}`)&&outputRelative!=='..'&&!path.isAbsolute(outputRelative)))throw new Error('Activity output must be outside the original source project');
   const project=JSON.parse(await readFile(path.join(sourceRoot,'project.json'),'utf8'));
   const app=project.paths.app,isaac=project.paths.isaac,hero=project.paths.hero;
   const entries=[],sourceChecks=[],transforms=[];
@@ -112,10 +115,14 @@ export async function buildLibrary({sourceRoot,outputRoot}){
     .replace("else location.assign('/');",`else location.assign('${LIBRARY}');`));
   await tree(`${isaac}/运行验证/node_modules/@ruffle-rs/ruffle`,'library/isaac-source/运行验证/node_modules/@ruffle-rs/ruffle',name=>/\.(?:js|wasm)$/.test(name)||name.startsWith('LICENSE'));
   for(const file of ['剧情扩展/Isaac-High-Damage.swf','SWF运行样本/The Binding of Isaac.swf'])await copy(`${isaac}/${file}`,`library/isaac-source/${file}`);
-  await tree(`${app}/games/wanyan/Build`,'wanyan/Build',name=>/\.(?:js|wasm|data)$/.test(name));
+  await tree(`${app}/games/wanyan/Build`,'wanyan/Build',name=>name!=='wanyan.data'&&/\.(?:js|wasm|data)$/.test(name));
+  const unityDataSource=`${app}/games/wanyan/Build/wanyan.data`,unityData=await readFile(path.join(sourceRoot,unityDataSource));
+  await put('wanyan/Build/wanyan.data',publicWanyanData(unityData),{source:unityDataSource,sourceHash:sha(unityData)});
+  transforms.push('Activity-only Unity metadata display text: four sanctuary labels renamed from 归心 to 圣所 with equal UTF-8 lengths; original package and gameplay unchanged');
   await tree(`${app}/games/wanyan/TemplateData`,'wanyan/TemplateData',name=>/\.(?:css|png|ico)$/.test(name));
   await copy(`${app}/games/wanyan/index.html`,'wanyan/index.html',source=>{
     let s=mobileAssets(injectAdapter(source,'wanyan'),WANYAN);
+    s=replaceExactly(s,'dataUrl: buildUrl + "/wanyan.data"','dataUrl: buildUrl + "/wanyan.data?campus-text=sanctum-v1"','Unity public wording cache version');
     s=replaceExactly(s,'</head>',`<script type="module" src="${WANYAN}wanyan-touch.mjs"></script></head>`,'Unity touch script');
     s=replaceExactly(s,'return Math.min(Math.max(1, nativeRatio || 1), 2, budgetRatio);',"var mobile=matchMedia('(pointer: coarse)').matches||navigator.maxTouchPoints>0||innerWidth<=900;return Math.min(Math.max(1, nativeRatio || 1), mobile?1.1:2, budgetRatio);",'Unity mobile pixel budget');
     s=s.replace("var meta = document.createElement('meta');","var meta = document.querySelector('meta[name=viewport]') || document.createElement('meta');")

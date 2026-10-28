@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import vm from 'node:vm';
 import {createLibraryHandler} from './handler.mjs';
 import {rebaseLibraryText} from './build.mjs';
+import {WANYAN_PUBLIC_TEXT} from './wanyan-public-text.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url)),assets=path.resolve(here,'../../work-assets');
 
 test('runtime URLs retain their original route hierarchy under activity prefixes',()=>{
@@ -50,6 +51,13 @@ test('mounted handler serves real models, Unity, nested games, routes, MIME and 
   assert.equal((await fetch(origin+'/works/library/serve.py')).status,404);
   assert.equal((await fetch(origin+'/works/library/',{method:'POST'})).status,405);
   assert.equal((await fetch(origin+'/works/library/model.glb',{headers:{Range:'bytes=999999999-'}})).status,416);
+});
+test('activity Unity data and cache URL contain the public sanctuary wording',async()=>{
+  const bytes=await readFile(path.join(assets,'wanyan/Build/wanyan.data'));
+  assert(!bytes.includes(Buffer.from('归心')));
+  for(const text of WANYAN_PUBLIC_TEXT.values())assert(bytes.includes(Buffer.from(text)));
+  const html=await readFile(path.join(assets,'wanyan/index.html'),'utf8');
+  assert(html.includes('/wanyan.data?campus-text=sanctum-v1'));
 });
 test('adapter authenticates parent/attempt, reports real readiness once and respects game-owned keys',async()=>{
   const messages=[],events=new Map(),parent={postMessage:(...args)=>messages.push(args)};

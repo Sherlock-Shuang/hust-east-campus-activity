@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {WANYAN_PUBLIC_TEXT} from './wanyan-public-text.mjs';
 import {touchVector,directionKeys,createTouchKeys,createTouchControls} from './touch-controls.mjs';
 
 test('movement and shooting sticks retain diagonal directions and clamp travel',()=>{
@@ -74,14 +76,18 @@ test('phase transitions hide inactive movement and release every held input befo
  phase='paused';tick();assert.equal(move.hidden,true);assert.deepEqual(moves.at(-1),{x:0,y:0});assert.equal(resets,2);
  phase='combat';tick();move.emit('pointermove',{pointerId:2,clientX:0,clientY:60});assert.deepEqual(moves.at(-1),{x:0,y:0});assert.equal(resets,3);touch.destroy();
 });
-test('generated copies install real touch hooks without altering Unity or SWF game files',async()=>{
+test('generated copies retain Unity executable/SWF bytes and change only the four sanctuary labels in Unity data',async()=>{
  const base=new URL('../../work-assets/',import.meta.url);
  const library=await readFile(new URL('library/hub/main.mjs',base),'utf8');
  assert(library.includes('campusTouchMove.x'));assert(library.includes("if(id==='book'){updateCamera();inspectBook();if(hovered)openBook(hovered)"));assert(library.includes("if(id==='dodge')startDodge(player,input(),yaw)"));
  const isaac=await readFile(new URL('library/games/isaac/index.html',base),'utf8');assert(isaac.includes('attachIsaacTouch(player, requestMenu)'));assert(isaac.includes('viewport-fit=cover'));
  const unity=await readFile(new URL('wanyan/index.html',base),'utf8');assert(unity.includes('mobile?1.1:2'));assert(unity.includes('wanyan-touch.mjs'));assert(!unity.includes('user-scalable=no'));
  const manifest=JSON.parse(await readFile(new URL('library-manifest.json',base),'utf8'));
- for(const name of ['wanyan/Build/wanyan.wasm','wanyan/Build/wanyan.data','library/isaac-source/剧情扩展/Isaac-High-Damage.swf']){
+ for(const name of ['wanyan/Build/wanyan.wasm','library/isaac-source/剧情扩展/Isaac-High-Damage.swf']){
   const output=manifest.entries.find(x=>x.file===name),source=manifest.sourceChecks.find(x=>x.sha256===output.sha256);assert(source,`${name} must be copied byte-for-byte`);
  }
+ const data=await readFile(new URL('wanyan/Build/wanyan.data',base));
+ for(const [before,after]of WANYAN_PUBLIC_TEXT){const value=Buffer.from(after),at=data.indexOf(value);assert(at>=0);assert.equal(data.indexOf(value,at+value.length),-1);Buffer.from(before).copy(data,at);}
+ const original=manifest.sourceChecks.find(x=>x.source.endsWith('/games/wanyan/Build/wanyan.data'));
+ assert.equal(createHash('sha256').update(data).digest('hex'),original.sha256,'reversing only four names must reproduce the exact original package');
 });

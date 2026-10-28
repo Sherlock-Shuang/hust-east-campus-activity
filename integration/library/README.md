@@ -30,7 +30,7 @@ manifest 的 `entries` 给出每条 URL、相对运行包路径、长度、SHA-2
 1. 原运行层绝对 URL 重写为活动前缀；馆内 J921 改指向同一 `/works/wanyan/` 真实构建，I921 保持以撒入口。
 2. `public-story.json` 使用“访客／书境向导”与中性活动文案，头像为空。没有复制原 `story/config.json` 或 `story/avatars`。保留 intro 的 8 步／2 次回复、birthday 的 4 步／1 次回复、原延时和原流程节点标识，因此条件判断没有改变。
 3. 活动存档使用 `campus-library-save-v1`、`campus-library-view-mode`，不覆盖原礼物存档。原主角、原游戏玩法、原有真实胜利回调保持。
-4. 以撒活动副本的 `story.js` 将一处作者真实姓名提示改为中性同行者提示；原脚本不变。编译的 Unity/SWF 游戏资源原样复制，没有从运行包导出原素材，也没有声称对编译内容做完整隐私扫描或另行授予再分发许可。
+4. 以撒活动副本的 `story.js` 将一处作者真实姓名提示改为中性同行者提示；原脚本不变。Unity 可执行文件和 SWF 原样复制；Unity data 仅将四处场景称呼“归心”改为“圣所”（见下文）。没有从运行包导出原素材，也没有声称对编译内容做完整隐私扫描或另行授予再分发许可。
 5. 图书馆活动副本新增外部暂停：冻结主循环和手柄轮询、停止输入、暂停手机及其音频，并向嵌套游戏发送已有 `bookrealm:controls`。原暂停／视角／游戏按键保留，Esc 没有被活动桥劫持。
 6. 晚言通过已有 `bookrealmControlsSuspended` 接入原战斗暂停边界；退出时尝试 `unityInstance.Quit()`，父层移除 iframe 释放运行时。
 7. 晚言活动画布对已知浏览器 Pointer Lock 拒绝作非致命降级，保留普通鼠标／键盘；同时捕获同步异常和 Promise 拒绝，不伪造锁定成功。真正的 Unity 运行错误和资源下载失败仍报告失败。降级只作用于活动副本，不修改编译游戏或原工程。
@@ -67,3 +67,9 @@ manifest 的 `entries` 给出每条 URL、相对运行包路径、长度、SHA-2
 实现源文件是本目录的 `touch-controls.mjs/css`、`library-touch-hooks.txt`、`isaac-touch.mjs`、`wanyan-touch.mjs`，由 `build.mjs` 注入并写入白名单。原生日礼物源文件和三平台桌面包均未修改，因此本轮不替它们重新打包。
 
 `node --test integration/library/integration.test.mjs integration/library/touch-controls.test.mjs` 共 16 项通过，包含真实资源哈希不变、并行触点、取消和恢复、阶段切换、窄屏鼠标拖动、原生菜单输入、输出白名单及原暂停协议。根任务在 844×390 浏览器验收晚言：触控开始进入真实战斗、摇杆移动人物／场景、攻击触发蓝色挥击、暂停进入原菜单、重新开始回到开场；以撒：开始／确认进入选人和真实关卡，左摇杆右移人物、右摇杆向上连续射出泪弹。图书馆实际输入由根任务统一验收；这些测试不等于 iPhone／Android 真机性能验收。
+
+## 晚言活动版场景称呼
+
+`wanyan-public-text.mjs` 严格解析 UnityWebData 与 IL2CPP v108 字面量表，只将四处完整文案中的“归心”改成“圣所”，包括开场提示、进入按钮和原胜利提示。等长 UTF-8 替换保持容器及元数据偏移，整包仅20个字节变化；未知版本、异常边界或文案变化会拒绝构建。`.wasm`、战斗、胜利回调和存档不变，原礼物包不写入。原包哈希保留在 manifest.sourceChecks；测试把四个名称还原后，要求整包SHA256与原包完全一致。
+
+活动HTML使用 `wanyan.data?campus-text=sanctum-v1` 避免旧缓存继续显示原称呼，资源路由仍为同一个data文件。字体已包含“圣”“所”，不增加字体下载。构建输出不能位于原工程内部。

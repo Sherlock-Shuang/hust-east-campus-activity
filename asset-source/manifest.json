@@ -1475,16 +1475,16 @@
     "/works/wanyan/": {
       "chunks": [
         {
-          "url": "/_activity_assets/b923b520c1502143c6d7c84440826b94f205a8f64230eb10fafbe375610a02cd.bin",
+          "url": "/_activity_assets/32e4b79b19f431cb64b33bae7ccb1d9e9a45acc7c3db28366d0eddfe7915982c.bin",
           "encoding": "gzip",
-          "bytes": 11452,
-          "storedBytes": 4093,
-          "sha256": "0e2d00f71d1ccb6dcee5849dd2c4779eec0490873be184bce3f49c3a2fc13fb2"
+          "bytes": 11475,
+          "storedBytes": 4107,
+          "sha256": "a4ac4ef90ec74aa7a61676e8db06981e72b0c0e3e0aaaaf72f4a3af059718b4e"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 11452,
-      "sha256": "0e2d00f71d1ccb6dcee5849dd2c4779eec0490873be184bce3f49c3a2fc13fb2"
+      "bytes": 11475,
+      "sha256": "a4ac4ef90ec74aa7a61676e8db06981e72b0c0e3e0aaaaf72f4a3af059718b4e"
     },
     "/works/wanyan/activity-adapter.js": {
       "chunks": [
@@ -1538,11 +1538,11 @@
           "sha256": "1cdf67690478fc21d1f46e00f866caabefa6ce01019e682f56069a61bc9eed58"
         },
         {
-          "url": "/_activity_assets/d2673eccb18ae3dcb4479807c1542edfc684944c6b298c9dabece231dc3123a7.bin",
+          "url": "/_activity_assets/3335cfae2a3e1a3368d06ef0612885fe30a36ee1c3abeea78fb7238e21aa0b11.bin",
           "encoding": "gzip",
           "bytes": 16777216,
-          "storedBytes": 11858768,
-          "sha256": "3252a71f9925fc4959ca3693ce67c3d1e4d9c57dd0ca91073149355637fb484d"
+          "storedBytes": 11858766,
+          "sha256": "bed7af35a2e75191b035204fc299902c51514acba9e579b069558f4c12117829"
         },
         {
           "url": "/_activity_assets/35cf8a4a9a4ef6ea5ce26a417609a343f7f3f5bfd9c643a573fb9315ccf2698c.bin",
@@ -1554,7 +1554,7 @@
       ],
       "mime": "application/octet-stream",
       "bytes": 103399842,
-      "sha256": "43b1bd10bf1f8751c031c1522088931b5e2dd7d67777a8583d768f41051ee85a"
+      "sha256": "c388027657359be8aec1049cd53adc500eea47df8cf32673ec14f824f5f8fc83"
     },
     "/works/wanyan/Build/wanyan.framework.js": {
       "chunks": [
@@ -1615,16 +1615,16 @@
     "/works/wanyan/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/b923b520c1502143c6d7c84440826b94f205a8f64230eb10fafbe375610a02cd.bin",
+          "url": "/_activity_assets/32e4b79b19f431cb64b33bae7ccb1d9e9a45acc7c3db28366d0eddfe7915982c.bin",
           "encoding": "gzip",
-          "bytes": 11452,
-          "storedBytes": 4093,
-          "sha256": "0e2d00f71d1ccb6dcee5849dd2c4779eec0490873be184bce3f49c3a2fc13fb2"
+          "bytes": 11475,
+          "storedBytes": 4107,
+          "sha256": "a4ac4ef90ec74aa7a61676e8db06981e72b0c0e3e0aaaaf72f4a3af059718b4e"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 11452,
-      "sha256": "0e2d00f71d1ccb6dcee5849dd2c4779eec0490873be184bce3f49c3a2fc13fb2"
+      "bytes": 11475,
+      "sha256": "a4ac4ef90ec74aa7a61676e8db06981e72b0c0e3e0aaaaf72f4a3af059718b4e"
     },
     "/works/wanyan/pointer-lock-compat.js": {
       "chunks": [
