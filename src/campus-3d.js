@@ -1,3 +1,4 @@
+import polygonClipping from 'polygon-clipping';
 import {createStaticInstanceSelection,createStaticXZIndex} from './static-instance-lod.js';
 import {createYunyuanForecourt} from './yunyuan-forecourt.js';
 import {createCampusLawnLandmarks} from './campus-lawn-landmarks.js';
@@ -266,17 +267,40 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     if(landmark){holder.add(landmark);record.displayMode='landmark-photo-informed';}
   }
   function local(c) { const p = geoToLocal({ longitude: c[0], latitude: c[1], height: 0, coordinateSystem: 'EPSG:4326' }, frame); return new THREE.Vector3(p.x, 0, p.z); }
-  function ribbon(points, width, y, material, holder, meta, depth = .12) {
-    if (points.length < 2) return null;
-    const vertices = [], indices = [];
+  function roadOutline(points,width) {
+    const left=[],right=[];
     for (let i = 0; i < points.length; i++) {
       const a = points[Math.max(0, i - 1)], b = points[Math.min(points.length - 1, i + 1)];let dx = b.x - a.x, dz = b.z - a.z;
       const joint=roadJoints.get(`${points[i].x.toFixed(4)}/${points[i].z.toFixed(4)}`);
       if((i===0||i===points.length-1)&&joint&&Math.abs(joint.width-width)<.01){const sign=joint.dx*dx+joint.dz*dz<0?-1:1;dx=joint.dx*sign;dz=joint.dz*sign;}
       const len = Math.hypot(dx, dz) || 1;
       const nx = -dz / len * width / 2, nz = dx / len * width / 2, p = points[i];
-      vertices.push(p.x + nx, y, p.z + nz, p.x - nx, y, p.z - nz, p.x + nx, y - depth, p.z + nz, p.x - nx, y - depth, p.z - nz);
+      left.push([p.x+nx,p.z+nz]);right.push([p.x-nx,p.z-nz]);
+    }
+    return {left,right,ring:[...left,...[...right].reverse(),left[0]]};
+  }
+  function ribbon(points, width, y, material, holder, meta, depth = .12) {
+    if (points.length < 2) return null;
+    const vertices = [], indices = [],outline=roadOutline(points,width);
+    for (let i = 0; i < points.length; i++) {
+      const [lx,lz]=outline.left[i],[rx,rz]=outline.right[i];
+      vertices.push(lx,y,lz,rx,y,rz,lx,y-depth,lz,rx,y-depth,rz);
       if (i) { const o = i * 4, q = o - 4; indices.push(q,o,q+1,q+1,o,o+1,q+2,o+2,q,o+2,o,q,q+1,o+1,q+3,o+1,o+3,q+3); }
+    }
+    // The lake branch starts at the asphalt road centreline. Trim only its
+    // displayed top where those source ribbons overlap, rather than keeping
+    // ~100 m² of coplanar competing triangles. Source geometry/physics stay put.
+    const mainRoad=sourceById.get('way/1228820956');
+    if(meta.featureId==='way/97080595'&&mainRoad?.feature.geometry.type==='LineString'){
+      const cut=roadOutline(mainRoad.feature.geometry.coordinates.map(local),getRoadProfile(mainRoad.feature).width);
+      const polygons=polygonClipping.difference([outline.ring],[cut.ring]);
+      const sides=indices.filter((_,i)=>i%18>=6);indices.length=0;indices.push(...sides);
+      const shapes=polygons.map(rings=>{const shape=new THREE.Shape(rings[0].map(([x,z])=>new THREE.Vector2(x,-z)));for(const ring of rings.slice(1))shape.holes.push(new THREE.Path(ring.map(([x,z])=>new THREE.Vector2(x,-z))));return shape;});
+      const top=new THREE.ShapeGeometry(shapes);top.rotateX(-Math.PI/2);
+      const p=top.attributes.position,offset=vertices.length/3;
+      for(let i=0;i<p.count;i++)vertices.push(p.getX(i),y,p.getZ(i));
+      for(const i of top.index.array)indices.push(offset+i);
+      top.dispose();meta.renderedTopClipAgainst=mainRoad.id;
     }
     const indexed = new THREE.BufferGeometry(); indexed.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3)); indexed.setIndex(indices);
     // Upward deck faces and hard slab edges prevent the shadow bias from
@@ -288,10 +312,6 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     m.castShadow = false; m.renderOrder = 200; holder.add(m); return m;
   }
   const roadMaterial = surfaces.asphalt, pathMaterial = surfaces.paving, bridgeMaterial = surfaces.concrete, markingMaterial = surfaces.paint, railMaterial = solid('#b7c3bf', .55, .3);
-  // The lakeside pavers and the main asphalt ribbon meet at the same datum.
-  // Keep asphalt continuous through that junction, with crossing paint (four
-  // depth steps) still in front of this two-step surface separation.
-  applySurfaceDepthBias(roadMaterial,2);
   const centreMaterial=solid('#c6ad67',.91);
   applySurfaceDepthBias(markingMaterial,4);applySurfaceDepthBias(centreMaterial,4);
   // Shared source vertices determine junction clearance. Separate ways that

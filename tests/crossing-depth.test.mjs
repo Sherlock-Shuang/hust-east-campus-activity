@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import polygonClipping from 'polygon-clipping';
 import {readFileSync} from 'node:fs';
 import {createCampus3D} from '../src/campus-3d.js';
 import {createLocalFrame,geoToLocal} from '../src/geospatial.js';
@@ -49,7 +50,7 @@ test('log-depth paint retains ordinary occlusion and uses a bounded fragment-dep
   details.dispose();surfaces.dispose();
 });
 
-test('bridge junction asphalt wins over coplanar pavers while all road paint keeps priority',()=>{
+test('bridge junction has no overlapping asphalt/paver top faces and road paint retains depth priority',()=>{
   const source=JSON.parse(readFileSync(new URL('../public/data/east-campus.geojson',import.meta.url),'utf8'));
   const ids=['way/1228820956','way/97080595'];
   const roads=source.features.filter(f=>ids.includes(f.id)).map(feature=>({id:feature.id,feature,category:'road',shapes:[]}));
@@ -60,9 +61,14 @@ test('bridge junction asphalt wins over coplanar pavers while all road paint kee
   for(const id of ids){
     const deck=campus.records.get(id).group.children.find(o=>o.isMesh);
     deck.geometry.computeBoundingBox();assert.ok(Math.abs(deck.geometry.boundingBox.max.y-.142)<1e-6);
-    assert.equal(biasOf(deck.material),id===ids[0]?2/2**24:0);
+    assert.equal(biasOf(deck.material),0,'road bodies do not need artificial depth separation');
     assert.equal(deck.material.depthTest,true);assert.equal(deck.material.depthWrite,true);
   }
+  const tops=id=>{const p=campus.records.get(id).group.children.find(o=>o.isMesh).geometry.attributes.position,result=[];for(let i=0;i<p.count;i+=3)if([i,i+1,i+2].every(j=>Math.abs(p.getY(j)-.142)<1e-6)){const ring=[i,i+1,i+2,i].map(j=>[p.getX(j),p.getZ(j)]);result.push([ring]);}return polygonClipping.union(...result);};
+  const overlap=polygonClipping.intersection(tops(ids[0]),tops(ids[1]));
+  let area=0;for(const polygon of overlap)for(const ring of polygon)for(let i=1;i<ring.length;i++)area+=ring[i-1][0]*ring[i][1]-ring[i][0]*ring[i-1][1];
+  assert.ok(Math.abs(area/2)<.005,'only float32 edge-rounding slivers may remain, not overlapping road sheets');
+  assert.equal(campus.records.get(ids[1]).group.children.find(o=>o.isMesh).userData.renderedTopClipAgainst,ids[0]);
   const lines=[];campus.group.traverse(o=>{if(/avenue-centre-lines|avenue-cycle-boundaries|avenue-motor-lane-dashes/.test(o.name))lines.push(o);});
   assert.ok(lines.length>=2);
   for(const line of lines)assert.equal(biasOf(line.material),4/2**24,'lane paint stays ahead of biased asphalt');
