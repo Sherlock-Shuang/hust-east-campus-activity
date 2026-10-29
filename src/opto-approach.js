@@ -75,11 +75,11 @@ export function planOptoApproach(model,{frame,geoToLocal,optoBuilding}={}){
   const areaOf=polygons=>polygons.reduce((sum,p)=>sum+p.reduce((s,r,i)=>s+(i?-1:1)*Math.abs(r.reduce((a,q,k)=>{const n=r[(k+1)%r.length];return a+q[0]*n[1]-n[0]*q[1];},0)/2),0),0);
   // Separate source paths on each SIDE of the real building. Reusing the west
   // footway for the east entrance would draw an impossible path through rooms.
-  for(const [key,id,roadId]of [['college','opto-c-entry-approach','way/1483567207'],['east','opto-c-east-approach','way/1483567206']]){
-    const door=ground?.[key],footway=roads.find(r=>r.id===roadId);if(!door||!footway)continue;
+  for(const [key,id,roadId]of [['college','opto-c-entry-approach','way/1483567207'],['east','opto-c-east-approach','way/1483567206'],['rear','opto-rear-entry-approach','way/1483567205']]){
+    const door=key==='rear'?optoBuilding?.plan?.rear:ground?.[key],footway=roads.find(r=>r.id===roadId);if(!door||!footway)continue;
     const end={x:door.x+door.nx*1.5,z:door.z+door.nz*1.5};let best;
     for(const line of footway.lines)for(let i=1;i<line.length;i++){const q=nearest(end,line[i-1],line[i]);if(!best||q.distance<best.distance)best=q;}
-    if(best&&best.distance<12){
+    if(best&&best.distance<(key==='rear'?18:12)){
       const path=[clipRing(linePolygon(best,end,3))],source=optoBuilding.plan.sourceFootprint;
       const overlap=source?.length?areaOf(polygonClipping.intersection(source,path)):0;
       if(overlap>.08){plan.diagnostics.push({id,reason:'Rejected: doorway approach crosses the source building footprint',overlap});continue;}

@@ -1,5 +1,7 @@
 // Explicit shared tour links only. The normal URL still starts at 韵苑食堂.
 export function campusLandmarkArrival(campus,place){
+  if(place==='opto-passage'&&campus?.optoViewpoints?.northPassage)return {...campus.optoViewpoints.northPassage};
+  if(place==='opto-rear'&&campus?.optoViewpoints?.rearEntrance)return {...campus.optoViewpoints.rearEntrance};
   if(place==='opto'&&campus?.optoEntry)return {...campus.optoEntry,pitch:-.15};
   if(place==='opto-main'&&campus?.optoEntry)return {...campus.optoEntry,pitch:-.08};
   if(place==='opto-east'&&campus?.optoEntries?.length){
