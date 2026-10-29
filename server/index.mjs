@@ -10,7 +10,7 @@ import {createWorkRouter} from '../integration/work-router.mjs';
 import {ACTIVITY_WORKS,activityPortals} from '../src/activity-catalog.js';
 
 const projectRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.geojson':'application/geo+json; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.woff2':'font/woff2','.ico':'image/x-icon'};
+const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.geojson':'application/geo+json; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.woff2':'font/woff2','.ico':'image/x-icon','.mp4':'video/mp4'};
 const COOKIE='campus_admin';
 const AUDIENCE_COOKIE='campus_audience';
 const hash=value=>createHash('sha256').update(value).digest();
@@ -183,8 +183,34 @@ export async function createLiveServer(options={}) {
     res.setHeader('Content-Type',MIME[path.extname(actual)]||'application/octet-stream');
     res.setHeader('Content-Length',info.size);
     res.setHeader('Cache-Control',pathname.startsWith('/assets/')?'public, max-age=31536000, immutable':'no-cache');
+    res.setHeader('Accept-Ranges','bytes');
+    // Range only applies to GET. Multiple/unknown range units fall back to the
+    // full representation; this small static server does not emit multipart.
     if(req.method==='HEAD'){res.end();return;}
-    const stream=createReadStream(actual);stream.on('error',()=>res.destroy());stream.pipe(res);
+    let start=0,end=info.size-1;
+    const range=req.headers.range;
+    if(typeof range==='string'&&/^bytes=/i.test(range)&&!range.includes(',')&&!req.headers['if-range']){
+      const match=/^bytes=(\d*)-(\d*)$/i.exec(range);
+      let valid=!!match&&(match[1]!==''||match[2]!=='')&&info.size>0;
+      if(valid){
+        if(match[1]===''){
+          const suffix=Number(match[2]);
+          valid=Number.isSafeInteger(suffix)&&suffix>0;
+          start=Math.max(0,info.size-suffix);
+        }else{
+          start=Number(match[1]);end=match[2]===''?end:Number(match[2]);
+          valid=Number.isSafeInteger(start)&&Number.isSafeInteger(end)&&start<info.size&&end>=start;
+          end=Math.min(end,info.size-1);
+        }
+      }
+      if(!valid){res.writeHead(416,{'Content-Range':`bytes */${info.size}`,'Content-Length':'0'});res.end();return;}
+      res.statusCode=206;
+      res.setHeader('Content-Range',`bytes ${start}-${end}/${info.size}`);
+      res.setHeader('Content-Length',end-start+1);
+    }
+    const stream=createReadStream(actual,info.size?{start,end}:undefined);
+    res.once('close',()=>stream.destroy());
+    stream.once('error',()=>res.destroy());stream.pipe(res);
   }
   const server=http.createServer(async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');
