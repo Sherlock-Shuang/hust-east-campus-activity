@@ -86,14 +86,14 @@ test('the undercroft opening has no decorative glazing or mullions across either
 });
 
 test('confirmed college straight-then-left route and east direct entry are walkable without a roof snap', () => {
-  assert.equal(building.entries.length, 2);
+  assert.equal(building.entries.length, 3);
   assert.equal(building.entry.id, 'opto-c118', 'legacy landmark arrival stays available');
   assert.match(building.entry.evidenceStatus, /user-confirmed-route-coordinate-estimated/);
   assert.ok(!building.entries.some(e => e.id === 'opto-c118-main'), 'central stair lobby is not an auditorium gate');
   for (const entry of building.entries) {
     const { center, normal, halfWidth } = entry.doorGate;
     assert.ok(halfWidth >= 1.2);
-    assert.equal(entry.workId, 'opto-c118'); assert.match(entry.url, /^\.\/c118\.html\?view=(westEntry|eastEntry)$/);
+    assert.equal(entry.workId, 'opto-c118'); assert.match(entry.url, /^\.\/c118\.html\?view=(westEntry|eastEntry|rearEntry)$/);
     const player = createPlayerMotion({ route, world });
     assert.equal(player.placeWalker(entry.approach).ok, true, `${entry.id} road-side approach`);
     let largestRise = 0, prior = player.state.y;
@@ -133,9 +133,10 @@ test('ground route turns left and only bounded corridor cuts open the lower sour
   assert.equal(JSON.stringify(source), before);
 });
 
-test('college route belongs to the southern skylit courtyard, not the national research centre portal', () => {
+test('left ground entry matches the user main-courtyard screenshot, while the southern college atrium stays modelled', () => {
   const g = building.plan.groundFloor;
-  assert.ok(g.college.z > building.plan.main.z + 35);
+  assert.ok(g.college.z < building.plan.main.z && g.college.x < building.plan.main.x, 'ground entry is left/north of the main stair portal');
+  assert.ok(g.college.x > 687 && g.college.x < 691 && g.college.z > 687 && g.college.z < 691, 'left-wing door is west of the obstructing canopy column');
   assert.equal(g.skylight, building.plan.polygons[0][3]);
   assert.ok(g.collegeSteps.z > 760);
   assert.ok(building.viewpoints.collegeEntrance && building.viewpoints.eastEntrance);

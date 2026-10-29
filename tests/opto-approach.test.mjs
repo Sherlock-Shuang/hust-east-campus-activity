@@ -42,9 +42,9 @@ test('bridge rails leave the real C-side pedestrian branch open at its internal 
   const m=walk(p,{x:p.x+(end.x-p.x)*5/l,z:p.z+(end.z-p.z)*5/l},{label:'C-side branch'});near(m.state.y,.14);
 });
 
-test('college and east connectors use their own side footways and never cross the source building',()=>{
+test('main-court left and east entries connect to their own mapped roads without crossing the source building',()=>{
   const c=made.plan.connectors.find(c=>c.id==='opto-c-entry-approach'),seam=made.plan.connectors.find(c=>c.id==='opto-footway-capture-seam');
-  assert.ok(c&&c.length>3&&c.length<8);assert.equal(c.sourceId,'way/1483567207');assert.ok(c.reason.includes('estimated'));walk(c.a,c.b,{label:'C entry paving'});
+  assert.ok(c&&c.length>5&&c.length<12);assert.equal(c.sourceId,'way/1483567204');assert.ok(c.reason.includes('estimated'));walk(c.a,c.b,{label:'main-court left entry paving'});
   const east=made.plan.connectors.find(c=>c.id==='opto-c-east-approach');
   assert.ok(east&&east.length>1&&east.length<4);assert.equal(east.sourceId,'way/1483567206');walk(east.a,east.b,{label:'east entry paving'});
   assert.ok(seam&&seam.length>3&&seam.length<5);assert.equal(seam.sourceId,'way/1483567253');walk(seam.a,seam.b,{label:'same-way capture seam'});

@@ -28,7 +28,7 @@ test('refined precincts replace generic solids once, retain original GIS, and su
       assert.equal(campus.records.get(id).group.children.length,0,'old flat bridge geometry is removed');
       assert.ok(!model.bridgeInfrastructure.walkSurfaces.some(s=>s.sourceId===id));
     }
-    for(const place of ['einstein','opto','opto-main','opto-east','yunyuan-south','xueer','east-gate','yunyuan-gate']){
+    for(const place of ['einstein','opto','opto-main','opto-left','opto-rear','opto-east','yunyuan-south','xueer','east-gate','yunyuan-gate']){
       const pose=campusLandmarkArrival(campus,place);
       assert.ok(pose&&Number.isFinite(pose.x+pose.z+pose.yaw),place);
       const route={points:[{x:pose.x+15,z:pose.z+15,y:.16},{x:pose.x+15,z:pose.z-100,y:.16}]};
@@ -36,7 +36,7 @@ test('refined precincts replace generic solids once, retain original GIS, and su
       assert.equal(player.placeWalker(pose).ok,true,`${place} visitor is not spawned in a solid`);
       assert.ok(Math.abs(player.state.y-pose.y)<.03,`${place} arrival height`);
     }
-    assert.equal(campus.optoEntries.length,2,'only the corridor left door and east exterior door enter C118');
+    assert.equal(campus.optoEntries.length,3,'main-court left hall, east door and rear foyer inner door enter C118');
     assert.ok(!campus.optoEntries.some(e=>e.id==='opto-c118-main'),'research-centre main staircase is not a C118 shortcut');
     for(const entry of campus.optoEntries){
       const player=createPlayerMotion({world,route:{points:[{x:400,z:400,y:.14},{x:1000,z:400,y:.14}]}});

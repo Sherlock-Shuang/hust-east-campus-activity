@@ -21,16 +21,18 @@ export const OPTO_BUILDING_EVIDENCE = Object.freeze({
     'https://hbkx.org.cn/attached/image/2024/08/19/3db0335373e2466a91d3cd33a687c388.png',
   ],
   observed: '连续W形院落、错落翼楼、南翼中段退低而端部升高；竖向金属遮阳屏、蓝绿玻璃带、灰石基座窄窗与宽架空口；主入口格网雨棚、分叉斜撑柱与侧墙台阶。',
-  uncertainty: 'OSM轮廓非测绘成果；窗格、分区高度、南翼中段退台、设备位置、架空洞口和入口坐标均为照片比例估计。C118两条进入路线由用户现场描述确认；入口坐标、走廊尺寸及C区边界仍为源轮廓上的展示估计，并非测绘平面。',
+  uncertainty: 'OSM轮廓非测绘成果；窗格、分区高度、南翼中段退台、设备位置、架空洞口和入口坐标均为照片比例估计。主庭院左门直走左转、北侧普通门直走到对面第二道门由用户现场描述确认；入口坐标、走廊尺寸及室内外空间对应仍为展示估计，并非测绘平面。',
   c118Evidence: 'https://wnlo.hust.edu.cn/info/1374/4231.htm',
 });
 
 // The user confirmed the access topology: ground door to the left of the main
-// steps, straight corridor then an auditorium door on the left; a second door
-// enters directly from the east. Coordinates remain source-edge estimates.
+// steps in the main courtyard, straight corridor then a hall door on the left;
+// the northern exterior door leads to an opposite inner hall door. Keep the
+// prior east-side entry available. Coordinates remain source-edge estimates.
 export const OPTO_ACCESS = Object.freeze({
   main: Object.freeze({ longitude: 114.42860685, latitude: 30.5093796 }),
-  c118: Object.freeze({ longitude: 114.428111, latitude: 30.508983 }),
+  // Keep the door's straight approach west of the existing canopy column.
+  c118: Object.freeze({ longitude: 114.42841772, latitude: 30.50954452 }),
   east: Object.freeze({ longitude: 114.42887397, latitude: 30.50894790 }),
   northPassage: Object.freeze({ longitude: 114.42784825, latitude: 30.51076485 }),
   rear: Object.freeze({ longitude: 114.42831535, latitude: 30.51058795 }),
@@ -96,7 +98,7 @@ export function planOptoBuilding(record, { frame, geoToLocal } = {}) {
   collegeSteps.yaw = -Math.atan2(collegeSteps.tz, collegeSteps.tx);
   const groundFloor = { college: cEntry, collegeSteps, skylight: polygons[0][3], east: eastEntry, hallDoor, turn, cuts: [corridorCut, hallCut, eastCut],
     floorY: .12, ceilingY: 4.4, evidenceStatus: cEntry.status,
-    routeEvidence: '用户现场说明：学院标识与台阶前左侧地面门，直走后左手报告厅；另有东侧直入门。' };
+    routeEvidence: '用户最新截图：研究中心主庭院台阶左翼地面门，直走后左手报告厅。北侧普通门进去，对面第二道门进入后排高处。' };
   // This opening belongs to the long west face, not to the oblique C door.
   // The measured source edge defines its yaw; photo proportions define its size.
   const parking = { ...nearestEdge(projected({ longitude: 114.4277934, latitude: 30.509777 }, frame, geoToLocal)), width: 25.8, depth: 28, height: 10.4 };
@@ -116,9 +118,12 @@ export function planOptoBuilding(record, { frame, geoToLocal } = {}) {
     status: 'user-screenshot-rear-door-coordinate-estimated' };
   rear.yaw = -Math.atan2(rear.tz, rear.tx);
   const rearCut = streetFootprint(rear.x - rear.nx * 4.4, rear.z - rear.nz * 4.4, rear.width, rear.depth, rear.yaw);
-  // A bounded, physical foyer. Its connection to C118 has not been verified;
-  // it must not masquerade as a third auditorium teleport.
-  const lowOpenings = [...groundFloor.cuts, northCut, rearCut];
+  // User confirmation: ordinary exterior door, then the opposite inner door
+  // enters C118 at its upper rear aisle. Crossing the OUTER door never opens it.
+  const rearHallDoor = { ...rear, x: rear.x - rear.nx * 8, z: rear.z - rear.nz * 8, width: 3.6, height: 3.2,
+    status: 'user-confirmed-rear-foyer-opposite-hall-door' };
+  const rearHallCut = streetFootprint(rearHallDoor.x - rear.nx * 1.3, rearHallDoor.z - rear.nz * 1.3, 3.6, 3.8, rear.yaw);
+  const lowOpenings = [...groundFloor.cuts, northCut, rearCut, rearHallCut];
   const cuts = [...lowOpenings.map(r => [closed(r)]), [closed(parkingCut)], [closed(mainCut)]];
   const geoMask = coordinates => [closed(coordinates.map(([longitude, latitude]) => projected({ longitude, latitude }, frame, geoToLocal)))];
   // Roof changes are aligned with the oblique wing cross sections. These are
@@ -153,7 +158,7 @@ export function planOptoBuilding(record, { frame, geoToLocal } = {}) {
   const lowCuts = polygonClipping.union(...lowOpenings.map(r => [closed(r)]));
   polygonClipping.intersection(footprint, lowCuts).forEach((p, i) => volumes.push({ id: `${OPTO_BUILDING_ID}:entry-lintel:${i}`, sourceId: OPTO_BUILDING_ID, rings: fromClip(p), minHeight: groundFloor.ceilingY, height: 8.2 }));
   return { polygons, bounds, volumes, zones, heightAt, cEntry, groundFloor, parking, parkingCut, mainCut, main,
-    northPassage, northCut, rear, rearCut, lowOpenings, sourceFootprint: footprint };
+    northPassage, northCut, rear, rearCut, rearHallDoor, rearHallCut, lowOpenings, sourceFootprint: footprint };
 }
 
 export function createOptoBuilding(THREE, record, options = {}) {
@@ -240,6 +245,7 @@ export function createOptoBuilding(THREE, record, options = {}) {
   openGroundDoor(ground.hallDoor, 'left-hall', 1.3, 3.6, 3.1, dark);
   openGroundDoor(ground.east, 'east', 1.6, 4.8, 3.2);
   openGroundDoor(plan.rear, 'rear', 1.9, 5.8, 3.2);
+  openGroundDoor(plan.rearHallDoor, 'rear-hall', 1.3, 3.6, 3.1, dark);
   // The same clipped footprint supplies a dark soffit and a continuous ground
   // slab on both open faces, so there is no painted wall or hidden curb.
   for (const rings of polygonClipping.intersection(plan.sourceFootprint, [closed(plan.northCut)]).map(fromClip)) {
@@ -257,7 +263,13 @@ export function createOptoBuilding(THREE, record, options = {}) {
   entranceLocal(plan.rear, 'opto-ground-corridor-ceiling', white, 0, 4.35, -4.4, 5.76, .08, 9.1);
   for (const side of [-1, 1]) entranceLocal(plan.rear, 'opto-ground-corridor-skirt', dark, side * 2.86, .27, -4.4, .06, .3, 9.1);
   const ceilingLight = material('#f5f0da', .6); ceilingLight.emissive.set('#d9ddcf'); ceilingLight.emissiveIntensity = .65;
-  for (const v of [-2.2, -6.4]) entranceLocal(plan.rear, 'opto-rear-foyer-light', ceilingLight, 0, 4.29, v, 1.5, .045, .4);
+  for (const source of [e, plan.rear]) for (const v of [-2.2, -6.4]) entranceLocal(source, 'opto-rear-foyer-light', ceilingLight, 0, 4.29, v, 1.5, .045, .4);
+  for (const side of [-1, 1]) {
+    const d = plan.rearHallDoor, u = side * 2.35;
+    entranceLocal(d, 'opto-rear-inner-partition', stone, u, 2.25, 0, 1.1, 4.26, .22);
+    infrastructure.barriers.push({ id: `opto-rear-inner-partition-${side}`, sourceId: OPTO_BUILDING_ID,
+      polygon: streetFootprint(d.x + d.tx * u, d.z + d.tz * u, 1.1, .22, d.yaw), minHeight: .12, height: 4.4, label: '报告厅后门门厅隔墙' });
+  }
   // A short straight hall has a left-hand opening. Its closed far wall is
   // intentional: no unverified all-floor circulation is implied.
   entranceLocal(e, 'opto-ground-corridor-ceiling', white, 0, 4.35, -4.8, 4.76, .08, 9.6);
@@ -470,6 +482,7 @@ export function createOptoBuilding(THREE, record, options = {}) {
         ['left-hall', ground.hallDoor, -.16, 3.65, 3.2, .32, 'C118 报告厅'],
         ['east', ground.east, -.29, 4.07, 4.5, .32, 'C118 报告厅 · 东侧入口'],
         ['rear', plan.rear, -.29, 4.07, 4.5, .32, '光电大楼 · 北侧入口'],
+        ['rear-hall', plan.rearHallDoor, -.16, 3.65, 3.4, .32, 'C118 报告厅 · 后门'],
       ];
       for (const [key, source, offset, y, width, height, text] of signSpecs) {
         const board = document.createElement('canvas'); board.width = 1280; board.height = 150;
@@ -488,28 +501,39 @@ export function createOptoBuilding(THREE, record, options = {}) {
     const o = new THREE.InstancedMesh(boxGeo, mat, items.length); o.name = name; items.forEach((m, i) => o.setMatrixAt(i, m)); o.instanceMatrix.needsUpdate = true; o.computeBoundingBox(); o.computeBoundingSphere(); o.castShadow = true; o.receiveShadow = true; o.renderOrder = 204; o.userData = { ...group.userData, component: name, instanceCount: items.length }; group.add(o);
   }
   const outsidePose = source => ({ x: source.x + source.nx * 3, y: .12, z: source.z + source.nz * 3, yaw: Math.atan2(-source.nx, -source.nz), pitch: 0 });
-  const entry = { id: 'opto-c118', name: 'C118报告厅', label: '学院门 · 直走后左转至 C118',
+  const entry = { id: 'opto-c118', name: 'C118报告厅', label: '主庭院左侧门 · 直走后左转至 C118',
     ...outsidePose(e), yaw: Math.atan2(e.nx, e.nz), radius: 8, evidenceStatus: e.status, coordinate: { ...OPTO_ACCESS.c118 } };
-  const makeInteriorEntry = (source, id, halfWidth, entranceName, exterior) => {
+  const makeInteriorEntry = (source, id, halfWidth, entranceName, exterior, view) => {
     const center = { x: source.x, z: source.z }, normal = { x: source.nx, z: source.nz };
-    return { id, name: 'C118报告厅', label: entranceName, workId: 'opto-c118', url: `./c118.html?view=${source === ground.hallDoor ? 'westEntry' : 'eastEntry'}`,
+    return { id, name: 'C118报告厅', label: entranceName, workId: 'opto-c118', url: `./c118.html?view=${view}`,
       x: center.x - normal.x * .65, y: .12, z: center.z - normal.z * .65, yaw: Math.atan2(normal.x, normal.z), radius: 2,
       evidenceStatus: source.status, doorGate: { center, normal, halfWidth, frontDepth: 1.3, backDepth: 1.7 },
       returnPose: outsidePose(exterior),
       approach: { ...outsidePose(exterior), yaw: Math.atan2(exterior.nx, exterior.nz) },
     };
   };
-  const entries = [makeInteriorEntry(ground.hallDoor, 'opto-c118-left-hall', 1.3, '左手门 · C118 报告厅', e), makeInteriorEntry(ground.east, 'opto-c118-east', 1.6, '东侧门 · C118 报告厅', ground.east)];
+  const entries = [makeInteriorEntry(ground.hallDoor, 'opto-c118-left-hall', 1.3, '左手门 · C118 报告厅', e, 'westEntry'),
+    makeInteriorEntry(ground.east, 'opto-c118-east', 1.6, '东侧门 · C118 报告厅', ground.east, 'eastEntry'),
+    makeInteriorEntry(plan.rearHallDoor, 'opto-c118-rear-hall', 1.3, '门厅对面 · C118 报告厅后门', plan.rear, 'rearEntry')];
   entries[0].returnPose = { x: ground.hallDoor.x + ground.hallDoor.nx * 2.6, y: .12, z: ground.hallDoor.z + ground.hallDoor.nz * 2.6, yaw: Math.atan2(-ground.hallDoor.nx, -ground.hallDoor.nz), pitch: 0 };
   entries[0].approachRoute = [entries[0].approach, { ...ground.turn, y: .12 }, { x: ground.hallDoor.x - ground.hallDoor.nx * 1.3, z: ground.hallDoor.z - ground.hallDoor.nz * 1.3, y: .12 }];
   entries[0].accessPath = [entries[0].approach, { x: e.x - e.nx * 1.2, y: .12, z: e.z - e.nz * 1.2 }, ...entries[0].approachRoute.slice(1)];
   entries[1].approachRoute = [entries[1].approach, { x: ground.east.x - ground.east.nx * 1.3, z: ground.east.z - ground.east.nz * 1.3, y: .12 }];
   entries[1].accessPath = entries[1].approachRoute;
+  entries[2].returnPose = { ...outsidePose(plan.rearHallDoor), x: plan.rearHallDoor.x + plan.rear.nx * 2.6, z: plan.rearHallDoor.z + plan.rear.nz * 2.6 };
+  entries[2].approachRoute = [entries[2].approach,
+    { x: plan.rear.x - plan.rear.nx * 1.2, z: plan.rear.z - plan.rear.nz * 1.2, y: .12 },
+    { x: plan.rearHallDoor.x - plan.rear.nx * 1.3, z: plan.rearHallDoor.z - plan.rear.nz * 1.3, y: .12 }];
+  entries[2].accessPath = entries[2].approachRoute;
   const northStart = { x: plan.northPassage.x + plan.northPassage.nx * 12, z: plan.northPassage.z + plan.northPassage.nz * 12, y: .14,
     yaw: Math.atan2(plan.northPassage.nx, plan.northPassage.nz), pitch: -.05 };
-  const rearStart = { x: 650, z: 576, y: .14, yaw: Math.atan2(650 - plan.rear.x, 576 - plan.rear.z), pitch: -.04 };
+  const rearStart = { x: plan.rear.x + plan.rear.nx * 25, z: plan.rear.z + plan.rear.nz * 25, y: .14,
+    yaw: Math.atan2(plan.rear.nx, plan.rear.nz), pitch: -.04 };
+  const leftCourtyard = { x: e.x + e.nx * 18, z: e.z + e.nz * 18, y: .14, yaw: Math.atan2(e.nx, e.nz), pitch: -.04 };
+  entries[0].exteriorAccessPath = [leftCourtyard, ...entries[0].accessPath];
+  entries[2].exteriorAccessPath = [rearStart, ...entries[2].accessPath];
   const viewpoints = { exterior: { x: m.x + nx * out * 92, z: m.z + nz * out * 92, y: 2, yaw: Math.atan2(nx * out, nz * out), pitch: -.16 },
-    northPassage: northStart, rearEntrance: rearStart,
+    northPassage: northStart, rearEntrance: rearStart, leftCourtyard,
     c118: { ...entry, y: 1.7, pitch: -.08 }, collegeEntrance: { ...entry, y: 1.7, pitch: -.08 },
     east: { ...entries[1].approach, y: 1.7, pitch: -.08 }, eastEntrance: { ...entries[1].approach, y: 1.7, pitch: -.08 } };
   // Hide entire instanced detail batches before both color and shadow passes.

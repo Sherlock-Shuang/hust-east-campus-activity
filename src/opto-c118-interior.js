@@ -115,12 +115,17 @@ export function planOptoC118Interior(options = {}) {
   solid('c118-stage-stool',rect(1.35,stageFront-2.25,2.05,stageFront-1.75),c.floorY+c.stageHeight,c.floorY+c.stageHeight+.4,'舞台低凳');
   const entryDoor=doors.find(d=>d.tier==='middle'&&d.side===-1),legacyDoor=doors.find(d=>d.tier==='front'&&d.side===-1);
   const spawn={x:-halfW+1.05,y:entryDoor.y,z:entryDoor.z,yaw:-.5,pitch:-.18};
+  // Rear-door arrival follows the user's elevated rear-to-stage photograph.
+  // Stand on the clear rear landing, aligned with the left main stair aisle;
+  // this local view does not claim a surveyed exterior/interior registration.
+  const rearEntry={x:-(centreHalf+sideInner)/2,y:rearY,z:lastRow+1,pitch:-.21};
+  rearEntry.yaw=Math.atan2(rearEntry.x,rearEntry.z-(stageFront-2.4));
   const exits=doors.map(d=>({id:`${d.id}-return`,doorId:d.id,x:d.x+d.side*.15,y:d.y,z:d.z,radius:1.15,polygon:rect(d.side<0?-halfW-1.5:halfW-.15,d.z-1.1,d.side<0?-halfW+.15:halfW+1.5,d.z+1.1)}));
   const exit={...exits.find(e=>e.doorId===legacyDoor.id),id:'c118-return'};
   return{id:'opto-c118',config:c,evidence:OPTO_C118_EVIDENCE,dimensions:'photo-estimate',bounds:{minX:-halfW-1.6,maxX:halfW+1.6,minZ:front,maxZ:back,minY:c.floorY,maxY:c.floorY+c.height},
     stage:{polygon:stagePolygon,front:stageFront,back:stageBack,halfWidth:stageHalfW,height:c.floorY+c.stageHeight},
     doors,seats,seatRows,blocks,aisles,stairs,audienceSteps,terraces,crossAisle,rearLanding,guards,wallSegments,lectern,piano,colliders,walkSurfaces,spawn,exit,exits,
-    viewpoints:{entry:{...spawn},westEntry:{...spawn},eastEntry:{x:halfW-1.05,y:c.floorY,z:legacyDoor.z,yaw:.5,pitch:.06},middle:{x:(centreHalf+sideInner)/2,y:crossAisle.y,z:crossAisle.z,yaw:0,pitch:-.19},
+    viewpoints:{entry:{...spawn},westEntry:{...spawn},eastEntry:{x:halfW-1.05,y:c.floorY,z:legacyDoor.z,yaw:.5,pitch:.06},rearEntry,middle:{x:(centreHalf+sideInner)/2,y:crossAisle.y,z:crossAisle.z,yaw:0,pitch:-.19},
       front:{x:0,y:c.floorY,z:stageFront+1.55,yaw:0,pitch:.14},frontDoor:{x:-halfW+1.05,y:c.floorY,z:legacyDoor.z,yaw:-1.1,pitch:.06},
       rear:{x:(centreHalf+sideInner)/2,y:rearY,z:lastRow+1,yaw:0,pitch:-.25}},seatCount:seats.length,layoutEstimated:true};
 }

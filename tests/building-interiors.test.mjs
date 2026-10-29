@@ -59,6 +59,6 @@ test('walking through either side door returns instead of entering the unmodelle
 });
 
 test('local door viewpoints are preserved, arbitrary interior URLs are not accepted',()=>{
-  for(const view of ['westEntry','eastEntry'])assert.equal(nearbyInterior([{...door,url:`./c118.html?view=${view}`}],walker(0,1)).url,`./c118.html?view=${view}`);
+  for(const view of ['westEntry','eastEntry','rearEntry'])assert.equal(nearbyInterior([{...door,url:`./c118.html?view=${view}`}],walker(0,1)).url,`./c118.html?view=${view}`);
   assert.equal(nearbyInterior([{...door,url:'https://example.com/'}],walker(0,1)).url,'./c118.html');
 });

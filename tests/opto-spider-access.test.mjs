@@ -45,11 +45,12 @@ function detector(player,phase=0){
 }
 
 for(const mode of ['walk','spider'])for(const fast of [false,true]){
-  test(`${mode}${fast?' sprint':''}: both complete C118 access paths stay grounded and enter at 200 ms polling`,()=>{
+  test(`${mode}${fast?' sprint':''}: complete exterior-to-C118 paths stay grounded and enter at 200 ms polling`,()=>{
     for(const entry of campus.optoEntries){
-      const p=motion();assert.equal(p.placeMode(entry.accessPath[0],mode).ok,true,`${entry.id} approach permits ${mode}`);
+      const path=entry.exteriorAccessPath||entry.accessPath;
+      const p=motion();assert.equal(p.placeMode(path[0],mode).ok,true,`${entry.id} approach permits ${mode}`);
       const poll=detector(p);
-      for(const [index,target]of entry.accessPath.slice(1).entries()){
+      for(const [index,target]of path.slice(1).entries()){
         let reached=false;
         for(let i=0;i<2400&&!poll.crossed;i++){
           const dx=target.x-p.state.x,dz=target.z-p.state.z,d=Math.hypot(dx,dz);
@@ -70,7 +71,7 @@ for(const mode of ['walk','spider'])for(const fast of [false,true]){
   });
 }
 
-test('spider sprint crosses both real doors at every 120 Hz / 200 ms polling phase',()=>{
+test('spider sprint crosses all three real doors at every 120 Hz / 200 ms polling phase',()=>{
   for(const entry of campus.optoEntries)for(let phase=0;phase<24;phase++){
     const p=motion();assert.equal(p.placeMode(doorPose(entry,2.8),'spider').ok,true);
     const poll=detector(p,phase),normal=entry.doorGate.normal;

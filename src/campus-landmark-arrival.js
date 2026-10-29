@@ -2,6 +2,7 @@
 export function campusLandmarkArrival(campus,place){
   if(place==='opto-passage'&&campus?.optoViewpoints?.northPassage)return {...campus.optoViewpoints.northPassage};
   if(place==='opto-rear'&&campus?.optoViewpoints?.rearEntrance)return {...campus.optoViewpoints.rearEntrance};
+  if(place==='opto-left'&&campus?.optoViewpoints?.leftCourtyard)return {...campus.optoViewpoints.leftCourtyard};
   if(place==='opto'&&campus?.optoEntry)return {...campus.optoEntry,pitch:-.15};
   if(place==='opto-main'&&campus?.optoEntry)return {...campus.optoEntry,pitch:-.08};
   if(place==='opto-east'&&campus?.optoEntries?.length){

@@ -31,6 +31,31 @@ test('default spawn and both entry viewpoints are at real clear side-door platfo
   for(const b of plan.blocks)assert.equal(m.placeWalker({x:(b.x0+b.x1)/2,z:plan.seatRows[4].z,yaw:0}).ok,false,'chairs remain solid');
 });
 
+test('rearEntry stands behind the last row, overlooks the stage, and joins the left stair aisle',()=>{
+  const pose=plan.viewpoints.rearEntry,m=motion(),aisle=plan.aisles.find(a=>a.id==='left-main');
+  assert.ok(pose,'rear-door URL needs its own elevated arrival');
+  close(pose.x,(aisle.x0+aisle.x1)/2);close(pose.y,plan.rearLanding.surfaceY);
+  assert.ok(pose.z>plan.seatRows.at(-1).endZ+.26&&pose.z<plan.bounds.maxZ-.4,'full player capsule is on the rear landing');
+  assert.equal(m.placeWalker(pose).ok,true);close(m.state.y,pose.y);
+  assert.equal(crossedC118Door(plan,m.state),false,'arrival must not immediately return');
+  const descent=travel(m,{x:pose.x,z:plan.crossAisle.z});
+  close(m.state.y,plan.crossAisle.y);assert.ok(descent.maxRise<=.181);
+  const ascent=travel(m,pose);close(m.state.y,pose.y);assert.ok(ascent.maxRise<=.181);
+
+  const hall=createOptoC118Interior(THREE),camera=new THREE.PerspectiveCamera(65,16/9,.07,90);
+  camera.rotation.order='YXZ';camera.position.set(pose.x,pose.y+1.65,pose.z);camera.rotation.set(pose.pitch,pose.yaw,0);camera.updateMatrixWorld();
+  const screenMesh=hall.group.getObjectByName('c118-led-screen'),screenMatrix=new THREE.Matrix4();
+  screenMesh.getMatrixAt(0,screenMatrix);
+  const screenPoint=new THREE.Vector3().setFromMatrixPosition(screenMatrix).applyMatrix4(screenMesh.matrixWorld);
+  const screenNdc=screenPoint.clone().project(camera),stageNdc=new THREE.Vector3(0,plan.stage.height+.05,plan.stage.front).project(camera);
+  assert.ok(Math.abs(screenNdc.x)<.2&&screenNdc.y>-.8&&screenNdc.y<.8,'the first view frames the actual stage screen');
+  assert.ok(Math.abs(stageNdc.x)<.3&&stageNdc.y>-1&&stageNdc.y<1,'the stage floor is also in the first view');
+  const ray=new THREE.Raycaster(camera.position,screenPoint.clone().sub(camera.position).normalize(),0,camera.position.distanceTo(screenPoint)+.3);
+  const hit=ray.intersectObject(hall.group,true)[0];
+  assert.ok(hit&&/c118-(video-screen|led-screen|screen-frame)/.test(hit.object.name),`screen sightline blocked by ${hit?.object.name}`);
+  hall.dispose();
+});
+
 test('all four longitudinal aisles climb two-stage seating and descend without a >0.18m snap',()=>{
   for(const aisle of plan.aisles){const m=motion(),x=(aisle.x0+aisle.x1)/2,start={x,z:plan.seatRows[0].startZ-.25,yaw:0},end={x,z:plan.seatRows.at(-1).endZ+.8};
     assert.equal(m.placeWalker(start).ok,true);close(m.state.y,plan.config.floorY);

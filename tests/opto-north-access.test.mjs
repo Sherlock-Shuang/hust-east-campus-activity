@@ -110,13 +110,13 @@ test('ground openings retain overhead solids, adjacent walls and the bounded foy
     assert.ok(hit&&hit.point.y>=4.2&&hit.point.y<=4.41,'visible ceiling retained above the ground route');
   }
   assert.equal(p.placeMode(local(plan.northPassage,0,-24),'walk').ok,false,'opening does not erase the adjacent north wing');
-  assert.equal(p.placeMode(local(plan.rear,0,-9.7),'walk').ok,false,'rear foyer has a solid end rather than an invented whole-floor passage');
+  assert.equal(p.placeMode(local(plan.rear,0,-12),'walk').ok,false,'beyond the inner hall door the bounded passage still ends');
   for(const side of [-1,1]){
     assert.equal(p.placeMode(local(plan.rear,side*2.4,0),'spider').ok,false,'fixed side glazing stays solid');
     assert.ok(visibleSegment(local(plan.rear,side*2.4,2),local(plan.rear,side*2.4,-1),1.65),'fixed side glazing remains visible');
   }
   assert.equal(JSON.stringify([base,extension]),sourceBefore,'source GIS untouched');
-  assert.equal(campus.optoEntries.length,2,'north foyer is not registered as a third C118 entrance');
+  assert.equal(campus.optoEntries.length,3,'only the rear inner door is added as the confirmed auditorium entrance');
 });
 
 test('both explicit north arrival links place walk and spider on clear ground',()=>{
