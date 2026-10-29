@@ -1,18 +1,18 @@
 import * as THREE from 'three';
 import {createOptoC118Interior} from './opto-c118-interior.js';
-import {createC118Navigation,indoorMovement} from './c118-navigation.js';
+import {createC118Navigation,indoorMovement,crossedC118Door} from './c118-navigation.js';
 import {createPlayerPointerLock} from './player-pointer-lock.js';
 import './c118-viewer.css';
 
 const canvas=document.querySelector('#hall-canvas'),status=document.querySelector('#hall-status'),stick=document.querySelector('#hall-stick');
-let renderer,interior,motion,raf,disposed=false,paused=false,previous=0,heading=0,pitch=0,joy=null,look=null,mouse=null,axes={forward:0,sideways:0};
+let renderer,interior,motion,raf,disposed=false,paused=false,returning=false,previous=0,heading=0,pitch=0,joy=null,look=null,mouse=null,axes={forward:0,sideways:0};
 const keys=new Set(),listeners=[];
 const on=(target,type,fn,options)=>{target.addEventListener(type,fn,options);listeners.push(()=>target.removeEventListener(type,fn,options));};
-const usable=()=>!disposed&&!paused&&!document.hidden;
+const usable=()=>!disposed&&!paused&&!returning&&!document.hidden;
 const lock=createPlayerPointerLock({canvas,document,canLock:usable,onChange:()=>resetInput(),onError:()=>{status.hidden=false;status.textContent='可直接移动鼠标环视，或在浏览器中按 L 锁定';}});
 function resetInput(){keys.clear();joy=look=mouse=null;axes={forward:0,sideways:0};stick.hidden=true;motion?.suspend();}
 function rotate(dx,dy,scale=.0025){heading-=Math.max(-250,Math.min(250,dx))*scale;pitch=Math.max(-1.35,Math.min(1.3,pitch-dy*scale));}
-function exit(){if(paused)return;if(window.parent!==window&&window.campusActivity)window.campusActivity.exit();else location.href='./';}
+function exit(){if(paused||returning)return;returning=true;resetInput();lock.release();if(window.parent!==window&&window.campusActivity)window.campusActivity.exit();else location.href='./';}
 on(document.querySelector('#hall-return'),'click',event=>{event.preventDefault();exit();});
 on(window,'keydown',event=>{if(!usable()||event.target.closest?.('a,button,input'))return;if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight'].includes(event.code)){event.preventDefault();keys.add(event.code);}if(event.code==='KeyL'&&!event.repeat){event.preventDefault();lock.toggle();}});
 on(window,'keyup',event=>keys.delete(event.code));
@@ -59,6 +59,7 @@ try{
     const pad=Array.from(navigator.getGamepads?.()||[]).find(p=>p?.connected);
     if(pad){const dead=v=>Math.abs(v)>.16?v:0;sideways+=dead(pad.axes[0]||0);forward-=dead(pad.axes[1]||0);heading-=dead(pad.axes[2]||0)*dt*1.8;pitch=Math.max(-1.35,Math.min(1.3,pitch-dead(pad.axes[3]||0)*dt*1.5));}
     motion.step(dt,{...indoorMovement(heading,forward,sideways),fast:pressed('ShiftLeft','ShiftRight')});
+    if(crossedC118Door(interior.plan,motion.state)){exit();return;}
     eyeY=THREE.MathUtils.damp(eyeY,motion.state.y+1.65,16,dt);camera.position.set(motion.state.x,eyeY,motion.state.z);camera.rotation.set(pitch,heading,0);
     renderer.render(scene,camera);
     if(!ready){ready=true;status.hidden=true;window.campusActivity?.ready('runtime_ready');canvas.focus({preventScroll:true});}

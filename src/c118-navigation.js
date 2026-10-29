@@ -17,3 +17,7 @@ export function indoorMovement(heading,forward,sideways){
   return {moveX:(-Math.sin(heading)*forward+Math.cos(heading)*sideways)/length,
     moveZ:(-Math.cos(heading)*forward-Math.sin(heading)*sideways)/length};
 }
+
+export function crossedC118Door(plan,state){
+  return Math.abs(state.x)>plan.config.width/2+.25&&plan.doors.some(door=>Math.abs(state.z-door.z)<door.width/2-.1);
+}
