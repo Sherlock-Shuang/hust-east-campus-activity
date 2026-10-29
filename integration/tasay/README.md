@@ -23,21 +23,19 @@ node integration/tasay/build.mjs --source /absolute/path/to/ta-say
 
 按用户要求撤回“回声项目—多窗口调查—身份替代”改写。`ui-overrides/src/config/hardcodedCopy.ts` 与 `src/features/reply/replyFallbacks.ts` 精确取自原项目提交 `9d9d37df8bbb0a7fd67e95600688d99b94c7e052`，作为持久化叙事基准；不从当前未提交的改写文案构建。朋友圈恢复该提交的原动态。聊天页移除新增调查任务、核对提示、预填疑问入口。
 
-原主线保持：甜蜜开场 → 第三次发送开始的连续消息改写 → 第 15 条对话出现监控图和“我会一直盯着你” → 第 28 条对话触发定位 → “回头／骗你的／我无处不在” → 原真相与梦醒文案。删稿、读档和朋友圈异常保持原行为。计数包含双方非系统消息，不是玩家发送次数。真相按钮恢复“梦醒”；保留直接进入聊天以及聊天内呈现尾声的现有容器。通关后的可选项目入口见下节，不改变主线流程。
+原主线保持：甜蜜开场 → 第三次发送开始的连续消息改写 → 第 15 条对话出现监控图和“我会一直盯着你” → 第 28 条对话触发定位 → “回头／骗你的／我无处不在” → 原真相与梦醒文案。删稿、读档和朋友圈异常保持原行为。计数包含双方非系统消息，不是玩家发送次数。真相按钮恢复“梦醒”；保留直接进入聊天以及聊天内呈现尾声的现有容器。独立的开源项目入口见下节，不参与主线流程。
 
 保留手机微信布局、防拉伸、输入法、草稿、滚动、存储容错及异步取消修复。恢复版使用 `ta-say:original-story:*` 独立存档，旧版 `ta-say:session`、`ta-say:persisted` 和 `ta-say:investigation-ui:v1` 不删除或覆盖；首次打开恢复版从原开场开始，之后正常续玩。
 
-## 通关后项目入口（2026-10-29）
+## 独立项目入口（2026-10-30）
 
-在真相页点击“梦醒”完成故事后，结局、聊天信息菜单和手机“发现 / 我”中解锁“她不一样 · 恋情分析室”。入口始终放在原过拟合恋人体验内，沿用校园主持人对该作品的开放、暂停和返回控制，不新增地图地点或独立作品。
+按用户最新要求，“她不一样 · 恋情分析室”已从过拟合恋人的结局、聊天菜单和发现页移至爱因斯坦广场独立入口，地址 `/works/she-love-me/`，不再要求通关。过拟合恋人的原剧情、手机布局和存档保持原行为；既有完成标记没有清除，但不再用于此项目的访问资格。
 
-页面提供 [she-love-me 开源仓库](https://github.com/863401402/she-love-me)、MIT 许可链接和可复制给电脑 AI 编程助手的使用指令；不是在线聊天分析器。复制失败时选择文本供手动复制。项目按其支持的 JSON / Markdown 格式接收用户自行提供的记录，网页不上传或读取聊天数据。
+独立页面源码在 `public/works/she-love-me/`，提供开源仓库、MIT 许可链接、可复制使用指令及手动复制降级；沿用公共 activity bridge 的暂停和返回校园功能。项目在电脑的 AI 编程助手中运行，页面不上传或分析聊天记录。
 
-通关状态基于既有 `finishWakeUp()`，保存在当前浏览器；刷新、重玩、返回校园不会清除。额外完成标记 `ta-say:she-love-me:completed` 只保存布尔值。兼容旧版和恢复版 persisted 中 `version === 2 && hasFinishedGame === true` 的完成位，不导入旧剧情或聊天。仅打开作品、返回校园、打开真相页不算完成。
+新地图点 `point-she-love-me` 位于爱因斯坦雕像东南侧铺装（x=848.45、z=-61.39，触发半径6米），开放和定时设置始终跟随过拟合恋人。旧活动配置读取时补齐，不修改现有活动坐标、修订号或主持人设置，下一次正常保存时持久化。没有过拟合恋人主入口时，这个关联入口保持关闭。
 
-使用原生模态 dialog 保持键盘焦点、Escape 返回和背景滚动位置，手机采用全屏可滚动页面。校园 iframe 仅对 tasay 添加用户点击外链所需的 popup 权限，其余作品不变。
-
-验证：`TASAY_SOURCE=/absolute/path/to/ta-say node --test integration/tasay/she-love-project.test.mjs`；构建后运行 `BASE_URL=http://127.0.0.1:5178 node scripts/verify-tasay-unlock.mjs` 检查存储兼容、原生弹窗和窄屏。`CAMPUS_ROOT=/absolute/path/to/built/campus node scripts/verify-tasay-unlock-flow.mjs` 会使用临时服务和数据目录，从实际聊天走到梦醒，并检查 iframe 外链、主持人暂停、重玩、刷新、返回和关闭入口；不连接正式活动数据。
+验证：`TASAY_SOURCE=/absolute/path/to/ta-say node --test integration/tasay/she-love-project.test.mjs`；构建后运行 `QA_OUTPUT_DIR=/absolute/path/to/evidence node scripts/verify-she-love-entry.mjs` 验证旧配置补齐、广场进入、外链、手机布局、暂停返回及同步关闭。
 
 ## 手机微信布局（2026-10-28）
 

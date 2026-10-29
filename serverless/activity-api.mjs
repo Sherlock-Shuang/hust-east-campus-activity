@@ -37,7 +37,9 @@ async function stateRow(env){
     await env.DB.prepare('INSERT OR IGNORE INTO activity_state (key,revision,payload) VALUES (?,?,?)').bind('current',initial.revision,JSON.stringify(initial)).run();
     row=await env.DB.prepare('SELECT revision,payload FROM activity_state WHERE key=?').bind('current').first();
   }
-  return row;
+  // Project legacy persisted points once for every consumer, including guarded
+  // audience admission; keep the stored revision/payload unchanged until a save.
+  return {...row,payload:JSON.stringify(validateLiveState(JSON.parse(row.payload)))};
 }
 async function counts(env,now=Date.now()){
   const [viewers,connections]=await Promise.all([

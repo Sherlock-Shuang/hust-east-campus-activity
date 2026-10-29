@@ -1,0 +1,35 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #ededed; color: #191919; font-family: system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+.she-love-project { width: min(680px, calc(100% - 40px)); margin: 24px auto; border: 1px solid #e4e4e4; border-radius: 12px; background: #f7f7f7; overflow-wrap: anywhere; }
+.she-love-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 20px; background: #f7f7f7; border-bottom: 1px solid #e7e7e7; border-radius: 12px 12px 0 0; }
+.she-love-header > span { color: #737373; font-size: 12px; white-space: nowrap; }
+.she-love-back { display: inline-flex; align-items: center; min-height: 44px; color: #191919; font-size: 15px; text-decoration: none; }
+.she-love-content { padding: 32px; }
+.she-love-mark { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 12px; background: #e7f3e9; color: #148642; font-size: 25px; }
+h1 { margin: 18px 0 4px; font-size: 28px; line-height: 1.3; }
+.she-love-subtitle { margin: 0 0 22px; color: #737373; font-size: 15px; }
+p, li { font-size: 14px; line-height: 1.8; }
+.she-love-guide { margin: 24px 0; padding: 20px; background: #fff; border: 1px solid #ededed; border-radius: 8px; }
+.she-love-guide h2 { margin: 0 0 10px; font-size: 16px; }
+.she-love-guide p { margin: 0 0 12px; }
+.she-love-guide ol { margin: 0; padding-left: 20px; }
+.she-love-guide li + li { margin-top: 8px; }
+.she-love-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0; }
+.she-love-actions > * { flex: 1 1 200px; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 46px; padding: 11px 14px; border: 0; border-radius: 6px; font: inherit; font-size: 14px; text-align: center; text-decoration: none; cursor: pointer; }
+.she-love-primary { background: #168043; color: #fff; }
+.she-love-copy { background: #e9e9e9; color: #168043; }
+.she-love-instruction-label { display: block; margin-bottom: 10px; font-size: 14px; font-weight: 600; }
+textarea { display: block; width: 100%; min-width: 0; max-width: 100%; min-height: 220px; padding: 14px; border: 1px solid #dedede; border-radius: 6px; background: #fff; color: #424242; font: inherit; font-size: 14px; line-height: 1.7; resize: vertical; overflow-wrap: anywhere; }
+.she-love-copy-status { margin: 9px 0 24px; min-height: 25px; color: #68736b; font-size: 12px; }
+.she-love-credits { display: flex; flex-wrap: wrap; gap: 8px 18px; padding-top: 18px; border-top: 1px solid #e3e3e3; color: #777; font-size: 12px; line-height: 1.8; }
+.she-love-credits a { color: #576b95; text-decoration: none; }
+:focus-visible { outline: 2px solid #168043; outline-offset: 3px; }
+.activity-status { position: fixed; z-index: 2; top: 0; left: 0; right: 0; margin: 0; padding: 14px 20px; background: #eef5ef; color: #225f39; text-align: center; box-shadow: 0 2px 10px #00000010; }
+.she-love-project[inert] { opacity: .55; }
+@media (max-width: 640px) {
+  .she-love-project { width: 100%; min-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+  .she-love-header { padding-top: max(8px, env(safe-area-inset-top)); border-radius: 0; }
+  .she-love-content { padding: 24px 20px max(24px, env(safe-area-inset-bottom)); }
+  .she-love-guide { padding: 16px; }
+  textarea { font-size: 16px; }
+}

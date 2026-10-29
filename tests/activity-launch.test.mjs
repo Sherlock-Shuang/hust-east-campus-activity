@@ -6,7 +6,7 @@ import {selectActivitiesNow,activitySelectionSignature} from '../src/activity-la
 import {createAudienceRecord,applyAudienceEvent} from '../server/audience-store.mjs';
 
 test('new activities have no beacons or admission until the host explicitly opens them',()=>{
-  const portals=activityPortals();assert.equal(portals.length,3);
+  const portals=activityPortals();assert.equal(portals.length,4);
   assert.ok(portals.every(p=>p.enabled===false&&!isEventActive(p)));
   const record=createAudienceRecord({id:'viewer',identityHash:'a'.repeat(64),nickname:'观众'},100);
   const point=portals[0],event={eventId:'closed-visit',type:'visit',tabId:'tab',pointId:point.id,position:{x:point.x,y:0,z:point.z}};
@@ -17,7 +17,7 @@ test('new activities have no beacons or admission until the host explicitly open
 test('host selection atomically enables only chosen activities, clears old schedules and preserves coordinates',()=>{
   const original=activityPortals().map(p=>({...p,startAt:9999999999999,endAt:99999999999999}));
   const opened=selectActivitiesNow(original,['point-library','point-tasay']);
-  assert.deepEqual(opened.map(p=>isEventActive(p)),[true,false,true]);
+  assert.deepEqual(opened.map(p=>isEventActive(p)),[true,false,true,true]);
   assert.deepEqual(opened.map(({id,x,z,url,radius})=>({id,x,z,url,radius})),original.map(({id,x,z,url,radius})=>({id,x,z,url,radius})));
   assert.ok(original.every(p=>p.enabled===false));
   assert.ok(selectActivitiesNow(opened,[]).every(p=>!isEventActive(p)));

@@ -147,7 +147,7 @@ export function createAudienceStore({initial=createAudienceData(),persist=async(
       record=touchAudience(record,tabId,now());next.audiences[record.id]=record;return summarizeAudience(record,{now:now()});
     });},
     async heartbeat(id,tabId){return transact(next=>{const r=touchAudience(requireRecord(next,id),tabId,now());next.audiences[id]=r;return summarizeAudience(r,{now:now()});});},
-    async event(id,event,context){return transact(next=>{const result=applyAudienceEvent(requireRecord(next,id),event,{...context,now:now()});next.audiences[id]=result.record;return {duplicate:result.duplicate,audience:summarizeAudience(result.record,{now:now()})};});},
+    async event(id,event,context){return transact(next=>{const result=applyAudienceEvent(requireRecord(next,id),event,{...(typeof context==='function'?context():context),now:now()});next.audiences[id]=result.record;return {duplicate:result.duplicate,audience:summarizeAudience(result.record,{now:now()})};});},
     statistics(options){return aggregateAudiences(Object.values(data.audiences),{...options,now:now()});},
     detail(id){return audienceDetail(requireRecord(data,id),{now:now()});},
     async flush(){await queue;},

@@ -7,8 +7,6 @@ import { countNarrativeConversationMessages, type ChatMessage } from "../../type
 import { useChatViewport } from "../../hooks/useChatViewport";
 
 import { MobileIcon, MobileTabBar, mobileTabs, usePhoneLayout, type MobileTab } from "../../components/MobileMessenger";
-import { SheLoveProject } from "../../components/SheLoveProject";
-import { readStoredStoryCompletion, rememberStoryCompletion } from "../../components/sheLoveCompletion";
 
 function formatTime(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString("zh-CN", {
@@ -279,14 +277,6 @@ export function ChatPage() {
   const [drafts, setDrafts] = useState<Record<ConversationId, string>>(() => savedUi?.drafts ?? { z: "", assistant: "", favorite: "", group: "" });
   const resetForReplay = useAppStore((state) => state.resetForReplay);
   const gameFinished = session.stage === "wake_up" && session.hasFinishedGame;
-  const [rememberedCompletion, setRememberedCompletion] = useState(readStoredStoryCompletion);
-  const projectUnlocked = session.hasFinishedGame === true || rememberedCompletion;
-  const [showSheLoveProject, setShowSheLoveProject] = useState(false);
-  useEffect(() => {
-    if (!projectUnlocked) return;
-    rememberStoryCompletion(true);
-    setRememberedCompletion(true);
-  }, [projectUnlocked]);
   const [expandedArticles, setExpandedArticles] = useState<string[]>(() => savedUi?.expandedArticles ?? []);
   const followScrollRef = useRef(true);
   const lastConversationRef = useRef<ConversationId>("z");
@@ -887,7 +877,6 @@ export function ChatPage() {
               <button className="wx-cell" type="button" aria-label="朋友圈" onClick={openSpace}><span className="wx-cell-icon moments"><MobileIcon name="discover"/></span><span>朋友圈</span><span className="wx-chevron">›</span></button>
               <button className="wx-cell" type="button" aria-label="收藏" onClick={() => selectConversation("favorite")}><span className="wx-cell-icon favorites"><MobileIcon name="favorite"/></span><span>收藏</span><span className="wx-chevron">›</span></button>
               <button className="wx-cell" type="button" onClick={() => { selectConversation("z"); setMenuOpen(true); }}><span className="wx-cell-icon"><MobileIcon name="clue"/></span><span>聊天信息</span><span className="wx-chevron">›</span></button>
-              {projectUnlocked ? <button className="wx-cell" type="button" onClick={() => setShowSheLoveProject(true)}><span className="wx-cell-icon"><MobileIcon name="favorite"/></span><span>她不一样 · 恋情分析室</span><span className="wx-chevron">›</span></button> : null}
             </> : null}
           </div>
           <MobileTabBar active={mobileTab} onChange={setMobileTab} unread={allConversationItems.some(item => item.hasUnread)}/>
@@ -931,7 +920,6 @@ export function ChatPage() {
             <div id="wx-chat-actions" className="desktop-chat-header-actions" aria-hidden={phone && !menuOpen ? true : undefined} ref={node => { if (node) node.inert = phone && !menuOpen; }}>
               <div className="wx-menu-title mobile-only">聊天信息<button type="button" aria-label="关闭聊天信息" onClick={() => setMenuOpen(false)}>完成</button></div>
               <button className="desktop-header-button mobile-space-button" type="button" onClick={openSpace}>朋友圈</button>
-              {projectUnlocked ? <button className="desktop-header-button" type="button" onClick={() => setShowSheLoveProject(true)}>她不一样 · 恋情分析室</button> : null}
               {currentConversation.isStory && !gameFinished ? (
                 <button
                   className={`desktop-header-button${rollbackDisabled ? " rollback-alert" : ""}`}
@@ -1131,7 +1119,6 @@ export function ChatPage() {
             {currentConversation.isStory && gameFinished ? <section className="game-ending" aria-label="故事结局">
               <h2>梦醒</h2>
               {storyCopy.wakeLines.map((line) => <p key={line}>{line}</p>)}
-              {projectUnlocked ? <button type="button" onClick={() => setShowSheLoveProject(true)}>她不一样 · 恋情分析室</button> : null}
               <button type="button" onClick={resetForReplay}>重新开始这段故事</button>
               <small>本作的聊天、定位与工作群均为虚构。没有读取真实通讯录、定位或其他应用。</small>
             </section> : null}
@@ -1284,7 +1271,6 @@ export function ChatPage() {
           </div>
         ) : null}
       </section>
-      {projectUnlocked && showSheLoveProject ? <SheLoveProject onClose={() => setShowSheLoveProject(false)}/> : null}
     </main>
   );
 }

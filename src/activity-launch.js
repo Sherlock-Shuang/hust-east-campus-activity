@@ -1,3 +1,4 @@
+import {getTasayPortal,isTasayLinkedPortal,synchronizeActivityPortals} from './activity-catalog.js';
 // One persisted portal flag controls both its gathering beacon and admission.
 // Hosts can open several activities in one revision without touching the stage.
 export function activitySelectionSignature(portals) {
@@ -10,7 +11,9 @@ export function selectActivitiesNow(portals, selectedIds) {
   if ([...selected].some(id => !portals.some(portal => portal.id === id))) {
     throw new Error('所选活动已被删除，请重新选择。');
   }
-  return portals.map(portal => selected.has(portal.id)
+  const master=getTasayPortal(portals);
+  if(portals.some(portal=>isTasayLinkedPortal(portal)&&selected.has(portal.id))&&(!master||!selected.has(master.id)))throw new Error('该入口随过拟合恋人开放，请选择过拟合恋人。');
+  return synchronizeActivityPortals(portals.map(portal => selected.has(portal.id)
     ? {...portal, enabled: true, startAt: null, endAt: null}
-    : {...portal, enabled: false});
+    : {...portal, enabled: false}));
 }

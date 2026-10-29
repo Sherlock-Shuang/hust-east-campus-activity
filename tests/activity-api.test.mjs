@@ -53,7 +53,7 @@ test('serverless sky QR state uses the shared boolean schema and survives handle
 });
 test('two independent libSQL clients preserve identity, admin sessions, revision CAS and origin protection',async t=>{
   const f=await fixture(t),initial=await (await f.request('/api/live/state')).json();
-  assert.deepEqual(initial.state.portals.map(p=>p.workId),['library','wanyan','tasay']);
+  assert.deepEqual(initial.state.portals.map(p=>p.workId),['library','wanyan','tasay','she-love-me']);
   assert.ok(initial.state.portals.every(p=>p.enabled===false));
   assert.equal((await f.request('/api/admin/audience')).status,401);
   const a=await f.join('同名','one'),b=await f.join('同名','one',undefined,1),again=await f.join('同名','two',a.cookie,1);
@@ -86,7 +86,7 @@ test('100 audiences, 100 SSE connections and 340 events aggregate correctly acro
       const before=performance.now(),response=await f.post(viewer,{...base,type,eventId:`event-${i}-${j}`},i%2);latencies.push(performance.now()-before);assert.equal(response.status,200,await response.text());
     }
   }));
-  const stats=await f.stats();assert.equal(stats.summary.totalParticipants,100);assert.deepEqual(stats.summary.points.map(p=>p.visitors),[34,33,33]);assert.equal(stats.summary.works.reduce((n,w)=>n+w.openedParticipants,0),80);assert.equal(stats.summary.currentParticipants,40);
+  const stats=await f.stats();assert.equal(stats.summary.totalParticipants,100);assert.deepEqual(stats.summary.points.map(p=>p.visitors),[34,33,33,0]);assert.equal(stats.summary.works.reduce((n,w)=>n+w.openedParticipants,0),80);assert.equal(stats.summary.currentParticipants,40);
   await Promise.all(readers.map(r=>r.cancel()));assert.equal((await f.dbs[0].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count,0);
   latencies.sort((a,b)=>a-b);t.diagnostic(JSON.stringify({environment:'local libSQL SQLite with two clients/handlers; not Turso network or WebGL',audiences:100,sseConnections:100,eventRequests:latencies.length,totalMs:Math.round(performance.now()-start),eventP95Ms:Math.round(latencies[Math.floor(latencies.length*.95)])}));
 });
@@ -118,7 +118,7 @@ test('real Node wrapper preserves rewritten API paths, JSON bodies, cookies, fil
   t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
   const origin=`http://127.0.0.1:${server.address().port}`;
   const call=(route,init={})=>fetch(origin+'/api/activity?__activity_path='+route,{...init,headers:{Origin:origin,'x-forwarded-proto':'http','Content-Type':'application/json',...init.headers}});
-  const initial=await (await call('live/state')).json();assert.equal(initial.state.portals.length,3);
+  const initial=await (await call('live/state')).json();assert.equal(initial.state.portals.length,4);
   const login=await call('admin/login',{method:'POST',body:JSON.stringify({password:PASSWORD})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0];
   const join=await call('audience/join',{method:'POST',body:JSON.stringify({nickname:'Wrapper viewer',tabId:'wrapper-tab'})});assert.equal(join.status,200);assert.match(join.headers.get('set-cookie'),/HttpOnly/);
   const found=await (await call('admin/audience&q=Wrapper',{headers:{Cookie:cookie}})).json();assert.equal(found.participants.length,1);
@@ -143,4 +143,32 @@ test('host admission survives handler restart and closed activities reject new v
   assert.equal((await event('returned')).status,200);
   await f.restart();const stats=await f.stats();assert.equal(stats.summary.points[0].visitors,1);assert.equal(stats.summary.works[0].openedParticipants,1);assert.equal(stats.summary.currentParticipants,0);
   assert.ok((await (await f.request('/api/live/state',{},1)).json()).state.portals.every(p=>!p.enabled));
+});
+
+test('old production rows project a fourth linked point for snapshots, SSE, statistics and audience admission',async t=>{
+  const f=await fixture(t),initial=(await (await f.request('/api/live/state')).json()).state,now=Date.now();
+  const legacy={...initial,revision:17,portals:initial.portals.filter(point=>point.workId!=='she-love-me').map(point=>point.workId==='tasay'?{...point,enabled:true,startAt:now-1000,endAt:now+600000,x:71,z:31}:point)};
+  const raw=JSON.stringify(legacy);await f.dbs[0].prepare('UPDATE activity_state SET revision=?,payload=? WHERE key=?').bind(17,raw,'current').run();
+  await f.restart();
+  let current=(await (await f.request('/api/live/state',{},1)).json()).state;
+  const linked=()=>current.portals.find(point=>point.id==='point-she-love-me');
+  assert.equal(current.revision,17);assert.equal(current.portals.length,4);assert.deepEqual(current.portals.slice(0,3),legacy.portals);
+  assert.deepEqual([linked().enabled,linked().startAt,linked().endAt],[true,now-1000,now+600000]);
+  assert.equal((await f.dbs[1].prepare('SELECT payload FROM activity_state WHERE key=?').bind('current').first()).payload,raw,'reads do not rewrite the old database');
+  const reader=await f.stream(1),packet=new TextDecoder().decode((await reader.read()).value);assert.equal(JSON.parse(/^data: (.+)$/m.exec(packet)[1]).state.portals.length,4);await reader.cancel();
+  const viewer=await f.join('独立广场观众','einstein');let sequence=0;
+  const event=(type='opening')=>f.post(viewer,{type,eventId:'event-'+ ++sequence,tabId:'einstein',pointId:'point-she-love-me',workId:'she-love-me',attemptId:'attempt-'+sequence,position:{x:linked().x,y:0,z:linked().z}},1);
+  assert.equal((await event('visit')).status,200,'visit only the independent square point');
+  assert.equal((await event()).status,200,'no tasay visit or completion is required');
+  assert.ok((await f.stats()).summary.points.some(point=>point.id==='point-she-love-me'));
+  current=await f.save({...current,portals:current.portals.map(point=>point.workId==='tasay'?{...point,startAt:now+60000,endAt:now+120000}:point)});
+  assert.deepEqual([linked().startAt,linked().endAt],[now+60000,now+120000]);assert.equal((await event()).status,409);
+  current=await f.save({...current,portals:current.portals.map(point=>point.workId==='tasay'?{...point,enabled:false}:point.workId==='she-love-me'?{...point,enabled:true,startAt:null,endAt:null,x:850}:point)});
+  assert.equal(linked().enabled,false);assert.equal(linked().x,850);assert.equal((await event()).status,409);
+  const stale=await f.request('/api/admin/state',{method:'PUT',headers:{Cookie:f.admin.cookie,'X-CSRF-Token':f.admin.csrf},body:JSON.stringify({state:legacy,expectedRevision:17})});assert.equal(stale.status,409);
+  current=await f.save({...current,paused:true,portals:current.portals.map(point=>point.workId==='tasay'?{...point,enabled:true,startAt:null,endAt:null}:point)});
+  assert.equal(linked().enabled,true);assert.equal((await event()).status,409,'pause continues to block both entries');
+  current=await f.save({...current,paused:false,portals:current.portals.filter(point=>point.workId!=='tasay')});
+  assert.equal(linked().enabled,false);assert.equal((await event()).status,409,'deleting the master cannot leave the dependency open');
+  await f.restart();assert.deepEqual((await (await f.request('/api/live/state',{},1)).json()).state,current);
 });

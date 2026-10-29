@@ -1,4 +1,5 @@
-// Shared, dependency-free schema for the activity console and campus clients.
+// Shared schema for the activity console, campus clients and server adapters.
+import {synchronizeActivityPortals} from './activity-catalog.js';
 export function createDefaultLiveState() {
   return {schemaVersion:1,revision:0,paused:false,skyQrVisible:false,pauseMessage:'请稍候，活动即将继续',phase:{id:'explore',label:'自由探索',guidance:'自由探索校园；作品开放与集合安排以主持人通知为准。'},announcement:null,markers:[],portals:[]};
 }
@@ -57,5 +58,6 @@ export function validateLiveState(input) {
       return {...common,color:e.color.toLowerCase(),height:number(e.height,'光柱高度',5,180,40),radius:number(e.radius,'光柱半径',.5,25,3)};
     });
   }
+  output.portals=synchronizeActivityPortals(output.portals,{occupiedIds:output.markers.map(marker=>marker.id)});
   return output;
 }

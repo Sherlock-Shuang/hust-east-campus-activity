@@ -116,7 +116,7 @@ export async function createLiveServer(options={}) {
     }
     if(req.method==='POST'&&url.pathname==='/api/audience/events'){
       const record=requireAudience(req),body=await readJson(req);
-      json(res,200,await audiences.event(record.id,body,{points:state.portals,paused:state.paused}));return;
+      json(res,200,await audiences.event(record.id,body,()=>({points:state.portals,paused:state.paused})));return;
     }
     if(req.method==='GET'&&(url.pathname==='/api/admin/audience'||url.pathname.startsWith('/api/admin/audience/'))){
       if(!sessionFor(req))throw httpError(401,'请先登录控制台');

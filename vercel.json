@@ -805,7 +805,7 @@
       "continue": true
     },
     {
-      "src": "^/works/tasay/assets/index-C9YLpfzA\\.js$",
+      "src": "^/works/tasay/assets/index-B4y9W2wL\\.js$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",
         "Cache-Control": "public, max-age=31536000, immutable"
@@ -813,7 +813,7 @@
       "continue": true
     },
     {
-      "src": "^/works/tasay/assets/index-pLcfrtbp\\.css$",
+      "src": "^/works/tasay/assets/index-Dn7Wr6JU\\.css$",
       "headers": {
         "Content-Type": "text/css; charset=utf-8",
         "Cache-Control": "public, max-age=31536000, immutable"
@@ -1075,6 +1075,28 @@
       "headers": {
         "Location": "/works/library/games/isaac/"
       }
+    },
+    {
+      "src": "^/works/she-love-me$",
+      "status": 308,
+      "headers": {
+        "Location": "/works/she-love-me/"
+      }
+    },
+    {
+      "src": "^/works/she-love-me/(?:index\\.html|project\\.(?:css|js))?$",
+      "headers": {
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/she-love-me/$",
+      "dest": "/works/she-love-me/index.html",
+      "methods": [
+        "GET",
+        "HEAD"
+      ]
     },
     {
       "src": "^/api/(.*)$",

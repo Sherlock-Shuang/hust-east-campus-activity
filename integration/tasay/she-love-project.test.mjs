@@ -31,48 +31,6 @@ function modules(mocks = {}) {
   };
 }
 
-function storage(initial = {}) {
-  const values = new Map(Object.entries(initial));
-  return {values, getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value)};
-}
-
-test('completion migration accepts only a literal completed flag and never changes legacy story saves', () => {
-  const {readStoredStoryCompletion, rememberStoryCompletion} = modules()('components/sheLoveCompletion');
-  for (const key of ['ta-say:persisted', 'ta-say:original-story:persisted']) {
-    for (const value of [null, 'broken json', 'true', '[]', '{}', '{"version":2,"hasFinishedGame":false}', '{"version":2,"hasFinishedGame":"true"}', '{"version":2,"hasFinishedGame":1}', '{"opened":true,"returned":true,"stage":"wake_up"}', '{"hasFinishedGame":true}', '{"version":1,"hasFinishedGame":true}', '{"version":3,"hasFinishedGame":true}', '{"version":"2","hasFinishedGame":true}']) {
-      assert.equal(readStoredStoryCompletion(storage({[key]: value})), false, `${key}: ${value}`);
-    }
-    assert.equal(readStoredStoryCompletion(storage({[key]: '{"version":2,"hasFinishedGame":true}'})), true);
-  }
-  const legacy = JSON.stringify({version: 2, hasFinishedGame: true, autoSaveSnapshot: {stage: 'old-story'}, metaMemory: ['old-story']});
-  const saved = storage({'ta-say:persisted': legacy});
-  assert.equal(readStoredStoryCompletion(saved), true);
-  rememberStoryCompletion(true, saved);
-  assert.equal(saved.getItem('ta-say:persisted'), legacy);
-  assert.equal(saved.getItem('ta-say:original-story:persisted'), null);
-  saved.values.delete('ta-say:persisted');
-  assert.equal(readStoredStoryCompletion(saved), true, 'completion survives after the legacy save is gone');
-  rememberStoryCompletion(false, saved);
-  assert.equal(readStoredStoryCompletion(saved), true, 'replay cannot clear a completed marker');
-});
-
-test('missing or blocked storage cannot unlock a new player or break a completed session', () => {
-  const blocked = {getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }};
-  for (const value of [null, blocked]) {
-    const {readStoredStoryCompletion, rememberStoryCompletion} = modules()('components/sheLoveCompletion');
-    assert.equal(readStoredStoryCompletion(value), false);
-    assert.doesNotThrow(() => rememberStoryCompletion(true, value));
-    assert.equal(readStoredStoryCompletion(value), true, 'completion survives within the current page');
-    assert.equal(modules()('components/sheLoveCompletion').readStoredStoryCompletion(value), false, 'a new page cannot persist completion when storage is blocked');
-  }
-  const {readStoredStoryCompletion, rememberStoryCompletion} = modules()('components/sheLoveCompletion');
-  const saved = storage();
-  rememberStoryCompletion(false, saved);
-  assert.equal(saved.values.size, 0);
-  assert.equal(readStoredStoryCompletion(storage({'ta-say:she-love-me:completed': '"true"'})), false);
-  assert.equal(readStoredStoryCompletion(storage({'ta-say:she-love-me:completed': 'bad', 'ta-say:persisted': '{"version":2,"hasFinishedGame":true}'})), true);
-});
-
 async function fixture(t, {finished = false, phone = false, legacy, blockedStorage = false} = {}) {
   const dom = new JSDOM('<div id="root"></div>', {url: 'https://campus.test/works/tasay/chat', pretendToBeVisual: true});
   const win = dom.window;
@@ -83,7 +41,10 @@ async function fixture(t, {finished = false, phone = false, legacy, blockedStora
   // JSDOM has no top layer. Browser verification checks its native focus trap/backdrop.
   win.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   win.HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
-  if (legacy !== undefined) win.localStorage.setItem('ta-say:persisted', legacy);
+  if (legacy !== undefined) {
+    win.localStorage.setItem('ta-say:persisted', legacy);
+    win.localStorage.setItem('ta-say:she-love-me:completed', 'true');
+  }
   if (blockedStorage) {
     Object.defineProperty(win, 'localStorage', {get() { throw new Error('blocked'); }});
     Object.defineProperty(globalThis, 'localStorage', {configurable: true, get() { throw new Error('blocked'); }});
@@ -131,77 +92,152 @@ async function fixture(t, {finished = false, phone = false, legacy, blockedStora
   };
 }
 
-test('new player has no project entry; real completion reveals it immediately and replay retains it', async t => {
-  const f = await fixture(t);
-  assert.equal(f.buttons('她不一样 · 恋情分析室').length, 0);
-  await f.finish();
-  assert.equal(f.document.querySelector('.game-ending').textContent.includes('她不一样 · 恋情分析室'), true);
-  assert.equal(f.win.localStorage.getItem('ta-say:she-love-me:completed'), 'true');
-  await f.click(f.buttons('重新开始这段故事')[0]);
-  assert.equal(f.document.querySelector('.game-ending'), null);
-  assert.ok(f.document.querySelector('#wx-chat-actions').textContent.includes('她不一样 · 恋情分析室'));
-});
 
-test('a returning legacy winner sees the entry without restoring old story progress', async t => {
-  const f = await fixture(t, {legacy: '{"version":2,"hasFinishedGame":true,"autoSaveSnapshot":{"stage":"wake_up"}}'});
-  assert.equal(f.state.session.stage, 'warmup');
-  assert.equal(f.state.session.hasFinishedGame, false);
-  assert.equal(f.document.querySelector('.game-ending'), null);
-  assert.ok(f.buttons('她不一样 · 恋情分析室').length);
-});
+const pageRoot = path.resolve(here, '../../public/works/she-love-me');
+const pageHtml = readFileSync(path.join(pageRoot, 'index.html'), 'utf8');
+const pageScript = readFileSync(path.join(pageRoot, 'project.js'), 'utf8');
+const bridgeScript = readFileSync(path.resolve(here, '../../public/experiences/activity-bridge.js'), 'utf8');
 
-test('blocked-storage replay clears the store flag but completion survives ChatPage remounts', async t => {
-  const f = await fixture(t, {blockedStorage: true});
-  assert.equal(f.buttons('她不一样 · 恋情分析室').length, 0);
-  await f.finish();
-  await f.click(f.buttons('重新开始这段故事')[0]);
-  assert.equal(f.state.session.hasFinishedGame, false, 'replay rebuilt the session from unavailable storage defaults');
-  await f.remount();
-  assert.equal(f.state.session.hasFinishedGame, false, 'project availability does not rewrite story state');
-  assert.equal(f.document.querySelector('.game-ending'), null);
-  await f.click(f.buttons('她不一样 · 恋情分析室')[0]);
-  assert.ok(f.document.querySelector('dialog[open]'));
-});
+function pageFixture(t, {embedded = false, clipboard} = {}) {
+  const dom = new JSDOM(embedded ? '<iframe src="/works/she-love-me/?campusAttempt=guide-test"></iframe>' : pageHtml, {
+    url: 'https://campus.test/works/she-love-me/', runScripts: 'outside-only', pretendToBeVisual: true
+  });
+  t.after(() => dom.window.close());
+  const win = embedded ? dom.window.document.querySelector('iframe').contentWindow : dom.window;
+  if (embedded) { win.document.open(); win.document.write(pageHtml); win.document.close(); }
+  const messages = [];
+  if (embedded) dom.window.postMessage = (message, origin) => messages.push({message, origin});
+  if (clipboard) Object.defineProperty(win.navigator, 'clipboard', {configurable: true, value: clipboard});
+  Object.defineProperty(win, 'localStorage', {get() { throw new Error('Storage unavailable'); }});
+  win.fetch = () => { throw new Error('The guide must not make data requests'); };
+  const bridgeElement = win.document.querySelector('script[data-work="she-love-me"]');
+  assert.ok(bridgeElement);
+  Object.defineProperty(win.document, 'currentScript', {configurable: true, get: () => bridgeElement});
+  win.eval(bridgeScript);
+  win.eval(pageScript);
+  win.document.dispatchEvent(new win.Event('DOMContentLoaded'));
+  return {win, document: win.document, messages,
+    async click(selector) {
+      const target = win.document.querySelector(selector);
+      assert.ok(target, selector);
+      const event = new win.MouseEvent('click', {bubbles: true, cancelable: true});
+      target.dispatchEvent(event);
+      await new Promise(resolve => setImmediate(resolve));
+      return event;
+    },
+    hostMessage(data, origin = 'https://campus.test') {
+      win.dispatchEvent(new win.MessageEvent('message', {source: dom.window, origin, data: {attemptId: 'guide-test', ...data}}));
+    }
+  };
+}
 
-test('project preserves chat position and menu, restores focus on Escape, and supplies safe external links', async t => {
-  const f = await fixture(t, {finished: true, phone: true});
-  await f.click(f.document.querySelector('[aria-label="聊天信息与操作"]'));
-  const entry = f.document.querySelector('#wx-chat-actions button:nth-of-type(2)');
-  assert.equal(entry.textContent, '她不一样 · 恋情分析室');
-  const stream = f.document.querySelector('.desktop-chat-stream');
-  assert.ok(stream);
-  stream.scrollTop = 123;
-  await f.click(entry);
-  const dialog = f.document.querySelector('dialog');
-  assert.ok(dialog.open);
-  assert.equal(f.document.activeElement.getAttribute('aria-label'), '返回聊天');
-  for (const link of dialog.querySelectorAll('a')) {
-    assert.equal(link.target, '_blank');
+test('independent guide is available without story/storage and retains project attribution and selectable instructions', t => {
+  const f = pageFixture(t);
+  assert.equal(f.document.querySelector('h1').textContent, '她不一样');
+  assert.match(f.document.body.textContent, /爱因斯坦广场/);
+  assert.doesNotMatch(f.document.body.textContent, /通关|解锁|过拟合恋人/);
+  assert.equal(f.document.querySelector('input[type=file], form'), null);
+  const instruction = f.document.getElementById('ai-instruction');
+  assert.equal(instruction.readOnly, true);
+  assert.match(instruction.value, /符合项目支持格式的 JSON 或 Markdown/);
+  assert.match(instruction.value, /不要自动读取微信、QQ/);
+  assert.match(f.document.body.textContent, /运行在电脑上的 AI 编程助手中/);
+  assert.equal(f.document.querySelector('link[rel=stylesheet]').getAttribute('href'), './project.css');
+  assert.equal(f.document.querySelectorAll('script').length, 2);
+  for (const link of f.document.querySelectorAll('a[target="_blank"]')) {
     assert.equal(link.rel, 'noopener noreferrer');
     assert.ok(link.href.startsWith('https://github.com/863401402/she-love-me'));
   }
-  assert.equal(dialog.querySelector('input[type=file]'), null);
-  await React.act(async () => dialog.dispatchEvent(new f.win.KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true})));
-  assert.equal(f.document.querySelector('dialog'), null);
-  assert.equal(f.document.activeElement, entry);
-  assert.equal(f.document.querySelector('[aria-label="聊天信息与操作"]').getAttribute('aria-expanded'), 'true');
-  assert.equal(stream.scrollTop, 123);
+  assert.ok(f.document.querySelector('a[href$="/LICENSE"]'));
+  assert.equal(f.document.getElementById('return-to-campus').getAttribute('href'), '/');
 });
 
-test('copy succeeds when permitted and falls back to selected instructions when iframe clipboard is denied', async t => {
-  const f = await fixture(t, {finished: true});
+test('clipboard success copies the exact visible instruction', async t => {
   let copied;
-  Object.defineProperty(f.win.navigator, 'clipboard', {configurable: true, value: {async writeText(value) { copied = value; }}});
-  await f.click(f.buttons('她不一样 · 恋情分析室')[0]);
-  await f.click(f.buttons('复制给 AI 的指令')[0]);
-  assert.equal(copied, f.load('components/SheLoveProject').sheLoveAiInstruction);
-  assert.match(f.document.querySelector('dialog [role=status]').textContent, /已复制/);
-  Object.defineProperty(f.win.navigator, 'clipboard', {value: {async writeText() { throw new Error('Permission denied'); }}});
-  await f.click(f.buttons('复制给 AI 的指令')[0]);
-  const field = f.document.querySelector('dialog textarea');
-  assert.equal(f.document.activeElement, field);
-  assert.equal(field.selectionStart, 0);
-  assert.equal(field.selectionEnd, field.value.length);
-  assert.match(f.document.querySelector('dialog [role=status]').textContent, /请长按或使用复制快捷键/);
-  assert.match(field.value, /不要自动读取微信、QQ/);
+  const f = pageFixture(t, {clipboard: {async writeText(value) { copied = value; }}});
+  await f.click('#copy-instruction');
+  assert.equal(copied, f.document.getElementById('ai-instruction').value);
+  assert.match(f.document.getElementById('copy-status').textContent, /已复制/);
+});
+
+test('missing or denied clipboard selects the instruction for manual copying', async t => {
+  for (const clipboard of [undefined, {async writeText() { throw new Error('Permission denied'); }}]) {
+    const f = pageFixture(t, {clipboard});
+    await f.click('#copy-instruction');
+    const field = f.document.getElementById('ai-instruction');
+    assert.equal(f.document.activeElement, field);
+    assert.equal(field.selectionStart, 0);
+    assert.equal(field.selectionEnd, field.value.length);
+    assert.match(f.document.getElementById('copy-status').textContent, /请长按或使用复制快捷键/);
+  }
+});
+
+test('activity bridge reports the independent work, pauses the whole guide, and exits only from the return control', async t => {
+  let copies = 0;
+  const f = pageFixture(t, {embedded: true, clipboard: {async writeText() { copies += 1; }}});
+  const ready = f.messages.find(item => item.message.type === 'campus:ready');
+  assert.ok(ready);
+  assert.equal(ready.message.workId, 'she-love-me');
+  assert.equal(ready.message.attemptId, 'guide-test');
+  assert.equal(ready.message.level, 'page_opened');
+  assert.equal(ready.origin, 'https://campus.test');
+  f.hostMessage({type: 'campus:activity', paused: true}, 'https://foreign.test');
+  assert.equal(f.document.getElementById('project').inert, false);
+  f.hostMessage({type: 'campus:activity', paused: true});
+  assert.equal(f.document.getElementById('project').inert, true);
+  assert.equal(f.document.getElementById('activity-status').hidden, false);
+  await f.click('#copy-instruction');
+  await f.click('#return-to-campus');
+  assert.equal(copies, 0);
+  assert.equal(f.messages.some(item => item.message.type === 'campus:exit'), false);
+  f.hostMessage({type: 'campus:activity', paused: false});
+  assert.equal(f.document.getElementById('project').inert, false);
+  assert.equal(f.document.getElementById('activity-status').hidden, true);
+  await f.click('#copy-instruction');
+  assert.equal(copies, 1);
+  const event = await f.click('#return-to-campus');
+  assert.equal(event.defaultPrevented, true);
+  const exits = f.messages.filter(item => item.message.type === 'campus:exit');
+  assert.equal(exits.length, 1);
+  assert.equal(exits[0].message.workId, 'she-love-me');
+  assert.equal(exits[0].message.attemptId, 'guide-test');
+  f.hostMessage({type: 'campus:dispose'});
+  assert.equal(f.document.getElementById('project').inert, true);
+  assert.match(f.document.getElementById('activity-status').textContent, /已结束/);
+  await f.click('#return-to-campus');
+  assert.equal(f.messages.filter(item => item.message.type === 'campus:exit').length, 1);
+});
+
+test('standalone return keeps normal campus navigation', async t => {
+  const f = pageFixture(t);
+  let wasPrevented;
+  f.document.getElementById('return-to-campus').addEventListener('click', event => {
+    wasPrevented = event.defaultPrevented;
+    event.preventDefault(); // JSDOM cannot perform navigation; observe the page handler first.
+  });
+  await f.click('#return-to-campus');
+  assert.equal(wasPrevented, false);
+});
+
+test('chat has no hidden project entry before or after completion, including old completion markers', async t => {
+  const f = await fixture(t, {phone: true, legacy: '{"version":2,"hasFinishedGame":true}'});
+  const assertNoEntry = () => {
+    assert.doesNotMatch(f.document.body.textContent, /她不一样|恋情分析室/);
+    assert.equal(f.document.querySelector('dialog'), null);
+    assert.equal(f.document.querySelector('a[href*="she-love-me"]'), null);
+  };
+  assertNoEntry();
+  await f.finish();
+  assert.ok(f.document.querySelector('.game-ending'));
+  assertNoEntry();
+  await f.click(f.document.querySelector('[aria-label="聊天信息与操作"]'));
+  assertNoEntry();
+  await f.click(f.buttons('重新开始这段故事')[0]);
+  assert.equal(f.document.querySelector('.game-ending'), null);
+  assertNoEntry();
+  await f.click(f.document.querySelector('[aria-label="返回会话列表"]'));
+  await f.click(f.document.querySelector('.wx-tabbar button[aria-label="我"]') || [...f.document.querySelectorAll('.wx-tabbar button')].find(button => button.textContent === '我'));
+  assert.ok(f.document.querySelector('.wx-profile'));
+  assertNoEntry();
+  for (const name of ['SheLoveProject.tsx', 'sheLoveCompletion.ts', 'she-love-project.css']) assert.equal(existsSync(path.join(overrideRoot, 'components', name)), false);
 });

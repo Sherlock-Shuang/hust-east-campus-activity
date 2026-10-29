@@ -1391,16 +1391,16 @@
     "/works/tasay/": {
       "chunks": [
         {
-          "url": "/_activity_assets/675dd8baa7e88857429306d699d795d74327b16ac6e96d319a135580692e8169.bin",
+          "url": "/_activity_assets/a8e83117d84ec95551ae4a721626b4c9b4d45dcf0b91b5640572da047d84c40e.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 329,
-          "sha256": "70aac9f6da4cfd1c75fd3fdec926e3fae518b51ac50849b34f344f66ceedc2b7"
+          "storedBytes": 333,
+          "sha256": "3a81173b8cae7f9b5619dc6d8ef39b18aa9bde00d8e63b0e4ab40281d2b79dae"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "70aac9f6da4cfd1c75fd3fdec926e3fae518b51ac50849b34f344f66ceedc2b7"
+      "sha256": "3a81173b8cae7f9b5619dc6d8ef39b18aa9bde00d8e63b0e4ab40281d2b79dae"
     },
     "/works/tasay/assets/66c8ec9cf7b1f1e882d92c7f0c2e8d73-B7Cr3f9M.png": {
       "chunks": [
@@ -1430,47 +1430,47 @@
       "bytes": 1432436,
       "sha256": "240d1088f608ffde16703305652611e55645446dc61cfd7f0d879cd4a20f2d33"
     },
-    "/works/tasay/assets/index-C9YLpfzA.js": {
+    "/works/tasay/assets/index-B4y9W2wL.js": {
       "chunks": [
         {
-          "url": "/_activity_assets/4a0580319f5717ff497d691cc3acca9b5054536ba24a6fb60e13dbe378fe1f1e.bin",
+          "url": "/_activity_assets/b270658d0874752f3f89e5569620cd7ac3f27d67c1328997f9842e1e250f15fd.bin",
           "encoding": "gzip",
-          "bytes": 256991,
-          "storedBytes": 83415,
-          "sha256": "b0623f25d11197e2b6738d6666bd463f288f1c7f4889ec3cc527c94515e2be8d"
+          "bytes": 251846,
+          "storedBytes": 81682,
+          "sha256": "8377d86469d1ba468ad4d931e9667d35478218bdd7444f0fc3be02118318eea4"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 256991,
-      "sha256": "b0623f25d11197e2b6738d6666bd463f288f1c7f4889ec3cc527c94515e2be8d"
+      "bytes": 251846,
+      "sha256": "8377d86469d1ba468ad4d931e9667d35478218bdd7444f0fc3be02118318eea4"
     },
-    "/works/tasay/assets/index-pLcfrtbp.css": {
+    "/works/tasay/assets/index-Dn7Wr6JU.css": {
       "chunks": [
         {
-          "url": "/_activity_assets/3ab21bd8a63be02baeace717d8546903eb8f37030a1efacd84029720da887666.bin",
+          "url": "/_activity_assets/5f612b637cd924b6a84f4b23f3ef06c966ccfef8560ed9f48d5407f13b212e6b.bin",
           "encoding": "gzip",
-          "bytes": 76397,
-          "storedBytes": 15325,
-          "sha256": "19aed05a333c858902b8aa26fdbe3104cac0b25686ea9b2b031fad1db09f79bd"
+          "bytes": 73476,
+          "storedBytes": 14738,
+          "sha256": "27d0605b0509df2e71ecff4da3fa3e4b66ea05710582ab31f5617e20ba6ef739"
         }
       ],
       "mime": "text/css; charset=utf-8",
-      "bytes": 76397,
-      "sha256": "19aed05a333c858902b8aa26fdbe3104cac0b25686ea9b2b031fad1db09f79bd"
+      "bytes": 73476,
+      "sha256": "27d0605b0509df2e71ecff4da3fa3e4b66ea05710582ab31f5617e20ba6ef739"
     },
     "/works/tasay/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/675dd8baa7e88857429306d699d795d74327b16ac6e96d319a135580692e8169.bin",
+          "url": "/_activity_assets/a8e83117d84ec95551ae4a721626b4c9b4d45dcf0b91b5640572da047d84c40e.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 329,
-          "sha256": "70aac9f6da4cfd1c75fd3fdec926e3fae518b51ac50849b34f344f66ceedc2b7"
+          "storedBytes": 333,
+          "sha256": "3a81173b8cae7f9b5619dc6d8ef39b18aa9bde00d8e63b0e4ab40281d2b79dae"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "70aac9f6da4cfd1c75fd3fdec926e3fae518b51ac50849b34f344f66ceedc2b7"
+      "sha256": "3a81173b8cae7f9b5619dc6d8ef39b18aa9bde00d8e63b0e4ab40281d2b79dae"
     },
     "/works/wanyan/": {
       "chunks": [

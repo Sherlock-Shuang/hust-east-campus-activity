@@ -1,7 +1,7 @@
 import './admin-control.css';
 import { geoToLocal } from './geospatial.js';
 import { createLiveMapFrame, getLiveLocationPresets } from './live-locations.js';
-import { ACTIVITY_PHASES, ACTIVITY_WORKS, activityPortals } from './activity-catalog.js';
+import { ACTIVITY_PHASES, ACTIVITY_WORKS, activityPortals, getTasayPortal, isTasayLinkedPortal, SHE_LOVE_POINT_ID } from './activity-catalog.js';
 import { readAdminCoordinates, bindAdminCoordinateInputs } from './admin-coordinates.js';
 import { activitySelectionSignature, selectActivitiesNow } from './activity-launch.js';
 
@@ -52,7 +52,7 @@ function connection(online) {
 function setBusy(value) {
   busy = value;
   document.querySelectorAll('#dashboard button, #dashboard input, #dashboard textarea, #dashboard select').forEach(el => { el.disabled = value; });
-  renderSkyQr();
+  renderSkyQr();renderActivityChoices();syncLinkedPortalControls();
 }
 function renderSkyQr() {
   const ready = loggedIn && skyQrReady && Boolean(snapshot);
@@ -142,30 +142,33 @@ function renderState() {
   $('announcement-status').textContent = status.text; $('announcement-status').dataset.status = status.type;
   const announcement = state.announcement;
   $('announcement-timing').textContent = announcement ? `${announcement.startAt ? dateLabel(announcement.startAt) : '立即'} → ${announcement.endAt ? dateLabel(announcement.endAt) : '持续显示'}` : '';
-  renderActivityChoices();renderObjects('marker', state.markers); renderObjects('portal', state.portals); renderPins();
+  renderActivityChoices();renderObjects('marker', state.markers); renderObjects('portal', state.portals);syncLinkedPortalControls();renderPins();
 }
 function renderActivityChoices() {
   if (!snapshot) return;
   const portals=snapshot.state.portals,host=$('activity-choices');
   if (!launchDirty) {
     launchBase=activitySelectionSignature(portals);
-    launchSelection=new Set(portals.filter(portal=>portal.enabled).map(portal=>portal.id));
+    launchSelection=new Set(portals.filter(portal=>portal.enabled&&!isTasayLinkedPortal(portal)).map(portal=>portal.id));
   }
   const active=portals.filter(portal=>eventStatus(portal).type==='active');
   $('activity-launch-status').textContent=active.length?`${active.length} 个活动开放中`:'等待主持人开启';
   $('activity-launch-status').dataset.status=active.length?'active':'off';
-  const signature=JSON.stringify([portals.map(portal=>[portal.id,portal.label,portal.description,eventStatus(portal).type]),[...launchSelection]]);
+  const signature=JSON.stringify([portals.map(portal=>[portal.id,portal.label,portal.description,eventStatus(portal).type]),[...launchSelection],busy]);
   if (host.dataset.signature!==signature) {
     host.dataset.signature=signature;host.replaceChildren();
-    if (!portals.length) host.append(element('p','尚无活动点位，请先载入下方的三个作品点位，或添加自定义作品。','empty-list'));
+    if (!portals.length) host.append(element('p','尚无活动点位，请先载入下方的作品点位，或添加自定义作品。','empty-list'));
     for (const portal of portals) {
       const row=element('label',null,'activity-choice'),input=document.createElement('input');
-      input.type='checkbox';input.value=portal.id;input.checked=launchSelection.has(portal.id);input.disabled=busy;
+      const linked=isTasayLinkedPortal(portal),master=getTasayPortal(portals);
+      input.type='checkbox';input.value=portal.id;input.checked=launchSelection.has(linked?master?.id:portal.id);input.disabled=busy||linked;
+      if(linked)input.dataset.tasayLinkedControl='true';
       input.setAttribute('aria-label',`选择${portal.label}`);
       const info=element('span',null,'activity-choice-copy');
-      info.append(element('strong',portal.label),element('small',portal.description||'靠近地图光柱后进入体验'));
+      info.append(element('strong',portal.label),element('small',linked?'随过拟合恋人同步开放与定时；无需通关，可独立前往爱因斯坦广场。':portal.description||'靠近地图光柱后进入体验'));
       const status=eventStatus(portal),pill=element('span',status.type==='active'?'光柱已亮 · 可进入':status.text,'status-pill');pill.dataset.status=status.type;
       input.addEventListener('change',()=>{
+        if(linked)return;
         launchDirty=true;if(input.checked)launchSelection.add(portal.id);else launchSelection.delete(portal.id);
         renderActivityChoices();
       });
@@ -173,6 +176,7 @@ function renderActivityChoices() {
     }
   }
   $('activity-selection-note').textContent=launchDirty?'选择尚未发布。点击“开启所选活动”后，所选光柱与入口一起开启，其余活动关闭。':'可多选。勾选只编辑草稿，发布后才影响观众；开启立即生效。';
+  if(getTasayPortal(portals)&&!portals.some(portal=>portal.id===SHE_LOVE_POINT_ID))$('activity-selection-note').textContent+=' 联动点位尚未补齐；请为它留出一个入口名额，并避免占用 point-she-love-me 标识。';
 }
 function launchActivities(selectedIds, message) {
   const baseline=launchBase;
@@ -195,11 +199,13 @@ function renderObjects(type, items) {
     const info = document.createElement('div'); info.className = 'object-info';
     const title = document.createElement('strong'); title.textContent = item.label;
     const note = document.createElement('small'); const status = eventStatus(item);
-    note.textContent = `${status.text} · X ${item.x.toFixed(1)} / Z ${item.z.toFixed(1)}${item.startAt ? ` · ${dateLabel(item.startAt)}` : ''}`;
+    const linked=type==='portal'&&isTasayLinkedPortal(item);
+    note.textContent = `${linked?'随过拟合恋人 · ':''}${status.text} · X ${item.x.toFixed(1)} / Z ${item.z.toFixed(1)}${item.startAt ? ` · ${dateLabel(item.startAt)}` : ''}`;
     info.append(title, note);
     const actions = document.createElement('div'); actions.className = 'object-actions';
     for (const [action, text] of [['edit', '编辑'], ['toggle', item.enabled ? '关闭' : '开启'], ['delete', '删除']]) {
-      const button = document.createElement('button'); button.type = 'button'; button.textContent = text; button.dataset.action = action; button.disabled = busy;
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = text; button.dataset.action = action; button.disabled = busy||(linked&&action!=='edit');
+      if(linked&&action!=='edit')button.dataset.tasayLinkedControl='true';
       button.setAttribute('aria-label', `${text}${item.label}`);
       button.addEventListener('click', () => objectAction(type, item.id, action)); actions.append(button);
     }
@@ -210,6 +216,7 @@ async function objectAction(type, itemId, action) {
   const key = type === 'marker' ? 'markers' : 'portals';
   const item = snapshot?.state[key].find(entry => entry.id === itemId);
   if (!item) return;
+  if(type==='portal'&&isTasayLinkedPortal(item)&&action!=='edit')return showNotice('该点位随过拟合恋人开放，请调整过拟合恋人的开关与时间。');
   if (action === 'edit') { fillObjectForm(type, item); return; }
   if (action === 'delete' && !window.confirm(`删除“${item.label}”？对应的${type === 'marker' ? '光柱' : '入口'}会从玩家地图中移除。`)) return;
   await mutate(state => {
@@ -250,7 +257,7 @@ function submitObject(type, event) {
       if ($(`${type}-id`).value && index < 0) throw new Error('此项目已被删除。清空表单后可重新添加。');
       if (index >= 0) state[key][index] = item;
       else { if (state[key].length >= 12) throw new Error('已达到 12 个的上限，请先删除不再使用的项目。'); state[key].push(item); }
-    }, `${type === 'marker' ? '光柱' : '入口'}已保存${item.enabled ? '并启用' : '，当前保持关闭'}。`).then(ok => { if (ok) clearObjectForm(type); });
+    }, type==='portal'&&isTasayLinkedPortal(item)?'点位已保存；开放状态与时段跟随过拟合恋人。':`${type === 'marker' ? '光柱' : '入口'}已保存${item.enabled ? '并启用' : '，当前保持关闭'}。`).then(ok => { if (ok) clearObjectForm(type); });
   } catch (error) { showNotice(error.message, true); }
 }
 function previewAnnouncement() {
@@ -268,6 +275,16 @@ function syncPhase() {
 }
 function syncCustomWork() {
   $('portal-custom-work-field').hidden = Boolean($('portal-work').value);
+  syncLinkedPortalControls();
+}
+function syncLinkedPortalControls(){
+  const current=snapshot?.state.portals.find(portal=>portal.id===$('portal-id').value);
+  const linked=isTasayLinkedPortal(current)||$('portal-work').value==='she-love-me';
+  $('portal-linked-note').hidden=!linked;
+  for(const field of ['portal-enabled','portal-start','portal-end','portal-url'])$(field).disabled=busy||linked;
+  $('portal-work').disabled=busy||isTasayLinkedPortal(current);
+  if(linked){const master=getTasayPortal(snapshot?.state.portals||[]);$('portal-enabled').checked=master?.enabled===true;$('portal-start').value=toLocalInput(master?.startAt);$('portal-end').value=toLocalInput(master?.endAt);}
+  document.querySelectorAll('[data-tasay-linked-control]').forEach(control=>{control.disabled=true;});
 }
 function element(tag, text, className = '') {
   const node = document.createElement(tag);
@@ -489,7 +506,7 @@ async function loadMap() {
 }
 
 for (const phase of ACTIVITY_PHASES) $('activity-phase').add(new Option(phase.label, phase.id));
-for (const work of ACTIVITY_WORKS) $('portal-work').add(new Option(work.name, work.id));
+for (const work of ACTIVITY_WORKS){const option=new Option(work.name,work.id);option.disabled=work.id==='she-love-me';$('portal-work').add(option);}
 $('activity-phase').addEventListener('change', () => {
   const phase=ACTIVITY_PHASES.find(item=>item.id===$('activity-phase').value);
   if(phase)$('phase-guidance').value=phase.guidance;
@@ -522,7 +539,7 @@ $('load-activity-portals').addEventListener('click',()=>mutate(state=>{
   const missing=activityPortals().filter(portal=>!state.portals.some(existing=>existing.id===portal.id));
   if(state.portals.length+missing.length>12)throw new Error('入口数量将超过 12 个。请先删除不再使用的入口，再载入作品点位。');
   state.portals.push(...missing);
-},'三个作品点位已检查并补齐，新点位保持关闭；请在上方选择活动后开启。已有配置保持不变。'));
+},'作品点位已检查并补齐；恋情分析室跟随过拟合恋人，其余新点位保持关闭。已有位置与设置保持不变。'));
 $('audience-search-form').addEventListener('submit',event=>{event.preventDefault();clearTimeout(searchTimer);refreshAudience();});
 $('audience-search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(refreshAudience,250);});
 $('refresh-audience').addEventListener('click',refreshAudience);
