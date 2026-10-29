@@ -50,7 +50,7 @@ const REMOVED_HUD_IDS = new Set([
   'web-phase','web-length','web-chain','web-actions','web-release-hint','web-zip-status',
   'web-maneuvers','web-point-status','web-trick-status','web-launch-meter','web-launch-fill','web-launch-hint',
 ]);
-function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePointer=false,joystickRect={left:24,top:190,width:120,height:120}}={}){
+function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePointer=false,roadSurfaces=[],joystickRect={left:24,top:190,width:120,height:120}}={}){
   const previous={document:globalThis.document,window:globalThis.window};
   const doc=new Element(),win=new Element(),ids=new Map(),html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const fromHTML=(tag,attributes)=>{
@@ -84,7 +84,7 @@ function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePo
   globalThis.document=doc;globalThis.window=win;
   const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(44,16/9,.3,2000),canvas=new Element('canvas');canvas.clientWidth=1280;canvas.clientHeight=720;canvas.rect={left:0,top:0,width:844,height:390};
   const controls=Object.assign(new THREE.EventDispatcher(),{target:new THREE.Vector3(),enabled:true,enableDamping:true,update(){}});
-  const route={length:300,dismountProgress:280,points:[{x:0,y:.16,z:0,progress:0},{x:0,y:.16,z:-300,progress:300}],segments:[{startProgress:0,endProgress:300,width:7.2}]};
+  const route={length:300,dismountProgress:280,roadSurfaces,points:[{x:0,y:.16,z:0,progress:0},{x:0,y:.16,z:-300,progress:300}],segments:[{startProgress:0,endProgress:300,width:7.2}]};
   const rectangle=(x1,z1,x2,z2)=>{const shape=new THREE.Shape();shape.moveTo(x1,-z1);shape.lineTo(x2,-z1);shape.lineTo(x2,-z2);shape.lineTo(x1,-z2);shape.closePath();return {category:'building',feature:{properties:{height:18}},shapes:[shape]};};
   const model={buildings:buildings?[rectangle(8,-160,18,25),rectangle(-18,-160,-8,25)]:[],water:[],bounds:{minX:-200,maxX:200,minZ:-400,maxZ:200}};
   const notices=[];const experience=createPlayerExperience({THREE,scene,camera,controls,canvas,route,simulation:{agents:[]},model,transportSources,onEnter(){},notify:s=>notices.push(s),invalidate(){}});
@@ -587,6 +587,21 @@ test('hoverboard one-click takeoff captures 20 m and landing actually reaches gr
   const x=s.x,z=s.z;f.tick(10);
   assert.equal(s.grounded,true,'landing must not be blocked by Space/hover priority');
   assert.ok(Math.hypot(s.x-x,s.z-z)<.01);assert.equal(s.verticalSpeed,0);
+});
+
+test('hoverboard automatic landing below a viaduct selects the lower floor through the registered control',t=>{
+  const roadSurfaces=[{bridge:true,surfaceY:11.14,polygon:[{x:-20,z:-20},{x:20,z:-20},{x:20,z:20},{x:-20,z:20}]}];
+  const f=fixture(t,{buildings:false,roadSurfaces});f.experience.enter('hoverboard');
+  f.key('KeyQ');f.tick(1.2);f.key('KeyQ','keyup');f.tick(1);
+  const s=f.experience.state,hoverY=s.y;
+  assert.ok(hoverY>1&&hoverY<8,'manual takeoff remains below the bridge');
+  assert.equal(s.grounded,false);
+  f.el('player-land').emit('click');f.tick(.8);
+  assert.ok(s.y<hoverY-.5,'landing starts descending rather than targeting the deck overhead');
+  f.tick(8);
+  assert.equal(s.grounded,true);
+  assert.ok(Math.abs(s.y-.14)<.001,'automatic landing returns to the same lower floor');
+  assert.equal(s.verticalSpeed,0);
 });
 
 test('hoverboard boost is available from keyboard and touch; Space cancels automatic controls',t=>{

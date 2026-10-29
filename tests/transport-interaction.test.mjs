@@ -52,3 +52,43 @@ test('failed pickup of a moving scooter returns the live rider to simulation wit
  const motion=createPlayerMotion({route,world:{buildings:[obstacle]},traffic:()=>sim.agents});const transport=createTransportInteraction({motion,sources:[source]});const before=sim.agents.length;
  assert.equal(transport.mount({item:target,source}).ok,false);assert.equal(sim.agents.length,before);assert.equal(sim.agents.filter(a=>a.id===actor.id).length,1);assert.equal(actor.active,true);assert.notEqual(actor.phase,'borrowed');assert.equal(source.parkedAgents.length,0);source.dispose();
 });
+
+for(const level of [.14,11.14])for(const mode of ['scooter','roadster'])test(`${mode} repeats pickup and exit ${level<1?'under':'on'} a viaduct without changing level or duplicating the parked vehicle`,()=>{
+ const bridge={bridge:true,sourceId:'test/viaduct',surfaceY:11.14,polygon:rect(-10,-100,10,20)};
+ const motion=createPlayerMotion({route:{...route,roadSurfaces:[bridge]}}),vehicle=item(mode,{y:level}),src=source([vehicle]);
+ const transport=createTransportInteraction({motion,sources:[src]});
+ for(let trip=0;trip<3;trip++){
+   assert.equal(motion.placeWalker({x:vehicle.x+2,z:vehicle.z,y:level,yaw:0}).ok,true);
+   assert.equal(transport.interact().ok,true);assert.equal(motion.state.mode,mode);
+   assert.ok(Math.abs(motion.state.y-level)<.02);
+   assert.deepEqual(transport.capture(),{id:vehicle.id,mode});
+   advance(motion,1,{forward:1});advance(motion,1,{brake:true});
+   const parked={x:motion.state.x,y:motion.state.y,z:motion.state.z,yaw:motion.state.yaw};
+   assert.equal(transport.interact().ok,true,'F should allow a grounded exit on the current layer');
+   assert.equal(motion.state.mode,'walk');assert.ok(Math.abs(motion.state.y-level)<.02);
+   assert.ok(Math.hypot(motion.state.x-parked.x,motion.state.z-parked.z)<5);
+   assert.equal(vehicle.taken,false);assert.equal(src.items.length,1);assert.equal(transport.capture(),null);
+   for(const key of ['x','y','z','yaw'])assert.equal(vehicle[key],parked[key],`parked ${key} changed`);
+ }
+ assert.deepEqual(src.calls,{takes:3,releases:3,restores:0});
+});
+
+test('dismount resolves a stale source exit height on the current layer without modifying the stored candidate',()=>{
+ const bridge={bridge:true,sourceId:'test/viaduct',surfaceY:11.14,polygon:rect(-10,-100,10,20)},motion=createPlayerMotion({route:{...route,roadSurfaces:[bridge]}});
+ const vehicle=item('scooter'),src=source([vehicle]),stored={x:4,z:0,y:11.14,yaw:0};
+ src.getDismountCandidates=()=>[stored];
+ const transport=createTransportInteraction({motion,sources:[src]});assert.equal(transport.mount({item:vehicle,source:src}).ok,true);
+ assert.equal(transport.dismount().ok,true);assert.equal(motion.state.x,stored.x);assert.equal(motion.state.z,stored.z);
+ assert.equal(motion.state.y,.14,'an old boarding height must not teleport the player onto the viaduct');
+ assert.equal(stored.y,11.14,'source-owned candidate remains untouched');
+});
+
+test('a boat below a high bridge can cross its water exit corridor to the nearby dry bank',()=>{
+ const bridge={bridge:true,sourceId:'test/viaduct',surfaceY:11.14,polygon:rect(-10,-100,30,100)},water={id:'lake',surfaceY:.022,rings:[rect(10,-100,100,100)]};
+ const motion=createPlayerMotion({route:{...route,roadSurfaces:[bridge]},world:{water:[water]}}),boat=item('boat',{x:12.2,z:0,y:.022,boardingPose:{x:8,z:0,y:.14,yaw:0}}),src=source([boat]);
+ src.getDismountCandidates=i=>[{...i.boardingPose}];const transport=createTransportInteraction({motion,sources:[src]});
+ assert.equal(motion.placeWalker(boat.boardingPose).ok,true);assert.equal(transport.mount().ok,true);
+ assert.equal(motion.state.mode,'boat');assert.equal(motion.state.y,.022);
+ assert.equal(transport.dismount().ok,true);assert.equal(motion.state.mode,'walk');
+ assert.equal(motion.state.x,8);assert.equal(motion.state.y,.14);assert.equal(boat.taken,false);
+});

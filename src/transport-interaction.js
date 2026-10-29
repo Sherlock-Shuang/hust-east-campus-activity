@@ -34,18 +34,21 @@ export function createTransportInteraction({motion,sources=[],notify=()=>{},onCh
   function dismount(){
     const s=motion.state;
     if(!mounted)return {ok:false,reason:'当前没有使用场景载具'};
-    if(!s.grounded||s.mode!=='boat'&&Math.abs(s.y-motion.groundAt(s.x,s.z).height)>.35)return reject('请先在地面降落，再按 F 下车');
+    if(!s.grounded||s.mode!=='boat'&&Math.abs(s.y-motion.groundAt(s.x,s.z,0,s.y).height)>.35)return reject('请先在地面降落，再按 F 下车');
     if(Math.abs(s.speed)>2.4)return reject(s.mode==='spider'?'先停稳，再按 F 脱下战衣':'先按空格减速停稳，再按 F 下车');
     const previous={...poseOf(s),mode:s.mode};
-    const next=candidates(mounted.item,previous,mounted.source).find(p=>{
-      const ground=motion.groundAt(p.x,p.z);
+    // A source may remember an old boarding height. Resolve every nearby exit
+    // from the current level, then carry that level through placement/corridor
+    // checks so an overhead deck cannot capture a ground-level dismount.
+    const next=candidates(mounted.item,previous,mounted.source).map(p=>({...p,y:previous.y})).find(p=>{
+      const ground=motion.groundAt(p.x,p.z,0,previous.y);p.y=ground.height;
       if(!ground.allowed||previous.mode!=='boat'&&Math.abs(ground.height-previous.y)>=.45||!motion.canPlaceMode(p,'walk').ok)return false;
       // Vehicle body at the starting point is ignored by the inventory while
       // mounted; sample the full exit corridor to avoid hopping through fences.
       const steps=Math.ceil(distance(previous,p)/.2);
       for(let i=1;i<steps;i++){
-        const q={x:previous.x+(p.x-previous.x)*i/steps,z:previous.z+(p.z-previous.z)*i/steps,yaw:p.yaw};
-        if(previous.mode==='boat'&&!motion.groundAt(q.x,q.z,.27).allowed)continue;
+        const q={x:previous.x+(p.x-previous.x)*i/steps,y:previous.y+(p.y-previous.y)*i/steps,z:previous.z+(p.z-previous.z)*i/steps,yaw:p.yaw};
+        if(previous.mode==='boat'&&!motion.groundAt(q.x,q.z,.27,q.y).allowed)continue;
         if(!motion.canPlaceMode(q,'walk').ok)return false;
       }return true;
     });

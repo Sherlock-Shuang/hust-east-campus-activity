@@ -394,7 +394,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     const moveX=(Math.cos(heading)*sideways-Math.sin(heading)*forward)/length;
     const moveZ=(-Math.sin(heading)*sideways-Math.cos(heading)*forward)/length;
     motion.step(dt,{forward:board&&landing?0:forward,turn:board&&landing?0:-sideways,vertical,lift:car?Math.max(0,vertical):undefined,brake:brake||landing&&!board,
-      altitudeTarget:board&&landing?motion.groundAt(motion.state.x,motion.state.z).height:board&&liftTarget!==null?liftTarget:undefined,fast:pressed('fast','ShiftLeft','ShiftRight'),
+      altitudeTarget:board&&landing?motion.groundAt(motion.state.x,motion.state.z,0,motion.state.y).height:board&&liftTarget!==null?liftTarget:undefined,fast:pressed('fast','ShiftLeft','ShiftRight'),
       ...(spider||walking?{moveX,moveZ,aimYaw:heading}:{}),
       swing:spider&&(pressed('swing','KeyE')||held.has('mouse-swing')),jump:spider&&pressed('jump','Space'),zip:spider&&pressed('zip'),dive:spider&&pressed('dive','KeyX'),point:spider&&pressed('point'),trick:spider&&pressed('trick','KeyT'),trickX:sideways,trickY:forward,reel:spider&&pressed('reel','KeyQ')});
     webAudio.setActive(spider);if(spider)webAudio.tick(motion.state);
