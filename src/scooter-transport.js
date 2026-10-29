@@ -34,7 +34,7 @@ export function createScooterTransport({parking=[],simulation,onChange=()=>{}}={
     if(!pose||![pose.x,pose.z].every(finite))return null;
     update();let best=null,distance=Math.max(0,maxDistance);
     for(const item of entries.values()){
-      if(item.mounted||Math.abs((pose.y??.14)-item.y)>1.8)continue;
+      if(item.mounted||Math.abs((pose.y??.14)-item.y)>.45)continue;
       const d=Math.hypot(item.x-pose.x,item.z-pose.z);
       if(d<=Math.min(distance,item.interactionRadius)){best=item;distance=d;}
     }return best;

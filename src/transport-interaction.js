@@ -4,17 +4,25 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const poseOf=s=>({x:s.x,y:s.y,z:s.z,yaw:s.yaw});
 const valid=r=>r!==false&&r?.ok!==false;
 const exits={scooter:1.35,roadster:2.1,hoverboard:2.2,helicopter:4.7,spider:1.1,boat:4.1};
+const pickupRanges={scooter:2.8,roadster:3.6,hoverboard:2.8,helicopter:4.6,spider:2.5,boat:3.1};
 
 export function createTransportInteraction({motion,sources=[],notify=()=>{},onChange=()=>{}}){
   let mounted=null;
+  function boardingAccess(item){
+    const at=item.mode==='boat'&&item.boardingPose?item.boardingPose:item,pose=motion.state;
+    if(![at.x,at.y,at.z,item.x,item.y,item.z,item.yaw].every(Number.isFinite))return '载具位置无效，请重新靠近';
+    if(distance(pose,at)>(item.interactionRadius??pickupRanges[item.mode]??2.8))return '请靠近载具后再按 F';
+    if(Math.abs(pose.y-at.y)>.45||item.mode==='boat'&&Math.abs(at.y-item.y)>.6)return '请到载具所在的同一层或可登船岸边';
+    return '';
+  }
   function nearest(){
     if(motion.state.mode!=='walk')return null;
     const pose=motion.state;
-    return sources.map(source=>({source,item:source.nearest(pose)})).filter(hit=>hit.item)
+    return sources.map(source=>({source,item:source.nearest(pose)})).filter(hit=>hit.item&&!boardingAccess(hit.item))
       .sort((a,b)=>distance(pose,a.item.boardingPose||a.item)-distance(pose,b.item.boardingPose||b.item))[0]||null;
   }
   function candidates(item,pose,source){
-    const supplied=source?.getDismountCandidates?.(item,pose)||[];
+    const supplied=[...(source?.getDismountCandidates?.(item,pose)||[])];
     const start=exits[pose.mode]||1.4;
     for(const r of[start,start+1,start+2])for(const angle of[Math.PI/2,-Math.PI/2,Math.PI,0,Math.PI/4,-Math.PI/4,Math.PI*3/4,-Math.PI*3/4]){
       supplied.push({x:pose.x+Math.sin(pose.yaw+angle)*r,z:pose.z+Math.cos(pose.yaw+angle)*r,yaw:pose.yaw});
@@ -22,13 +30,31 @@ export function createTransportInteraction({motion,sources=[],notify=()=>{},onCh
     return supplied.filter(p=>distance(p,pose)<=8);
   }
   function reject(reason){notify(reason);return {ok:false,reason};}
+  function clearPassage(from,to,allowWater=false){
+    const length=distance(from,to),steps=Math.max(1,Math.ceil(length/.15));let previousHeight=from.y;
+    for(let i=1;i<=steps;i++){
+      const t=i/steps,q={x:from.x+(to.x-from.x)*t,y:from.y+(to.y-from.y)*t,z:from.z+(to.z-from.z)*t,yaw:to.yaw};
+      const check=motion.canPlaceMode(q,'walk');
+      // Boarding spans the small water gap to a moored hull. Only the water
+      // restriction is exempt: a fence or wall in that gap still blocks it.
+      if(!check.ok){if(allowWater&&check.reason==='水域边界')continue;return false;}
+      const height=motion.groundAt(q.x,q.z,0,q.y).height;
+      if(Math.abs(height-previousHeight)>.22+length/steps*.25)return false;
+      previousHeight=height;
+    }return true;
+  }
   function mount(hit=nearest()){
     if(mounted||motion.state.mode!=='walk')return reject('请先下车或脱下战衣');
     if(!hit)return {ok:false,reason:'靠近电动车、载具或战衣后按 F'};
-    const {item,source}=hit,original=poseOf(item);
+    const {item,source}=hit,original=poseOf(item),before=poseOf(motion.state),access=boardingAccess(item);
+    if(access)return reject(access);
     if(!valid(source.take(item)))return reject('这辆载具暂时无法使用，请靠近后再试');
+    const rollback=()=>source.restore?source.restore(item):source.release(item,original);
+    // Taking a live scooter hides its own actor before the walking corridor is
+    // checked. Other people, walls and railings remain authoritative blockers.
+    if(boardingAccess(item)||!clearPassage(before,item,item.mode==='boat')){rollback();return reject('人与载具之间有障碍，请从同侧靠近');}
     const placed=motion.placeMode(item,item.mode);
-    if(!placed.ok){source.restore?source.restore(item):source.release(item,original);return reject(placed.reason);}
+    if(!placed.ok){rollback();return reject(placed.reason);}
     mounted={item,source};onChange(item.mode);return {ok:true,mode:item.mode,id:item.id};
   }
   function dismount(){
@@ -43,14 +69,7 @@ export function createTransportInteraction({motion,sources=[],notify=()=>{},onCh
     const next=candidates(mounted.item,previous,mounted.source).map(p=>({...p,y:previous.y})).find(p=>{
       const ground=motion.groundAt(p.x,p.z,0,previous.y);p.y=ground.height;
       if(!ground.allowed||previous.mode!=='boat'&&Math.abs(ground.height-previous.y)>=.45||!motion.canPlaceMode(p,'walk').ok)return false;
-      // Vehicle body at the starting point is ignored by the inventory while
-      // mounted; sample the full exit corridor to avoid hopping through fences.
-      const steps=Math.ceil(distance(previous,p)/.2);
-      for(let i=1;i<steps;i++){
-        const q={x:previous.x+(p.x-previous.x)*i/steps,y:previous.y+(p.y-previous.y)*i/steps,z:previous.z+(p.z-previous.z)*i/steps,yaw:p.yaw};
-        if(previous.mode==='boat'&&!motion.groundAt(q.x,q.z,.27,q.y).allowed)continue;
-        if(!motion.canPlaceMode(q,'walk').ok)return false;
-      }return true;
+      return clearPassage(previous,p,previous.mode==='boat');
     });
     if(!next)return reject(s.mode==='boat'?'请靠近可步行的岸边，再按 F 下船':'旁边暂时没有落脚处，移到空地后再试');
     const placed=motion.placeWalker(next);if(!placed.ok)return reject(placed.reason);

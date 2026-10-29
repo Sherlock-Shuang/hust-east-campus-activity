@@ -37,12 +37,12 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   for(let i=1;i<points.length;i++)if(!finite(points[i].progress))points[i].progress=points[i-1].progress+Math.hypot(points[i].x-points[i-1].x,points[i].z-points[i-1].z);
   const length=route.length??points.at(-1).progress,buildings=polygonRecords(world.buildings),water=polygonRecords(world.water),bounds=world.bounds;
   const bridgeSurfaceCells=new Map(),bridgeSolidCells=new Map(),walkSurfaceCells=new Map(),barrierCells=new Map(),surfaceCell=24;
-  const bridgeSurfaces=(route.roadSurfaces||[]).filter(s=>s.bridge&&s.polygon?.length>=3&&finite(s.surfaceY));
+  const bridgeSurfaces=[...(route.roadSurfaces||[]),...(world.walkSurfaces||[]).filter(s=>s.bridge)].filter(s=>s.bridge&&s.polygon?.length>=3&&finite(s.surfaceY));
   // Elevated decks are slabs, not columns extending to the ground. Keep the
   // source height and the same thickness as the rendered bridge ribbon.
   const bridgeSolids=bridgeSurfaces.filter(s=>s.surfaceY>BASE_Y+.35).map(s=>({...s,id:`bridge-deck:${s.sourceId??''}`,label:'桥面净空不足',minHeight:s.surfaceY-(s.deckDepth??.75),height:s.surfaceY,rings:[s.polygon]}));
   const barriers=polygonRecords([...(world.barriers||[]).filter(b=>b.polygon?.length>=3&&finite(b.height)&&b.height>(b.minHeight??0)).map(b=>({...b,minHeight:b.minHeight??0,rings:[b.polygon]})),...bridgeSolids]);
-  const walkSurfaces=(world.walkSurfaces||[]).filter(s=>s.polygon?.length>=3&&finite(s.surfaceY));
+  const walkSurfaces=(world.walkSurfaces||[]).filter(s=>!s.bridge&&s.polygon?.length>=3&&finite(s.surfaceY));
   function addIndexed(cells,record,polygon){
     const b=record.bounds??{minX:Math.min(...polygon.map(p=>p.x)),maxX:Math.max(...polygon.map(p=>p.x)),minZ:Math.min(...polygon.map(p=>p.z)),maxZ:Math.max(...polygon.map(p=>p.z))};
     for(let x=Math.floor(b.minX/surfaceCell);x<=Math.floor(b.maxX/surfaceCell);x++)for(let z=Math.floor(b.minZ/surfaceCell);z<=Math.floor(b.maxZ/surfaceCell);z++){const key=`${x}/${z}`;if(!cells.has(key))cells.set(key,[]);cells.get(key).push(record);}
@@ -193,7 +193,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   }
   function bodySamples(x,z,yaw,mode,pose=state){
     if(mode!=='hoverboard')return standardBodySamples(x,z,yaw,mode);
-    const pitch=state.mode===mode?pose.pitch:0,lean=state.mode===mode?pose.lean:0,cp=Math.cos(pitch),sp=Math.sin(pitch),cl=Math.cos(lean),sl=Math.sin(lean),cy=Math.cos(yaw),sy=Math.sin(yaw);
+    const pitch=state.mode===mode||pose.mode===mode?pose.pitch:0,lean=state.mode===mode||pose.mode===mode?pose.lean:0,cp=Math.cos(pitch),sp=Math.sin(pitch),cl=Math.cos(lean),sl=Math.sin(lean),cy=Math.cos(yaw),sy=Math.sin(yaw);
     function part(lx,ly,lz,radius,below,above){const xx=lx*cl-ly*sl,yy=lx*sl+ly*cl,ry=yy*cp-lz*sp,rz=yy*sp+lz*cp;return{x:x+xx*cy+rz*sy,z:z-xx*sy+rz*cy,radius,minY:ry-below,maxY:ry+above};}
     const rim=.29*Math.hypot(sl*cp,sp),rotors=[[-1.13,-.43],[-1.13,.43],[1.13,-.43],[1.13,.43],...[-.55,0,.55].flatMap(lx=>[[lx,-.73],[lx,.73]])];
     // Low rotor disks/struts and the standing person's tilted capsule have
@@ -205,7 +205,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       // Also cover the upright torso/head throughout that compensation.
       {x,z,radius:.45,minY:1.0,maxY:1.9},{x,z,radius:.25,minY:1.75,maxY:2.2}];
   }
-  function hoverboardContact(){const cy=Math.cos(state.yaw),sy=Math.sin(state.yaw),feet=[];for(const x of[-HOVERBOARD.footX,HOVERBOARD.footX])for(const z of[-HOVERBOARD.footZ,HOVERBOARD.footZ])feet.push({x,z,h:contactAt(state.x+x*cy+z*sy,state.z-x*sy+z*cy).height});
+  function hoverboardContact(x=state.x,z=state.z,yaw=state.yaw,referenceY=state.y){const cy=Math.cos(yaw),sy=Math.sin(yaw),feet=[];for(const lx of[-HOVERBOARD.footX,HOVERBOARD.footX])for(const lz of[-HOVERBOARD.footZ,HOVERBOARD.footZ])feet.push({x:lx,z:lz,h:contactAt(x+lx*cy+lz*sy,z-lx*sy+lz*cy,0,referenceY).height});
     const avg=items=>items.reduce((sum,p)=>sum+p.h,0)/items.length;return{y:avg(feet),pitch:Math.atan2(avg(feet.filter(p=>p.z<0))-avg(feet.filter(p=>p.z>0)),2*HOVERBOARD.footZ),lean:Math.atan2(avg(feet.filter(p=>p.x>0))-avg(feet.filter(p=>p.x<0)),2*HOVERBOARD.footX)};
   }
   function hoverboardLandingFloor(){const cp=Math.cos(state.pitch),sp=Math.sin(state.pitch),cl=Math.cos(state.lean),sl=Math.sin(state.lean),cy=Math.cos(state.yaw),sy=Math.sin(state.yaw);let floor=-Infinity;
@@ -244,6 +244,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     return walkHeight(x,z,bridgeSupport(x,z,0,referenceY)?.surfaceY??BASE_Y);
   };
   groundAt.solidsInBounds=(minX,minZ,maxX,maxZ)=>indexedIn(bridgeSolidCells,minX,minZ,maxX,maxZ);
+  groundAt.obstaclesInBounds=(minX,minZ,maxX,maxZ)=>indexedIn(barrierCells,minX,minZ,maxX,maxZ);
   const contactAt=(x,z,radius=0,referenceY=state.y)=>groundAt(x,z,radius,referenceY);
   groundAt.maxHeightInBounds=(minX,minZ,maxX,maxZ)=>{
     if(!levelRoute)return maximumGroundHeight;
@@ -266,9 +267,11 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   function obstacleAt(x,z,yaw,mode,y=state.y,previous=null,grounded=state.grounded,bodyPose=state){
     const bodies=bodySamples(x,z,yaw,mode,bodyPose),ground=contactAt(x,z,mode==='spider'?.37:mode==='walk'?.26:mode==='scooter'?.42:mode==='roadster'?1.1:mode==='hoverboard'?1.42:0,y);
     if(bodies.some(outside))return'校园边界';
-    const barrierY=grounded&&mode!=='helicopter'&&mode!=='boat'?Math.max(y,ground.height):y;
+    // Ground contact may raise wheels or feet before the centre crosses a
+    // step. Check the resulting support height against overhead structures.
+    const barrierY=grounded&&mode!=='helicopter'&&mode!=='boat'?Math.max(y,ground.height,groundContactHeight(x,z,yaw,mode,y)):y;
     if(barriers.length)for(const p of bodies){const hit=barrierAt({...p,y:barrierY},p.radius,p.minY??0,p.maxY??(mode==='helicopter'?3.4:mode==='roadster'?1.7:2));if(hit)return hit.label||'围栏边界';}
-    if(bodies.some(p=>buildings.some(b=>y+(p.minY??0)<(b.height??18)+.5&&y+(p.maxY??(mode==='helicopter'?3.4:mode==='roadster'?1.7:2))>(b.minHeight??0)&&overlapsPolygon(p,p.radius,b))))return'建筑边界';
+    if(bodies.some(p=>buildings.some(b=>barrierY+(p.minY??0)<(b.height??18)+.5&&barrierY+(p.maxY??(mode==='helicopter'?3.4:mode==='roadster'?1.7:2))>(b.minHeight??0)&&overlapsPolygon(p,p.radius,b))))return'建筑边界';
     if(mode==='boat'){
       if(bodies.some(p=>!waterAt(p.x,p.z,p.radius)))return'请在水域内航行';
       if(bodies.some(p=>[[0,0],[p.radius,0],[-p.radius,0],[0,p.radius],[0,-p.radius]].some(([dx,dz])=>{const g=groundAt(p.x+dx,p.z+dz);return g.onBridge&&g.height>y-.4&&g.height<y+2.8;})))return'桥下净空不足';
@@ -312,16 +315,21 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     }
     return false;
   }
-  function roadsterContact(){const half=ROADSTER.wheelbase/2,f=contactAt(state.x-Math.sin(state.yaw)*half,state.z-Math.cos(state.yaw)*half),r=contactAt(state.x+Math.sin(state.yaw)*half,state.z+Math.cos(state.yaw)*half);return{y:(f.height+r.height)/2,pitch:Math.atan2(f.height-r.height,ROADSTER.wheelbase)};}
+  function roadsterContact(x=state.x,z=state.z,yaw=state.yaw,referenceY=state.y){const half=ROADSTER.wheelbase/2,f=contactAt(x-Math.sin(yaw)*half,z-Math.cos(yaw)*half,0,referenceY),r=contactAt(x+Math.sin(yaw)*half,z+Math.cos(yaw)*half,0,referenceY);return{y:(f.height+r.height)/2,pitch:Math.atan2(f.height-r.height,ROADSTER.wheelbase)};}
+  function scooterContact(x=state.x,z=state.z,yaw=state.yaw,referenceY=state.y,lean=state.lean){
+    const f=contactAt(x-Math.sin(yaw)*.59,z-Math.cos(yaw)*.59,0,referenceY),r=contactAt(x+Math.sin(yaw)*.56,z+Math.cos(yaw)*.56,0,referenceY),pitch=Math.atan2(f.height-r.height,1.15),support=.208*Math.cos(lean)+.046;
+    return{y:(f.height*.56+r.height*.59)/1.15+(support-.255*Math.cos(lean))/Math.cos(pitch),pitch};
+  }
+  function groundContactHeight(x,z,yaw,mode,referenceY,lean=state.lean){
+    return mode==='roadster'?roadsterContact(x,z,yaw,referenceY).y:mode==='hoverboard'?hoverboardContact(x,z,yaw,referenceY).y:mode==='scooter'?scooterContact(x,z,yaw,referenceY,lean).y:contactAt(x,z,0,referenceY).height;
+  }
   function contactPose(){const ground=contactAt(state.x,state.z);state.progress=ground.progress;
     if(state.mode==='boat'){const water=waterAt(state.x,state.z);if(water)state.y=water.height;state.grounded=true;state.verticalSpeed=0;return;}
     if(state.mode==='helicopter'||state.mode==='roadster'&&!state.grounded||state.mode==='hoverboard'&&!state.grounded)return;
     if(state.mode==='hoverboard'){const contact=hoverboardContact();state.y=contact.y;state.pitch=contact.pitch;state.lean=contact.lean;state.grounded=true;return;}
     if(state.mode==='roadster'){const contact=roadsterContact();state.y=contact.y;state.pitch=contact.pitch;state.lean=0;state.grounded=true;return;}
-    const f=contactAt(state.x-Math.sin(state.yaw)*.59,state.z-Math.cos(state.yaw)*.59),r=contactAt(state.x+Math.sin(state.yaw)*.56,state.z+Math.cos(state.yaw)*.56);
-    state.pitch=state.mode==='scooter'?Math.atan2(f.height-r.height,1.15):0;
-    const support=.208*Math.cos(state.lean)+.046;
-    state.y=state.mode==='scooter'?(f.height*.56+r.height*.59)/1.15+(support-.255*Math.cos(state.lean))/Math.cos(state.pitch):ground.height;state.grounded=true;
+    if(state.mode==='scooter'){const contact=scooterContact();state.pitch=contact.pitch;state.y=contact.y;}
+    else{state.pitch=0;state.y=ground.height;}state.grounded=true;
   }
   function roadsterLandingFloor(){let floor=-Infinity;const cy=Math.cos(state.yaw),sy=Math.sin(state.yaw),cp=Math.cos(state.pitch),sp=Math.sin(state.pitch),cl=Math.cos(state.lean),sl=Math.sin(state.lean);
     for(const x of[-ROADSTER.halfTrack,ROADSTER.halfTrack])for(const z of[-ROADSTER.wheelbase/2,ROADSTER.wheelbase/2]){
@@ -331,7 +339,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     }return floor;
   }
   function trafficClear(point,mode,{ignoreTrafficId}={}){if(mode==='helicopter'||mode==='boat')return true;const actors=typeof traffic==='function'?traffic():traffic;if(!Array.isArray(actors))return true;
-    const bodies=bodySamples(point.x,point.z,point.yaw,mode);
+    const bodies=bodySamples(point.x,point.z,point.yaw,mode,finite(point.pitch)&&finite(point.lean)?point:state);
     for(const actor of actors){if(ignoreTrafficId!==undefined&&actor.id===ignoreTrafficId||actor.active===false||!finite(actor.x)||!finite(actor.z)||(mode==='roadster'||mode==='hoverboard'?point.y>=(actor.y??BASE_Y)+1.9||point.y+(mode==='roadster'?1.7:2.4)<=(actor.y??BASE_Y):Math.abs((actor.y??BASE_Y)-point.y)>1.6)||Math.hypot(actor.x-point.x,actor.z-point.z)>(mode==='roadster'?3.7:3.4))continue;
       const kind=actor.type??actor.kind,radius=kind==='walk'?.27:.43,half=kind==='walk'?0:.48,yaw=actor.yaw??0,ax=Math.sin(yaw)*half,az=Math.cos(yaw)*half,front={x:actor.x-ax,z:actor.z-az},rear={x:actor.x+ax,z:actor.z+az};
       if(bodies.some(p=>distanceToSegment(p,front,rear)<p.radius+radius+.1))return false;
@@ -373,6 +381,54 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     Object.assign(state,{mode,x:point.x,y:point.y,z:point.z,yaw:point.yaw,speed:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,blockedReason:'',progress:ground.progress,verticalSpeed:0,elapsed:0,braking:false});
     verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;
     contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();
+    return{ok:true};
+  }
+  // Activity returns restore an actual pose, not a map placement. Validate
+  // before touching either public state or private integrator/controller data.
+  function canRestorePose(saved,mode=state.mode,options={}){
+    if(!MODES.has(mode)||!saved||!['x','y','z','yaw'].every(k=>finite(saved[k])))return{ok:false,reason:'无效的返回位置'};
+    for(const key of ['vx','vz','speed','verticalSpeed','pitch','lean','rotorPower'])if(saved[key]!==undefined&&!finite(saved[key]))return{ok:false,reason:'无效的返回运动状态'};
+    if(saved.altitudeTarget!==undefined&&saved.altitudeTarget!==null&&!finite(saved.altitudeTarget))return{ok:false,reason:'无效的返回飞行高度'};
+    const maximum=mode==='roadster'?ROADSTER.ceiling:mode==='hoverboard'?HOVERBOARD.ceiling:mode==='helicopter'?120:Infinity;
+    if(saved.y>BASE_Y+maximum+.01)return{ok:false,reason:'返回位置超出飞行高度范围'};
+    const grounded=saved.grounded!==false;
+    if(!grounded&&!['spider','roadster','hoverboard','helicopter'].includes(mode))return{ok:false,reason:'该移动方式需要地面落脚点'};
+    const pose={x:saved.x,y:saved.y,z:saved.z,yaw:saved.yaw,mode,grounded,
+      vx:saved.vx??0,vz:saved.vz??0,speed:saved.speed??0,verticalSpeed:saved.verticalSpeed??0,
+      pitch:saved.pitch??0,lean:saved.lean??0,rotorPower:saved.rotorPower??(grounded?0:mode==='hoverboard'?.72:mode==='helicopter'?1:0),
+      altitudeTarget:saved.altitudeTarget??null,flightEnabled:mode==='roadster'&&saved.flightEnabled===true};
+    if(Math.max(Math.abs(pose.vx),Math.abs(pose.vz),Math.abs(pose.speed),Math.abs(pose.verticalSpeed))>100||Math.abs(pose.pitch)>Math.PI||Math.abs(pose.lean)>Math.PI||pose.rotorPower<0||pose.rotorPower>1)return{ok:false,reason:'返回运动状态超出有效范围'};
+    const bodies=bodySamples(pose.x,pose.z,pose.yaw,mode,pose),height=mode==='helicopter'?3.4:mode==='roadster'?1.7:mode==='spider'?2.08:2;
+    const ground=contactAt(pose.x,pose.z,0,pose.y),bodyY=grounded&&mode!=='boat'?Math.max(pose.y,ground.height):pose.y;
+    if(bodies.some(outside))return{ok:false,reason:'返回位置超出校园边界'};
+    for(const body of bodies){
+      const minY=body.minY??0,maxY=body.maxY??height;
+      if(barrierAt({...body,y:bodyY},body.radius,minY,maxY))return{ok:false,reason:'返回位置被设施占用'};
+      if(buildings.some(b=>bodyY+minY<(b.height??18)-.012&&bodyY+maxY>(b.minHeight??0)+.012&&overlapsPolygon(body,body.radius,b)))return{ok:false,reason:'返回位置被建筑占用'};
+    }
+    if(mode==='boat'){
+      const water=waterAt(pose.x,pose.z);
+      if(!water||Math.abs(pose.y-water.height)>.05||bodies.some(p=>!waterAt(p.x,p.z,p.radius)))return{ok:false,reason:'返回位置不在可航行水面'};
+    }else{
+      const support=mode==='spider'?spider.supportAt(pose):{height:groundContactHeight(pose.x,pose.z,pose.yaw,mode,pose.y,pose.lean),allowed:ground.allowed};
+      if(pose.y<ground.height-.05||grounded&&(!support.allowed||Math.abs(pose.y-support.height)>.05))return{ok:false,reason:'返回位置的落脚面已改变'};
+      if(grounded&&support.roof==null&&bodies.some(p=>!contactAt(p.x,p.z,p.radius,pose.y).allowed))return{ok:false,reason:'返回位置在水域边缘'};
+      if(!grounded&&!ground.allowed&&pose.y<ground.height+(mode==='spider'?.1:2.48))return{ok:false,reason:'返回位置过于接近水面'};
+    }
+    if(!trafficClear(pose,mode,options))return{ok:false,reason:'返回位置有人车，请稍后再试'};
+    return{ok:true,pose};
+  }
+  function restorePose(saved,mode=state.mode,options={}){
+    const check=canRestorePose(saved,mode,options);if(!check.ok)return check;
+    Object.assign(state,check.pose,{distance:0,elapsed:0,braking:false,blockedReason:'',steeringAngle:0,jetPower:0,forwardJetPower:0});
+    accumulator=0;previousBodyPose=null;jumpPending=false;zipPending=false;pointPending=false;
+    resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();
+    // Resets clear transient input and web state. Saved motion is assigned last
+    // so the next fixed step starts from the returned velocity, not an old trip.
+    Object.assign(state,check.pose);verticalSpeed=check.pose.verticalSpeed;
+    state.progress=contactAt(state.x,state.z).progress;state.acceleration=0;state.yawRate=0;
+    if(mode==='spider')state.roofIndex=state.grounded?spider.supportAt(state).roof:null;
+    state.flightPhase=mode==='boat'?'water':state.grounded?'ground':mode==='roadster'?(verticalSpeed<-.08?'descending':verticalSpeed>.08?'ascending':'coasting'):mode==='hoverboard'?'hover':state.flightPhase;
     return{ok:true};
   }
   function placeWalker(pose){return placeMode(pose,'walk');}
@@ -527,5 +583,5 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   const spider=createWebSwingMotion({state,world:{buildings,water,bounds,...(barriers.length?{barrierAt,barrierSweep,barrierVertical}:{})},groundAt,traffic,guideAt:sample});
   function clearActionInputs(){jumpPending=false;zipPending=false;pointPending=false;spider.clearActionInputs();}
   function suspend(){state.speed=0;verticalSpeed=0;state.verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;resetRoadsterControls();resetBoardControls();resetGroundControls();if((state.mode==='roadster'||state.mode==='hoverboard')&&!state.grounded){state.altitudeTarget=state.mode==='roadster'?null:state.y;state.pitch=0;state.lean=0;state.flightPhase=state.mode==='roadster'?'coasting':'hover';if(state.mode==='roadster')state.jetPower=0;}spider.suspend();}
-  reset();return{state,reset,placeWalker,placeMode,canPlaceMode,setMode,setFlightEnabled,step,suspend,clearActionInputs,groundAt,waterAt};
+  reset();return{state,reset,placeWalker,placeMode,canPlaceMode,canRestorePose,restorePose,setMode,setFlightEnabled,step,suspend,clearActionInputs,groundAt,waterAt};
 }

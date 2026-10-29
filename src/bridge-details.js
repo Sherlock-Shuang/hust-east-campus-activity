@@ -1,6 +1,8 @@
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {applyWorldUV} from './surface-materials.js';
 import {YUDAI_BRIDGE_PROFILE} from './bridge-profile.js';
+import {bridgeRailBarrier} from './bridge-infrastructure.js';
+import {streetFootprint} from './street-clearance.js';
 
 /** The main deck is rendered by campus-3d; this builds the two source-aligned
  * sidewalks as parts of that same broad bridge, with rails only at the river
@@ -9,6 +11,7 @@ import {YUDAI_BRIDGE_PROFILE} from './bridge-profile.js';
 export function createBridgeDetails(THREE,{points,width,surfaceY,surfaces,sourceId,sidewalks=[]}){
   if(points?.length<2||!Number.isFinite(width)||width<=0||!Number.isFinite(surfaceY))throw new TypeError('Bridge source points, width and surfaceY are required.');
   const profile=YUDAI_BRIDGE_PROFILE,group=new THREE.Group();
+  const infrastructure={barriers:[],walkSurfaces:[]};
   group.name='喻岱桥 · 宽桥断面、连续步道与玻璃栏杆';
   group.userData={component:'photo-informed-bridge-details',sourceId,coordinateSystem:'LOCAL_ENU',units:'metres',
     centrelineEvidence:'unaltered source main and sidewalk ways',dimensionsEvidence:'photo-and-source-spacing-estimates',
@@ -50,6 +53,8 @@ export function createBridgeDetails(THREE,{points,width,surfaceY,surfaces,source
       const p=path.pose(e.start+e.length/2);
       box('bridge-sidewalk-slab',e.length,.45,walkWidth,concrete,{...p,y:surfaceY-.125},e.yaw);
       box('bridge-weathered-wood-deck',e.length,.045,walkWidth-.12,wood,{...p,y:walkY-.0225},e.yaw);
+      infrastructure.walkSurfaces.push({id:`${sourceId}:walkway:${walkwayRecords.length}:${infrastructure.walkSurfaces.length}`,sourceId:supplied.sourceId??sourceId,
+        polygon:streetFootprint(p.x,p.z,e.length,walkWidth,e.yaw),surfaceY:walkY,bridge:true,geometryEvidence:'same rectangle and top as the rendered bridge sidewalk slab'});
       const inner=path.pose(e.start+e.length/2,-outerSign*(walkWidth/2-.08));
       box('bridge-inner-dropped-kerb',e.length,.09,.16,edgeStone,{...inner,y:surfaceY+.045},e.yaw);
       const rail=path.pose(e.start+e.length/2,outer);
@@ -71,8 +76,12 @@ export function createBridgeDetails(THREE,{points,width,surfaceY,surfaces,source
         if(Math.abs(up)<.00001)continue;
         for(const v of up>0?[a,b,c]:[a,c,b])shoulderVertices.push(v.x,surfaceY+.003,v.z);
       }
-      if(shoulderVertices.length){const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.Float32BufferAttribute(shoulderVertices,3));sg.computeVertexNormals();bake('bridge-continuous-shoulders',sg,concrete);}
+      if(shoulderVertices.length){const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.Float32BufferAttribute(shoulderVertices,3));sg.computeVertexNormals();bake('bridge-continuous-shoulders',sg,concrete);
+        infrastructure.walkSurfaces.push({id:`${sourceId}:shoulder:${infrastructure.walkSurfaces.length}`,sourceId,polygon:[shoulder[0],shoulder[2],shoulder[3],shoulder[1]],surfaceY:surfaceY+.003,bridge:true,geometryEvidence:'same triangles as the rendered continuous bridge shoulder'});}
       const ar=path.pose(e.start,outer),br=path.pose(e.start+e.length,outer);railSegments.push({a:ar,b:br});
+      const railId=`${sourceId}:outer-rail:${walkwayRecords.length}:${railSegments.length}`;
+      infrastructure.barriers.push(bridgeRailBarrier({id:railId,sourceId,a:ar,b:br,width:.09,minHeight:walkY+.177,height:walkY+profile.railingHeight+.045}),
+        bridgeRailBarrier({id:`${railId}:base`,sourceId,a:ar,b:br,width:.22,minHeight:walkY-.105,height:walkY+.065}));
       tube('bridge-stainless-handrail',.045,steel,{...ar,y:walkY+profile.railingHeight},{...br,y:walkY+profile.railingHeight});
       tube('bridge-stainless-bottom-rail',.023,steel,{...ar,y:walkY+.20},{...br,y:walkY+.20});
       // The visible side elevation has three shallow scalloped lower edges.
@@ -99,6 +108,6 @@ export function createBridgeDetails(THREE,{points,width,surfaceY,surfaces,source
     mesh.userData={...group.userData,detailPart:key};group.add(mesh);
   }
   let disposed=false;
-  return{group,counts:{posts,glassPanels,planks,drains:0,expansionJoints:joints.length,supportBents:0,sidewalks:paths.length},joints,length,walkways:walkwayRecords,
+  return{group,infrastructure,counts:{posts,glassPanels,planks,drains:0,expansionJoints:joints.length,supportBents:0,sidewalks:paths.length},joints,length,walkways:walkwayRecords,
     dispose(){if(disposed)return;disposed=true;group.removeFromParent();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());group.clear();}};
 }

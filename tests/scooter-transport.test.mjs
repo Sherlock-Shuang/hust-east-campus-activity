@@ -24,3 +24,8 @@ test('ended riders cease being candidates while mounted and parked returns remai
  const sim=simulation(),source=createScooterTransport({simulation:sim}),i=source.items.find(v=>v.origin==='traffic');
  i.record.active=false;source.update();assert.equal(source.items.some(v=>v.id===i.id),false);assert.equal(source.take(i).ok,false);source.dispose();
 });
+
+test('nearby scooter selection cannot reach a separate raised platform',()=>{
+ const source=createScooterTransport({parking:[{id:17,x:1,z:0,y:1.281,yaw:0}],simulation:{agents:[]}});
+ try{assert.equal(source.nearest({x:1,z:0,y:.14}),null);assert.equal(source.nearest({x:1,z:0,y:1.26}),source.items[0]);}finally{source.dispose();}
+});

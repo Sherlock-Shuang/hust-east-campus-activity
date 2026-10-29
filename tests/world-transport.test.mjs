@@ -49,3 +49,25 @@ test('full live campus keeps exact counts clear of parked scooters and batches r
   const boards=layer.items.filter(i=>i.mode==='hoverboard');assert.equal(boards[0].visual.children[0].geometry,boards[1].visual.children[0].geometry,'static copies share baked geometry');
  }finally{layer.dispose();playerModels.dispose();commute.dispose();campus.dispose();model.dispose();}
 });
+
+test('activity props use the reachable ground level rather than an overhead bridge top',()=>{
+ const {model,route,motion}=fixture();try{
+  const original=planWorldTransport({model,route,groundAt:motion.groundAt,canPlaceMode:motion.canPlaceMode}),at=original.items.find(i=>i.id==='world-roadster-1');
+  const deck={sourceId:'test/overhead-deck',bridge:true,surfaceY:11.14,polygon:[{x:at.x-12,z:at.z-12},{x:at.x+12,z:at.z-12},{x:at.x+12,z:at.z+12},{x:at.x-12,z:at.z+12}]};
+  const layered=createPlayerMotion({route:{...route,roadSurfaces:[...route.roadSurfaces,deck]},world:createPlayerWorld(model)});
+  const plan=planWorldTransport({model,route,groundAt:layered.groundAt,canPlaceMode:layered.canPlaceMode}),car=plan.items.find(i=>i.id==='world-roadster-1');
+  assert.equal(car.x,at.x);assert.equal(car.z,at.z);assert.equal(car.y,.14,'an overhead road must not lift a roadside game prop onto its deck');
+  assert.deepEqual(plan.counts,original.counts);
+ }finally{model.dispose();}
+});
+
+test('world prop selection does not offer an item on a separate raised level',()=>{
+ const {scene,model,route,motion}=fixture(),playerModels=mockModels(),layer=createWorldTransport({THREE,scene,model,route,groundAt:motion.groundAt,playerModels});
+ try{const item=layer.items.find(i=>i.mode==='spider'),ground=item.y;layer.take(item);layer.release(item,{...item,y:ground+1.12});assert.notEqual(layer.nearest({...item,y:ground}),item);assert.equal(layer.nearest(item),item);}finally{layer.dispose();model.dispose();playerModels.geometry.dispose();playerModels.material.dispose();}
+});
+
+test('both real lake docks remain usable for normal boarding and local disembarking',async()=>{
+ const {createTransportInteraction}=await import('../src/transport-interaction.js');
+ const {scene,model,route,motion}=fixture(),playerModels=mockModels(),layer=createWorldTransport({THREE,scene,model,route,groundAt:motion.groundAt,canPlaceMode:motion.canPlaceMode,playerModels});
+ try{for(const boat of layer.items.filter(i=>i.mode==='boat')){assert.equal(motion.placeWalker(boat.boardingPose).ok,true);const transport=createTransportInteraction({motion,sources:[layer]});assert.equal(transport.mount().ok,true,boat.id+' real shoreline should board');assert.equal(motion.state.mode,'boat');assert.equal(transport.dismount().ok,true,boat.id+' real shoreline should exit');assert.equal(motion.state.mode,'walk');assert.equal(boat.taken,false);}}finally{layer.dispose();model.dispose();playerModels.geometry.dispose();playerModels.material.dispose();}
+});

@@ -23,7 +23,7 @@ test('mount rejection restores a claimed object and leaves the walking player in
  const transport=createTransportInteraction({motion,sources:[src]});const before={...motion.state};assert.equal(transport.mount({item:vehicle,source:src}).ok,false);assert.equal(vehicle.taken,false);assert.equal(transport.mounted,null);assert.equal(motion.state.mode,'walk');assert.equal(motion.state.x,before.x);assert.equal(motion.state.z,before.z);assert.equal(src.calls.restores,1,'rollback restores rather than parks a borrowed live actor');
 });
 test('airborne and fast vehicles cannot be abandoned, then permit a grounded stopped exit',()=>{
- const motion=createPlayerMotion({route}),vehicle=item('helicopter',{x:7}),src=source([vehicle]);const transport=createTransportInteraction({motion,sources:[src]});transport.mount({item:vehicle,source:src});
+ const motion=createPlayerMotion({route}),vehicle=item('helicopter',{x:7}),src=source([vehicle]);const transport=createTransportInteraction({motion,sources:[src]});motion.placeWalker({x:vehicle.x-3,z:vehicle.z,y:.14,yaw:0});transport.mount({item:vehicle,source:src});
  advance(motion,3,{vertical:1});assert.equal(motion.state.grounded,false);assert.equal(transport.dismount().ok,false);assert.equal(vehicle.taken,true);
  advance(motion,7,{vertical:-1,brake:true});assert.equal(motion.state.grounded,true);assert.equal(transport.dismount().ok,true);
  const car=item('roadster',{x:motion.state.x,z:motion.state.z});src.items.push(car);transport.mount({item:car,source:src});advance(motion,2,{forward:1});assert.ok(motion.state.speed>2.4);assert.equal(transport.dismount().ok,false);advance(motion,2,{brake:true});assert.equal(transport.dismount().ok,true);
@@ -91,4 +91,43 @@ test('a boat below a high bridge can cross its water exit corridor to the nearby
  assert.equal(motion.state.mode,'boat');assert.equal(motion.state.y,.022);
  assert.equal(transport.dismount().ok,true);assert.equal(motion.state.mode,'walk');
  assert.equal(motion.state.x,8);assert.equal(motion.state.y,.14);assert.equal(boat.taken,false);
+});
+
+test('pickup cannot teleport a walking player through a thin fence to a reachable-looking scooter',()=>{
+ const motion=createPlayerMotion({route,world:{barriers:[{label:'测试围栏',height:2.4,minHeight:0,polygon:rect(.9,-10,1.05,10)}]}});
+ const scooter=item('scooter',{x:2.5,interactionRadius:2.8}),src=source([scooter]),transport=createTransportInteraction({motion,sources:[src]}),before={...motion.state};
+ assert.equal(transport.interact().ok,false,'a clear target is not a clear boarding path');
+ assert.equal(motion.state.mode,'walk');assert.equal(motion.state.x,before.x);assert.equal(motion.state.y,before.y);assert.equal(scooter.taken,false);assert.equal(transport.mounted,null);
+});
+
+test('pickup rejects a raised platform vehicle instead of teleporting across a one-metre height difference',()=>{
+ const motion=createPlayerMotion({route,world:{walkSurfaces:[{surfaceY:1.26,polygon:rect(1,-10,6,10)}]}}),vehicle=item('scooter',{x:2,y:1.26}),src=source([vehicle]),transport=createTransportInteraction({motion,sources:[src]});
+ assert.equal(transport.interact().ok,false);assert.equal(motion.state.mode,'walk');assert.equal(motion.state.y,.14);assert.equal(vehicle.taken,false);
+ assert.equal(motion.placeWalker({x:3.5,y:1.26,z:0,yaw:0}).ok,true);
+ assert.equal(transport.interact().ok,true,'the same scooter remains usable from its actual platform');assert.ok(Math.abs(motion.state.y-1.26)<.02);
+});
+
+test('boat boarding rejects a bank fence instead of skipping directly from shore to the hull',()=>{
+ const water={id:'lake',surfaceY:.022,rings:[rect(10,-100,100,100)]},barrier={label:'岸边护栏',height:2.4,minHeight:0,polygon:rect(9.1,-100,9.3,100)};
+ const motion=createPlayerMotion({route,world:{water:[water],barriers:[barrier]}}),boat=item('boat',{x:12.2,y:.022,boardingPose:{x:8,y:.14,z:0,yaw:0}}),src=source([boat]),transport=createTransportInteraction({motion,sources:[src]});
+ assert.equal(motion.placeWalker(boat.boardingPose).ok,true);assert.equal(transport.mount().ok,false);assert.equal(motion.state.mode,'walk');assert.equal(boat.taken,false);
+});
+
+test('a water exit corridor does not ignore fences when disembarking a boat',()=>{
+ const water={id:'lake',surfaceY:.022,rings:[rect(10,-100,100,100)]},barrier={label:'水边隔栏',height:2.4,minHeight:0,polygon:rect(10.4,-100,10.6,100)};
+ const motion=createPlayerMotion({route,world:{water:[water],barriers:[barrier]}}),boat=item('boat',{x:12.2,y:.022,boardingPose:{x:8,y:.14,z:0,yaw:0}}),src=source([boat]),transport=createTransportInteraction({motion,sources:[src]});
+ assert.equal(motion.placeMode(boat,'boat').ok,true);assert.equal(transport.restore({id:boat.id,mode:'boat'}),true);
+ assert.equal(transport.dismount().ok,false,'water permission does not remove a solid fence from the exit path');
+ assert.equal(motion.state.mode,'boat');assert.equal(boat.taken,true);assert.equal(src.calls.releases,0);
+});
+
+test('an old explicit pickup target cannot be claimed after the player walks away',()=>{
+ const motion=createPlayerMotion({route}),vehicle=item('scooter',{interactionRadius:2.8}),src=source([vehicle]),transport=createTransportInteraction({motion,sources:[src]}),hit=transport.nearest();assert.ok(hit);
+ assert.equal(motion.placeWalker({x:20,z:0,y:.14,yaw:0}).ok,true);
+ assert.equal(transport.mount(hit).ok,false);assert.equal(motion.state.x,20);assert.equal(vehicle.taken,false);assert.equal(src.calls.takes,0);
+});
+
+test('rejected exits do not append generated candidates into the source-owned array',()=>{
+ const motion=createPlayerMotion({route}),vehicle=item('scooter'),src=source([vehicle]),stored=Object.freeze([Object.freeze({x:4,y:.14,z:0,yaw:0})]);src.getDismountCandidates=()=>stored;
+ const transport=createTransportInteraction({motion,sources:[src]});assert.equal(transport.mount().ok,true);assert.equal(transport.dismount().ok,true);assert.equal(stored.length,1);
 });

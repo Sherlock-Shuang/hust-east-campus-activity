@@ -86,13 +86,20 @@ function groundHeight(groundAt, point) {
 
 function groundHit(start, end, groundAt) {
   if (!groundAt) return 1;
-  const maximum=groundAt.maxHeightInBounds?.(Math.min(start.x,end.x),Math.min(start.z,end.z),Math.max(start.x,end.x),Math.max(start.z,end.z));
-  if(Number.isFinite(maximum)&&Math.min(start.y,end.y)>=maximum+CLEARANCE)return 1;
+  const minX=Math.min(start.x,end.x),minZ=Math.min(start.z,end.z),maxX=Math.max(start.x,end.x),maxZ=Math.max(start.z,end.z);
+  // Piers and rails rise above their supporting terrain. Query the same local
+  // obstacle cells as movement before the ground-height fast path; otherwise
+  // that shortcut would discard every rail on top of a bridge. This index also
+  // contains deck slabs, so each candidate needs only one exact volume test.
+  const obstacles=groundAt.obstaclesInBounds?.(minX,minZ,maxX,maxZ);
+  let hit=1;
+  for(const obstacle of obstacles||[])hit=Math.min(hit,buildingHit(start,end,obstacle));
+  const maximum=groundAt.maxHeightInBounds?.(minX,minZ,maxX,maxZ);
+  if(Number.isFinite(maximum)&&Math.min(start.y,end.y)>=maximum+CLEARANCE)return hit;
   // Height-relative sampling alone would let a descending ray forget a deck
   // as soon as it goes below its top. Test the actual slab volume too, so
   // cameras stay below its underside, above its top or outside its side edge.
-  let hit=1;
-  for(const deck of groundAt.solidsInBounds?.(Math.min(start.x,end.x),Math.min(start.z,end.z),Math.max(start.x,end.x),Math.max(start.z,end.z))||[])hit=Math.min(hit,buildingHit(start,end,deck));
+  if(!obstacles)for(const deck of groundAt.solidsInBounds?.(minX,minZ,maxX,maxZ)||[])hit=Math.min(hit,buildingHit(start,end,deck));
   const length = Math.hypot(end.x - start.x, end.y - start.y, end.z - start.z);
   const steps = Math.max(1, Math.ceil(length / .2));
   for (let i = 1; i <= steps; i++) {
@@ -115,8 +122,9 @@ function groundHit(start, end, groundAt) {
  * a trailing camera above the player and looks downward in first-person view.
  * Buildings use local metre-space rings, optional baseY, and relative height.
  * groundAt(x,z,radius,referenceY) may return a number or {height} / {y}.
- * Layered surfaces also expose heightAt(x,z,referenceY) and solidsInBounds;
- * use the same support and deck volumes as the player's ground contact.
+ * Layered surfaces also expose heightAt(x,z,referenceY), plus indexed
+ * obstaclesInBounds (infrastructure and decks) or legacy solidsInBounds.
+ * Use the same support and obstacle volumes as the player's ground contact.
  */
 export function calculatePlayerCamera(state, { view = 'third', yawOffset = 0, pitch = .25, distance, heading, visualSpeed, comfortable = false, actionFraming, world, groundAt } = {}) {
   const profile = CAMERA[state.mode] || CAMERA.walk;

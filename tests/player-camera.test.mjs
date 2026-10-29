@@ -5,6 +5,7 @@ import { calculatePlayerCamera,createTraversalCameraRig,createVehicleCameraRig,c
 import {createPlayerMotion} from '../src/player-motion.js';
 import {createCommuteRoute} from '../src/commute-route.js';
 import {createLocalFrame,geoToLocal} from '../src/geospatial.js';
+import {planBridgeStructure} from '../src/bridge-infrastructure.js';
 
 const near = (actual, expected, tolerance = 1e-8) => assert.ok(Math.abs(actual - expected) < tolerance, `${actual} ~= ${expected}`);
 const rectangle = (x1, z1, x2, z2) => [{ x: x1, z: z1 }, { x: x2, z: z1 }, { x: x2, z: z2 }, { x: x1, z: z2 }];
@@ -571,4 +572,60 @@ test('camera above the maximum surface keeps the broad-phase fast path',()=>{
   const state={mode:'walk',x:0,y:20,z:0,yaw:0,grounded:false},rig=createVehicleCameraRig();rig.reset(state);
   for(let i=0;i<30;i++)rig.update(state,1/60,{groundAt,lookLocked:true});
   assert.equal(volumeQueries,0);
+});
+
+function realViaductInfrastructure(){
+  const source=JSON.parse(readFileSync(new URL('../public/data/east-campus.geojson',import.meta.url),'utf8'));
+  const frame=createLocalFrame({longitude:114.42123985,latitude:30.51575845,coordinateSystem:'EPSG:4326'});
+  const route=createCommuteRoute(source,{frame,geoToLocal}),feature=source.features.find(f=>f.id==='way/456199549');
+  const surface=route.roadSurfaces.find(s=>s.sourceId===feature.id);
+  const points=feature.geometry.coordinates.map(c=>geoToLocal({longitude:c[0],latitude:c[1],height:0,coordinateSystem:'EPSG:4326'},frame));
+  // The renderer adds 2mm above the route's support plane.
+  const structure=planBridgeStructure({points,width:surface.width,surfaceY:surface.surfaceY+.002,sourceId:feature.id});
+  return{route,structure,groundAt:createPlayerMotion({route,world:{barriers:structure.barriers}}).groundAt};
+}
+
+test('actual Guanggu bridge piers stop chase cameras without closing the open underpass',()=>{
+  const {structure,groundAt}=realViaductInfrastructure(),pier=structure.piers[0];
+  for(const mode of ['walk','scooter','roadster','spider']){
+    const state={mode,x:pier.x-3,z:pier.z,y:.14,yaw:Math.PI/2,speed:0,grounded:true,vx:0,vz:0};
+    const rig=mode==='spider'?createTraversalCameraRig():createVehicleCameraRig();rig.reset(state);
+    const pose=rig.update(state,0,{snap:true,lookLocked:true,pitch:0,groundAt});
+    assert.ok(pose.position.x<pier.x-pier.radiusBottom,`${mode} camera must stop in front of the pier`);
+    assert.ok(pose.position.x>state.x+.5,'clear space before the pier remains usable');
+    assert.ok(pose.position.y<2,'a ground-level camera must not be pushed onto the bridge');
+    const bypass={...state,z:pier.z+2.2};rig.reset(bypass);
+    const clear=rig.update(bypass,0,{snap:true,lookLocked:true,pitch:0,groundAt});
+    assert.ok(clear.position.x>pier.x+2,'the space beside the pier remains open');
+  }
+});
+
+test('actual raised bridge rails clip the camera above the terrain fast-path without blocking below',()=>{
+  const {structure,groundAt}=realViaductInfrastructure(),rail=structure.rails[0];
+  const nx=Math.sin(rail.yaw),nz=Math.cos(rail.yaw);
+  const poseAt=y=>{
+    const target={x:rail.x-nx*2,y,z:rail.z-nz*2},position={x:rail.x+nx*2,y,z:rail.z+nz*2};
+    return constrainPlayerCamera({mode:'walk',x:target.x,z:target.z,y:y-1.05,yaw:0},{target,position},{groundAt});
+  };
+  assert.ok(rail.y>groundAt.maxHeightInBounds(rail.x-3,rail.z-3,rail.x+3,rail.z+3)+.24,'exercise the former early return above the highest supporting surface');
+  const blocked=poseAt(rail.y),progress=(blocked.position.x-rail.x)*nx+(blocked.position.z-rail.z)*nz;
+  assert.ok(progress< -rail.width/2,'the camera remains on the near side of the 14cm rail');
+  const below=poseAt(1.19);near((below.position.x-rail.x)*nx+(below.position.z-rail.z)*nz,2);
+  const above=poseAt(rail.y+2);near((above.position.x-rail.x)*nx+(above.position.z-rail.z)*nz,2);
+});
+
+test('camera obstacle candidates stay local and terrain sampling remains skipped above level ground',()=>{
+  const route={points:[{x:0,y:.16,z:0},{x:0,y:.16,z:100}]};
+  const local={id:'near-pier',polygon:rectangle(-.6,-.6,.6,.6),minHeight:0,height:5};
+  const distant=Array.from({length:2000},(_,i)=>({id:`distant-${i}`,polygon:rectangle(1000+i*3,1000,1001+i*3,1001),minHeight:0,height:5}));
+  const groundAt=createPlayerMotion({route,world:{barriers:[local,...distant]}}).groundAt;
+  const query=groundAt.obstaclesInBounds,readHeight=groundAt.heightAt;let queries=0,candidates=0,heightSamples=0;
+  groundAt.obstaclesInBounds=(...args)=>{queries++;const result=[...query(...args)];candidates+=result.length;return result;};
+  groundAt.heightAt=(...args)=>{heightSamples++;return readHeight(...args);};
+  groundAt.solidsInBounds=()=>{throw new Error('the unified obstacle index already contains bridge slabs');};
+  const state={mode:'walk',x:-3,y:.14,z:0,yaw:Math.PI/2};
+  const pose=calculatePlayerCamera(state,{pitch:0,groundAt});
+  assert.ok(pose.position.x<-.6,'the nearby pier is tested even above the maximum ground height');
+  assert.equal(queries,1);assert.equal(candidates,1,'two thousand distant barriers do not enter ray tests');
+  assert.equal(heightSamples,1,'only desired camera support is read; the ground ray retains its fast path');
 });

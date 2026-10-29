@@ -31,9 +31,9 @@ export function createPlayerWorld(model,{movableParking=false}={}) {
     height: record.category === 'building' ? getBuildingProfile(record.feature).height + .065 : 0,
     minHeight: record.category === 'building' ? getBuildingProfile(record.feature).baseHeight + .065 : 0,
   })));
-  const architecture=model.architectureInfrastructure||{},sports=model.sportsInfrastructure||{},parking=model.parkingInfrastructure||{};
+  const architecture=model.architectureInfrastructure||{},sports=model.sportsInfrastructure||{},parking=model.parkingInfrastructure||{},bridges=model.bridgeInfrastructure||{};
   const replacedBuildings=new Set([...(sports.replacedBuildingIds||[]),...(architecture.replacedBuildingIds||[])]);
-  return { buildings:[...polygons(getReconstructionBuildings(model).filter(record=>!replacedBuildings.has(record.id))),...(architecture.buildings||[])], water:polygons(model.water), bounds:{...model.bounds}, barriers:[...(sports.barriers||[]),...(architecture.barriers||[]),...(parking.barriers||[]).filter(b=>!movableParking||!String(b.id).startsWith('parked-east-nine-'))], walkSurfaces:[...(sports.walkSurfaces||[]),...(architecture.walkSurfaces||[])] };
+  return { buildings:[...polygons(getReconstructionBuildings(model).filter(record=>!replacedBuildings.has(record.id))),...(architecture.buildings||[])], water:polygons(model.water), bounds:{...model.bounds}, barriers:[...(sports.barriers||[]),...(architecture.barriers||[]),...(bridges.barriers||[]),...(parking.barriers||[]).filter(b=>!movableParking||!String(b.id).startsWith('parked-east-nine-'))], walkSurfaces:[...(sports.walkSurfaces||[]),...(architecture.walkSurfaces||[]),...(bridges.walkSurfaces||[])] };
 }
 
 export function createPlayerExperience({ THREE, scene, camera, controls, canvas, route, simulation,
@@ -405,29 +405,34 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   }
   function captureActivityPose(){
     if(!active)return null;
-    const fields=['x','y','z','yaw','vx','vz','speed','verticalSpeed','grounded','flightEnabled'];
+    const fields=['x','y','z','yaw','vx','vz','speed','verticalSpeed','grounded','flightEnabled','pitch','lean','rotorPower','altitudeTarget'];
     return {mode:motion.state.mode,transport:interaction?.capture(),view,pitch,distance:distance??null,yawOffset,manualPitch,lookHeading:motion.state.mode==='spider'?spiderCamera.heading:vehicleCamera.heading,state:Object.fromEntries(fields.map(k=>[k,motion.state[k]])),camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray(),fov:camera.fov}};
   }
   function restoreActivityPose(saved){
     if(suspended||!saved||!modeNames[saved.mode]||!['first','third'].includes(saved.view))return false;
     if(!['x','y','z','yaw'].every(k=>Number.isFinite(saved.state?.[k]))||Math.abs(saved.state.x)>6000||Math.abs(saved.state.z)>6000||saved.state.y< -10||saved.state.y>1000)return false;
+    // A restored scene vehicle must still refer to the claimed world item.
+    // Reject incompatible snapshots without losing the current inventory lease.
+    if(interaction){
+      if(saved.mode==='walk'?!!saved.transport:!saved.transport||saved.transport.mode!==saved.mode)return false;
+      if(interaction.mounted&&(!saved.transport||interaction.mounted.item.id!==saved.transport.id||interaction.mounted.item.mode!==saved.mode))return false;
+    }
     const newLease=interaction&&saved.transport&&!interaction.mounted;
     if(interaction&&saved.transport&&!interaction.restore(saved.transport))return false;
-    // A refreshed return must claim its parked model and activate the vehicle
-    // at its own safe footprint, not try to spawn a helicopter at the canteen.
-    if(newLease){
-      const initial=saved.state.grounded?saved.state:interaction.mounted.item;
-      if(!motion.placeMode(initial,saved.mode).ok){interaction.cancelRestore();return false;}
-      if(saved.mode==='scooter')models.setScooterAppearance(interaction.mounted.item.appearance);
-    }else if(saved.mode==='boat'&&motion.state.mode!=='boat'&&!motion.placeMode(saved.state,'boat').ok)return false;
+    // Restore through the physics layer: stale coordinates cannot bypass new
+    // geometry, and private flight velocity must agree with the public state.
+    const restored=motion.restorePose(saved.state,saved.mode);
+    if(!restored.ok){if(newLease)interaction.cancelRestore();return false;}
+    if(interaction?.mounted&&saved.mode==='scooter')models.setScooterAppearance(interaction.mounted.item.appearance);
+    initialized=true;
     enter(saved.mode);if(!active||motion.state.mode!==saved.mode)return false;
-    for(const key of ['x','y','z','yaw','vx','vz','speed','verticalSpeed'])if(Number.isFinite(saved.state[key]))motion.state[key]=saved.state[key];
-    for(const key of ['grounded','flightEnabled'])if(typeof saved.state[key]==='boolean')motion.state[key]=saved.state[key];
     view=saved.view;pitch=Number.isFinite(saved.pitch)?Math.max(-1.4,Math.min(1.4,saved.pitch)):.25;
+    camera.near=view==='first'?.06:.12;camera.updateProjectionMatrix();
     yawOffset=Number.isFinite(saved.yawOffset)?saved.yawOffset:0;manualPitch=!!saved.manualPitch;distance=Number.isFinite(saved.distance)?Math.max(1,Math.min(100,saved.distance)):undefined;
     const restoredHeading=Number.isFinite(saved.lookHeading)?saved.lookHeading:motion.state.yaw;
     clearInput();spiderCamera.reset(motion.state,restoredHeading);vehicleCamera.reset(motion.state,restoredHeading);models.update({...motion.state,view},0);cameraFrame(0,true);
-    if(saved.camera?.position?.length===3&&saved.camera.position.every(Number.isFinite)&&saved.camera?.quaternion?.length===4&&saved.camera.quaternion.every(Number.isFinite)){camera.position.fromArray(saved.camera.position);camera.quaternion.fromArray(saved.camera.quaternion);if(Number.isFinite(saved.camera.fov))camera.fov=Math.max(20,Math.min(100,saved.camera.fov));camera.updateProjectionMatrix();}
+    // Recompute from the restored view and today's obstacles. A cached raw
+    // camera transform must not override the collision-aware camera rig.
     updateUI();invalidate();return true;
   }
   mobileControls=createMobileControls({document,window,movementSurface:canvas,canUse:()=>active&&!disposed&&!inputBlocked(),

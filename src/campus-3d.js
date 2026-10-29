@@ -5,6 +5,7 @@ import {createCampusLawnLandmarks} from './campus-lawn-landmarks.js';
 import {createLakesideDetails} from './lakeside-details.js';
 import {createAquaticPlants} from './aquatic-plants.js';
 import {createBridgeDetails} from './bridge-details.js';
+import {planBridgeStructure} from './bridge-infrastructure.js';
 import { getBuildingProfile, getRoadProfile, getBuildingPartGroups } from './building-profiles.js';
 import { createEastNineDetails } from './east-nine.js';
 import { createArchitecturalMaterials, applyBuildingUV } from './architectural-materials.js';
@@ -69,6 +70,9 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
   group.userData = { units: 'metres', reconstruction: true, terrain: 'flat display datum; no measured terrain' };
   const layers = new Map(), records = new Map(), materials = new Map(), sharedGeometries = new Set(), warnings = [];
   const counts = { buildings: 0, buildingParts: 0, compositeBuildings: 0, roads: 0, bridges: 0, facadeWindows: 0, estimatedHeights: 0, sourceHeights: 0, estimatedRoadWidths: 0, airConditioners:0, slopingRoofs:0 };
+  const bridgeInfrastructure={barriers:[],walkSurfaces:[]};
+  model.bridgeInfrastructure=bridgeInfrastructure;
+  const compositeInfrastructure={replacedBuildingIds:[],walkSurfaces:[]};
   function layer(name) { if (!layers.has(name)) { const g = new THREE.Group(); g.name = name; group.add(g); layers.set(name, g); } return layers.get(name); }
   const solid = (color, roughness = .86, metalness = 0) => { const key = `${color}/${roughness}/${metalness}`; if (!materials.has(key)) materials.set(key, new THREE.MeshStandardMaterial({ color, roughness, metalness, side: THREE.DoubleSide })); return materials.get(key); };
   const sourceMeta = (r, extra = {}) => ({ feature: r.feature, featureId: r.id, category: r.category, reconstruction: true, ...extra });
@@ -257,7 +261,14 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     }
     if (parts.length && r.id !== eastNineId) {
       // Source part volumes express the building composition; a full parent extrusion would swallow them.
-      record.mesh = extrude(r.shapes, .24, .06, p.wallColor || '#d5d2c8', p.roofColor || '#b8b9b2', r, holder);
+      const baseY=.06,baseThickness=.24;
+      record.mesh = extrude(r.shapes, baseThickness, baseY, p.wallColor || '#d5d2c8', p.roofColor || '#b8b9b2', r, holder);
+      // The same rule must hold for physics: retain every source part collider,
+      // but replace the conceptual parent volume with its visible low plinth.
+      compositeInfrastructure.replacedBuildingIds.push(r.id);
+      r.shapes.forEach((shape,i)=>compositeInfrastructure.walkSurfaces.push({id:`${r.id}:composite-plinth:${i}`,sourceId:r.id,
+        polygon:shape.getPoints().map(v=>({x:v.x,z:-v.y})),holes:shape.holes.map(h=>h.getPoints().map(v=>({x:v.x,z:-v.y}))),
+        surfaceY:baseY+baseThickness,geometryEvidence:'same base and thickness as the rendered composite-building plinth'}));
       record.displayMode = 'part-composite-base'; counts.compositeBuildings++; continue;
     }
     record.mesh = extrude(r.shapes, height - baseHeight, baseHeight + .08, p.wallColor || '#d6d0c0', p.roofColor || '#9fa69e', r, holder);
@@ -375,12 +386,13 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
         const sidewalks=(p.campusBridge?.sidewalkIds||[]).map(id=>sourceById.get(id)).filter(Boolean).map(side=>({sourceId:side.id,points:side.feature.geometry.coordinates.map(local),width:getRoadProfile(side.feature).width}));
         const details=createBridgeDetails(THREE,{points,width,surfaceY:y,surfaces,sourceId:r.id,sidewalks});
         holder.add(details.group);detailDisposers.push(details.dispose);
+        bridgeInfrastructure.barriers.push(...details.infrastructure.barriers);
+        bridgeInfrastructure.walkSurfaces.push(...details.infrastructure.walkSurfaces);
       } else if (p.bridge) {
-        for (let j = 1; j < points.length; j++) {
-          const a = points[j - 1], b = points[j], delta = b.clone().sub(a), length = delta.length(), n = Math.max(1, Math.floor(length / 24));
-          for (let k = 0; k < n; k++) { const point = a.clone().lerp(b, (k + .5) / n); instance('bridge-piers',pierGeometry,bridgeMaterial,point.x,Math.max(.3,y-.75)/2,point.z,.7,Math.max(.3,y-.75),.7,0,r.id,null,'road'); }
-          if(length>.1)for(const side of [-1,1]){ const nx=-delta.z/length*width*.49*side,nz=delta.x/length*width*.49*side; instance('bridge-rails',box,railMaterial,(a.x+b.x)/2+nx,y+.75,(a.z+b.z)/2+nz,length,1,.14,-Math.atan2(delta.z,delta.x),r.id,null,'road'); }
-        }
+        const structure=planBridgeStructure({points,width,surfaceY:y,sourceId:r.id});
+        for(const part of structure.piers)instance('bridge-piers',pierGeometry,bridgeMaterial,part.x,part.y,part.z,part.radiusTop,part.height,part.radiusTop,0,r.id,null,'road');
+        for(const part of structure.rails)instance('bridge-rails',box,railMaterial,part.x,part.y,part.z,part.length,part.height,part.width,part.yaw,r.id,null,'road');
+        bridgeInfrastructure.barriers.push(...structure.barriers);
       }
     }
   }
@@ -408,6 +420,12 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     alignEastNineColumnFeet(THREE,eastNineDetail,eastNineGround.surfaceHeightAt);
     const access=collectEastNineAccess(eastNineDetail);
     model.architectureInfrastructure={...access,walkSurfaces:[...access.walkSurfaces,...eastNineGround.infrastructure.walkSurfaces],barriers:[...access.barriers,...eastNineGround.infrastructure.barriers]};
+  }
+  if(compositeInfrastructure.replacedBuildingIds.length){
+    const access=model.architectureInfrastructure||{};
+    model.architectureInfrastructure={...access,
+      replacedBuildingIds:[...(access.replacedBuildingIds||[]),...compositeInfrastructure.replacedBuildingIds],
+      walkSurfaces:[...(access.walkSurfaces||[]),...compositeInfrastructure.walkSurfaces]};
   }
   const forecourt=createEastNineForecourt(THREE,model,{surfaces,existingTrees:forestLayer.plan.trees,heightAt:eastNineGround.heightAt});
   layer('environment').add(forecourt.group);detailDisposers.push(forecourt.dispose);counts.forecourtPlantInstances=forecourt.plan.planting.plants.length;

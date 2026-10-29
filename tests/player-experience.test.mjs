@@ -119,6 +119,36 @@ test('activity pose restores location, mode and viewpoint without retaining held
   assert.equal(f.experience.restoreActivityPose({...saved,state:{...saved.state,x:Infinity}}),false);
 });
 
+test('stale activity returns cannot place the player inside buildings or beyond map bounds',t=>{
+  const f=fixture(t,{legacyControls:false});f.experience.enter('walk');
+  const saved=f.experience.captureActivityPose(),before=structuredClone(f.experience.state);
+  for(const state of [{...saved.state,x:12,z:0},{...saved.state,x:400,z:0}]){
+    assert.equal(f.experience.restoreActivityPose({...saved,state}),false);
+    assert.deepEqual(f.experience.state,before,'rejected restore leaves the current player unchanged');
+  }
+});
+
+test('activity return restores the view clipping plane and recomputes a safe camera',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});
+  f.experience.enterAt({x:24,z:-35,yaw:0});f.tick(.5);
+  const saved=f.experience.captureActivityPose();f.key('KeyV');
+  assert.equal(f.camera.near,.12);
+  // A cached camera can predate map corrections; it must not bypass today's
+  // camera collision constraints or remain disconnected from the saved body.
+  saved.camera.position=[1000,-10,1000];
+  assert.equal(f.experience.restoreActivityPose(saved),true);
+  assert.equal(f.camera.near,.06);
+  assert.ok(f.camera.position.distanceTo(new THREE.Vector3(24,1.72,-35))<1);
+});
+
+test('cold activity return restores at its own pose without respawning on the route',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});
+  const saved={mode:'walk',view:'first',state:{x:35,y:.14,z:-85,yaw:1,grounded:true}};
+  assert.equal(f.experience.restoreActivityPose(saved),true);
+  assert.equal(f.experience.active,true);assert.equal(f.experience.state.x,35);assert.equal(f.experience.state.z,-85);
+  f.tick(.2);assert.equal(f.experience.state.x,35);assert.equal(f.experience.state.z,-85);
+});
+
 function horizontalView(f){
   const direction=new THREE.Vector3();f.camera.getWorldDirection(direction);direction.y=0;return direction.normalize();
 }
@@ -715,6 +745,29 @@ test('failed refreshed vehicle placement returns its inventory item instead of l
   const source=inventory('helicopter',{x:12,z:0}),f=fixture(t,{transportSources:[source],legacyControls:false});f.experience.enter('walk');
   assert.equal(f.experience.restoreActivityPose({mode:'helicopter',transport:{id:'scene-helicopter',mode:'helicopter'},view:'third',state:{x:12,y:.14,z:0,yaw:0,grounded:true}}),false);
   assert.equal(source.items[0].taken,false);assert.equal(f.experience.state.mode,'walk');
+});
+
+test('activity restore cannot detach inventory identity from the restored vehicle mode',t=>{
+  const source=inventory('roadster'),f=fixture(t,{buildings:false,transportSources:[source],legacyControls:false});
+  f.experience.enter('walk');f.key('KeyF');
+  const saved=f.experience.captureActivityPose(),before=structuredClone(f.experience.state);
+  for(const snapshot of [{...saved,mode:'helicopter'},{...saved,transport:null},{...saved,mode:'walk',transport:null}]){
+    assert.equal(f.experience.restoreActivityPose(snapshot),false);
+    assert.deepEqual(f.experience.state,before);assert.equal(source.items[0].taken,true);
+  }
+  f.key('KeyF','keyup');f.key('KeyF');assert.equal(source.items[0].taken,false);
+});
+
+test('airborne activity return keeps valid momentum and clears old held thrust',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter('roadster');
+  f.key('KeyQ');f.tick(2);const saved=f.experience.captureActivityPose();
+  assert.equal(saved.state.grounded,false);assert.ok(saved.state.verticalSpeed>1);
+  f.key('KeyQ','keyup');f.tick(1.5);assert.ok(f.experience.state.verticalSpeed<saved.state.verticalSpeed);
+  assert.equal(f.experience.restoreActivityPose(saved),true);
+  assert.equal(f.experience.state.y,saved.state.y);assert.equal(f.experience.state.verticalSpeed,saved.state.verticalSpeed);
+  f.tick(1/120);
+  assert.ok(f.experience.state.verticalSpeed<saved.state.verticalSpeed,'released thrust resumes gravity');
+  assert.ok(f.experience.state.verticalSpeed>saved.state.verticalSpeed-.3,'integrator uses the saved velocity');
 });
 
 function touch(element,type,pointerId,values={}){return element.emit(type,{pointerType:'touch',pointerId,...values});}
