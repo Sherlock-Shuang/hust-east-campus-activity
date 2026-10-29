@@ -99,7 +99,7 @@ npm run dev -- --host 127.0.0.1 --port 5178
 
 | 稳定点位 ID | 作品 ID | X / Z | 默认触发半径 |
 |---|---|---|---|
-| `point-library` | `library` | 561.85 / -337.92 | 16 米 |
+| `point-library` | `library` | 584.66 / 332.64（东图东门外） | 8 米 |
 | `point-wanyan` | `wanyan` | 449.91 / -119.96 | 16 米 |
 | `point-tasay` | `tasay` | 58.19 / 17.55 | 16 米 |
 

@@ -19,8 +19,9 @@ export const ACTIVITY_PHASES = Object.freeze([
   {id:'share',label:'分享',guidance:'请听主持人引导，分享你的体验。'},
 ]);
 export function activityPortals(){
-  const positions=[[561.85,-337.92],[449.91,-119.96],[58.19,17.55],[848.45,-61.39]];
-  return ACTIVITY_WORKS.map((work,i)=>({id:`point-${work.id}`,workId:work.id,label:work.name,description:work.description,url:work.url,x:positions[i][0],z:positions[i][1],radius:work.id==='she-love-me'?6:16,enabled:false,startAt:null,endAt:null}));
+  // East-library gate (way/98867853): place the entry on the clear eastern approach.
+  const positions=[[584.66,332.64],[449.91,-119.96],[58.19,17.55],[848.45,-61.39]];
+  return ACTIVITY_WORKS.map((work,i)=>({id:`point-${work.id}`,workId:work.id,label:work.name,description:work.description,url:work.url,x:positions[i][0],z:positions[i][1],radius:work.id==='library'?8:work.id==='she-love-me'?6:16,enabled:false,startAt:null,endAt:null}));
 }
 
 export const SHE_LOVE_POINT_ID='point-she-love-me';
