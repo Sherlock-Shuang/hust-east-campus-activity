@@ -1,0 +1,181 @@
+/* Campus phone UI. Desktop rules remain upstream; the phone has one full screen per view. */
+.mobile-only { display: none; }
+.wx-avatar-unread { display: none; }
+.wx-new-messages { position: absolute; right: 16px; bottom: 100px; z-index: 4; min-height: 40px; padding: 8px 14px; border-radius: 4px; background: #fff; color: #576b95; box-shadow: 0 2px 10px #0001; }
+
+@media (max-width: 860px), (max-width: 1024px) and (max-height: 540px) {
+  :root { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif; -webkit-text-size-adjust: 100%; }
+  body { background: #ededed; }
+  .mobile-only { display: block; }
+  .desktop-chat-screen { background: #ededed; isolation: isolate; }
+  .wx-shell { position: relative; display: block; padding: 0; background: #ededed; overflow: hidden; }
+  .wx-shell button, .wx-shell input, .wx-shell textarea { font: inherit; -webkit-tap-highlight-color: transparent; }
+  .wx-shell button { touch-action: manipulation; cursor: pointer; }
+  .wx-shell button:disabled { cursor: default; }
+  .wx-shell button:active:not(:disabled) { filter: brightness(.94); }
+  .wx-shell svg { width: 24px; height: 24px; display: block; flex: 0 0 auto; }
+  .wx-shell .desktop-app-sidebar, .mobile-conversation-nav, .wx-shell .investigation-hint { display: none; }
+  .wx-shell .desktop-chat-list, .wx-shell .desktop-chat-main {
+    position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; max-height: none;
+    display: flex; flex-direction: column; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    border: 0; border-radius: 0; background: #ededed;
+    transition: transform 220ms cubic-bezier(.22,.68,0,1), visibility 220ms;
+  }
+  .wx-shell .desktop-chat-list { z-index: 1; }
+  .wx-shell .desktop-chat-main { z-index: 2; }
+  .wx-chat-open .desktop-chat-list { transform: translateX(-25%); visibility: hidden; pointer-events: none; }
+  .wx-list-open .desktop-chat-main { transform: translateX(100%); visibility: hidden; pointer-events: none; }
+  .wx-list-open .desktop-chat-list, .wx-chat-open .desktop-chat-main { transform: translateX(0); visibility: visible; }
+  .wx-home-header { min-height: 48px; flex: 0 0 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 20px; }
+  .wx-home-header h1 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.2; }
+  .wx-home-header button { display: grid; place-items: center; background: transparent; width: 44px; height: 44px; color: #181818; }
+  .wx-home .desktop-chat-list-header { padding: 2px 8px 8px; background: #ededed; border: 0; flex: 0 0 auto; }
+  .wx-home .desktop-search { min-height: 36px; height: 36px; padding: 0 12px; background: #fff; border: 0; border-radius: 6px; gap: 7px; }
+  .wx-home .desktop-search input { font-size: 16px; min-width: 0; width: 100%; }
+  .wx-home .desktop-search svg { width: 18px; height: 18px; }
+  .wx-home .desktop-chat-list-scroll { display: block; flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0; background: #fff; overscroll-behavior: contain; }
+  .wx-home .desktop-conversation-item { width: 100%; min-height: 76px; padding: 11px 16px; display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 13px; border: 0; border-radius: 0; box-shadow: none; position: relative; }
+  .wx-home .desktop-conversation-item + .desktop-conversation-item { margin: 0; }
+  .wx-home .desktop-conversation-item::after { content: ""; position: absolute; left: 79px; right: 0; bottom: 0; height: .5px; background: #e5e5e5; }
+  .wx-home .desktop-conversation-item.active { background: #fff; }
+  .wx-home .desktop-conversation-item:active { background: #e5e5e5; }
+  .wx-home .desktop-conversation-avatar { width: 50px; height: 50px; border-radius: 5px; font-size: 21px; border: 0; position: relative; overflow: visible; }
+  .wx-home .desktop-conversation-body { gap: 5px; }
+  .wx-home .desktop-conversation-row { gap: 8px; }
+  .wx-home .desktop-conversation-row strong { font-size: 17px; font-weight: 400; color: #181818; }
+  .wx-home .desktop-conversation-meta time { display: block; font-size: 11px; color: #b2b2b2; }
+  .wx-home .desktop-conversation-preview { display: block; font-size: 14px; color: #999; line-height: 1.4; }
+  .wx-home .desktop-conversation-subtitle, .wx-home .desktop-conversation-unread-dot { display: none; }
+  .wx-home .wx-avatar-unread { display: block; position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #fa5151; right: -4px; top: -3px; border: 1px solid #fff; }
+  .wx-shell .wx-avatar-z { background: #d6ded4; color: #4f6653; }
+  .wx-shell .wx-avatar-assistant { background: #08c063; color: #fff; }
+  .wx-shell .wx-avatar-favorite { background: #f1ad41; color: #fff; }
+  .wx-shell .wx-avatar-group { background: #c7d5e3; color: #506d83; }
+  .wx-shell .wx-avatar-self, .wx-shell .desktop-message-avatar.user { background: #d6e0ec; color: #55708c; border: 0; }
+  .wx-home-content { flex: 1 1 0; overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+  .wx-tab-chats .wx-home-content { display: none; }
+  .wx-home:not(.wx-tab-chats) .desktop-chat-list-scroll, .wx-home:not(.wx-tab-chats) .desktop-chat-list-header { display: none; }
+  .wx-tab-contacts .wx-home-content { background: #fff; }
+  .wx-contact-label { color: #888; background: #ededed; margin: 0; padding: 8px 16px; font-size: 13px; }
+  .wx-cell { width: 100%; display: flex; align-items: center; gap: 16px; min-height: 58px; padding: 10px 17px; color: #191919; background: #fff; border-bottom: .5px solid #ededed; text-align: left; font-size: 17px; }
+  .wx-cell-icon { color: #576b95; padding: 0 4px; }
+  .wx-cell-icon.moments { color: #07c160; }
+  .wx-cell-icon.favorites { color: #eda844; }
+  .wx-chevron { margin-left: auto; color: #bbb; font-size: 24px; line-height: 1; }
+  .wx-profile { display: flex; align-items: center; gap: 20px; background: #fff; margin-bottom: 8px; padding: 28px 24px; }
+  .wx-profile .desktop-conversation-avatar { width: 64px; height: 64px; }
+  .wx-profile strong { font-size: 22px; font-weight: 600; }
+  .wx-profile p { margin: 8px 0 0; font-size: 14px; color: #888; }
+  .wx-tabbar { display: grid; grid-template-columns: repeat(4, 1fr); flex: 0 0 auto; padding: 4px 8px calc(4px + env(safe-area-inset-bottom)); background: #f7f7f7; border-top: .5px solid #d9d9d9; }
+  .wx-tabbar button { min-height: 48px; display: flex; align-items: center; flex-direction: column; justify-content: center; gap: 4px; padding: 4px 0 2px; color: #181818; background: transparent; font-size: 10px; line-height: 1.2; }
+  .wx-tabbar button[aria-current] { color: #07c160; }
+  .wx-tabbar button[aria-current] svg { fill: #07c16012; stroke-width: 2; }
+  .wx-tab-icon { position: relative; }
+  .wx-tab-icon i { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: #fa5151; right: -5px; top: -1px; }
+
+  .wx-shell .desktop-chat-header { height: 48px; min-height: 48px; flex: 0 0 48px; display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; gap: 0; padding: 0; background: #ededed; border-bottom: .5px solid #d6d6d6; z-index: 8; }
+  .wx-back, .wx-more { display: grid; place-items: center; width: 52px; height: 48px; padding: 0; background: transparent; color: #181818; }
+  .wx-chat-heading { min-width: 0; text-align: center; max-width: none !important; }
+  .wx-shell .desktop-chat-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 17px; font-weight: 600; line-height: 24px; }
+  .wx-shell .desktop-chat-subtitle { display: none; }
+  .wx-shell .desktop-chat-stream { padding: 8px 12px 18px; min-height: 0; background: transparent; overscroll-behavior-y: contain; overflow-anchor: none; -webkit-overflow-scrolling: touch; }
+  .wx-time-divider { display: block; text-align: center; margin: 16px 0 20px; color: #999; font-size: 12px; line-height: 16px; }
+  .wx-shell .desktop-message-row, .wx-shell .desktop-message-row.is-grouped { align-items: flex-start; gap: 10px; margin-top: 20px; }
+  .wx-shell .desktop-message-row:first-child, .wx-time-divider + .desktop-message-row { margin-top: 0; }
+  .wx-shell .desktop-message-avatar { width: 40px; height: 40px; flex: 0 0 40px; margin: 0; border: 0; border-radius: 4px; font-size: 17px; font-weight: 500; }
+  .wx-shell .desktop-message-stack { max-width: calc(100% - 100px); min-width: 0; }
+  .wx-shell .desktop-message-bubble { min-height: 40px; padding: 9px 12px; border: 0; border-radius: 4px; font-size: 17px; line-height: 24px; overflow-wrap: anywhere; box-shadow: none; }
+  .wx-shell .desktop-message-bubble.ta { background: #fff; }
+  .wx-shell .desktop-message-bubble.user { background: #95ec69; }
+  .wx-shell .desktop-message-bubble::after { top: 15px; width: 7px; height: 7px; border: 0; }
+  .wx-shell .desktop-message-bubble.ta::after { left: -3px; background: #fff; }
+  .wx-shell .desktop-message-bubble.user::after { right: -3px; background: #95ec69; }
+  .wx-shell .desktop-message-bubble.media { padding: 0; background: transparent; }
+  .wx-shell .desktop-message-media { border: 0; border-radius: 4px; box-shadow: none; }
+  .wx-shell .desktop-message-time { display: none; }
+  .wx-shell .desktop-message-pending-spinner { align-self: center; width: 13px; height: 13px; flex-basis: 13px; }
+  .wx-shell .desktop-space-notice-card { border-radius: 4px; padding: 16px; border: 0; background: #fff; }
+  .wx-shell .desktop-message-rollback { border: 0; color: #576b95; background: #fff; border-radius: 4px; }
+  .wx-rollback-banner { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; background: #fff6e5; color: #806f4c; font-size: 13px; }
+  .wx-rollback-banner button { min-height: 44px; background: transparent; color: #576b95; }
+
+  .wx-shell .desktop-chat-composer { gap: 0; padding: 5px 5px calc(5px + env(safe-area-inset-bottom)); border-top: .5px solid #d4d4d4; background: #f7f7f7; }
+  .wx-shell .desktop-composer-editor { grid-template-columns: 36px minmax(0,1fr) 36px 36px; align-items: end; gap: 4px; }
+  .wx-shell .desktop-composer-editor.wx-has-draft { grid-template-columns: 36px minmax(0,1fr) 36px auto; }
+  .wx-composer-icon { display: grid; place-items: center; width: 36px; height: 44px; padding: 0; background: transparent; color: #222; }
+  .wx-shell .wx-composer-icon svg { width: 27px; height: 27px; }
+  .wx-shell .desktop-chat-input { box-sizing: border-box; min-height: 40px; max-height: 132px; margin: 2px 0; padding: 8px 10px; font-size: 17px; line-height: 24px; background: #fff; border: 0; outline: none; box-shadow: none; border-radius: 5px; resize: none; -webkit-appearance: none; }
+  .wx-shell .desktop-chat-input:focus { border: 0; box-shadow: none; outline: none; }
+  .wx-shell .desktop-chat-input:disabled { background: #eee; }
+  .wx-shell .desktop-chat-input::placeholder { color: #aaa; font-size: 13px; }
+  .wx-shell .desktop-send-button { display: none; min-width: 56px; width: 56px; min-height: 36px; height: 36px; margin: 4px 2px; padding: 0; font-size: 14px; font-weight: 500; border-radius: 4px; }
+  .wx-has-draft .desktop-send-button { display: block; }
+  .wx-has-draft .wx-add { display: none; }
+  .wx-shell .desktop-composer-alert { position: absolute; left: 0; right: 0; bottom: calc(100% + 10px); padding: 10px; border-radius: 4px; z-index: 4; background: #fff5f5; }
+  .wx-shell .desktop-composer-input-wrap.has-warning { gap: 0; }
+  .wx-composer-panel { border-top: .5px solid #e5e5e5; margin-top: 6px; padding: 18px 12px 12px; max-height: min(240px, 36vh); overflow-y: auto; overscroll-behavior: contain; }
+  .wx-emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .wx-emoji-grid button { height: 44px; padding: 0; background: transparent; font-size: 26px; }
+  .wx-emoji-grid button:nth-last-child(-n+2) { font-size: 13px; color: #555; }
+  .wx-more-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .wx-more-grid button { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 0; background: transparent; color: #777; font-size: 12px; }
+  .wx-more-grid button > span { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 12px; color: #444; background: #fff; }
+  .wx-voice-note { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; font-size: 14px; color: #888; }
+  .wx-voice-note button { min-height: 44px; padding: 0 16px; color: #07c160; background: #fff; border-radius: 4px; }
+  .wx-shell .desktop-system-toast { bottom: 84px; padding: 12px; border-radius: 5px; }
+  .wx-shell .desktop-system-toast-badge { display: none; }
+  .wx-shell .favorite-article-card { border: 0; border-radius: 4px; padding: 18px; }
+  .wx-shell .favorite-article-title { font-size: 19px; line-height: 1.5; }
+  .wx-shell .favorite-article-footer button { color: #576b95; background: transparent; }
+  .wx-menu-backdrop { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 8; background: #0005; border-radius: 0; padding: 0; }
+  .wx-shell .desktop-chat-header-actions { display: none; }
+  .wx-shell .wx-menu-open .desktop-chat-header-actions { position: fixed; z-index: 9; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-height: calc(var(--chat-viewport-height, 100dvh) - 64px); overflow-y: auto; gap: 0; padding: 0 0 env(safe-area-inset-bottom); border-radius: 12px 12px 0 0; background: #f7f7f7; box-shadow: none; animation: wx-sheet-enter 180ms ease-out; }
+  .wx-menu-title { display: flex; align-items: center; justify-content: space-between; min-height: 56px; padding: 6px 20px; font-size: 17px; font-weight: 600; border-bottom: .5px solid #ddd; }
+  .wx-menu-title button { min-height: 44px; background: transparent; color: #07c160; font-size: 15px; }
+  .wx-menu-guide { padding: 16px 20px 0; background: #fff; margin-bottom: 8px; }
+  .wx-menu-guide strong { font-size: 15px; font-weight: 500; }
+  .wx-menu-guide p { margin: 8px 0; font-size: 14px; line-height: 1.7; color: #888; }
+  .wx-menu-guide button { width: 100%; min-height: 48px; text-align: left; background: #fff; color: #576b95; padding: 0; font-size: 16px; }
+  .wx-menu-guide button span { float: right; color: #bbb; }
+  .wx-shell .desktop-chat-header-actions > .desktop-header-button { display: flex; align-items: center; min-height: 54px; padding: 12px 20px; width: 100%; background: #fff; border: 0; border-bottom: .5px solid #eee; border-radius: 0; font-size: 16px; color: #191919; }
+  .wx-shell .desktop-chat-header-actions > .desktop-header-button:disabled { color: #bbb; }
+  .wx-shell .desktop-chat-header-actions > .windows-close-button { color: #fa5151; margin-top: 8px; }
+  .wx-desktop-close { display: none; }
+  .wx-shell .desktop-exit-dialog { border-radius: 12px; padding: 24px; text-align: center; border: 0; }
+  .wx-shell .desktop-exit-dialog-actions { gap: 10px; }
+  .wx-shell .desktop-exit-dialog-actions button { min-height: 44px; background: #f2f2f2; border: 0; color: #07c160; font-size: 15px; }
+  :root[data-chat-keyboard="true"] .wx-shell .desktop-chat-header { min-height: 48px; padding: 0; }
+  :root[data-chat-keyboard="true"] .wx-shell .desktop-chat-composer { padding-bottom: 5px; }
+  :root[data-chat-keyboard="true"] .wx-shell .wx-tabbar { display: none; }
+  @keyframes wx-sheet-enter { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+}
+@media (min-width: 600px) and (max-width: 1024px) and (max-height: 540px) {
+  .wx-shell .desktop-message-stack { max-width: min(72%, 540px); }
+  .wx-shell .desktop-chat-input { max-height: 84px; }
+  .wx-emoji-grid { grid-template-columns: repeat(9, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wx-shell .desktop-chat-main, .wx-shell .desktop-chat-list, .wx-shell .desktop-chat-header-actions { animation: none; transition: none; }
+  .wx-shell .desktop-chat-stream { scroll-behavior: auto; }
+}
+@media (max-width: 860px), (max-width: 1024px) and (max-height: 540px) {
+  .wx-shell .wx-space-notice { margin: 20px 0 0 50px; display: block; max-width: calc(100% - 100px); }
+  .wx-shell .wx-space-notice .desktop-space-notice-card { width: 100%; position: relative; padding: 12px; gap: 6px; }
+  .wx-space-notice .desktop-space-notice-card::before { content: "宝"; position: absolute; top: 0; left: -50px; width: 40px; height: 40px; display: grid; place-items: center; background: #d6ded4; color: #4f6653; border-radius: 4px; font-size: 17px; }
+  .wx-space-notice .desktop-space-notice-badge, .wx-space-notice .desktop-space-notice-time { display: none; }
+  .wx-shell .wx-space-notice .desktop-space-notice-title { font-size: 15px; font-weight: 400; }
+  .wx-shell .wx-space-notice .desktop-space-notice-copy { color: #999; font-size: 13px; line-height: 1.5; margin: 0; }
+  .wx-shell .wx-space-notice .desktop-message-rollback { margin: 2px -12px -12px; padding: 0 12px; min-height: 40px; border-top: .5px solid #eee; border-radius: 0; text-align: left; font-size: 13px; }
+}
+
+/* Keep a phone-sized reading column in wide side panels and phone landscape.
+   Only the message viewport grows/shrinks; content is never scaled to fit. */
+@media (max-width: 860px), (max-width: 1024px) and (max-height: 540px) {
+  .desktop-chat-screen { width: min(100%, 480px); margin-inline: auto; }
+  .wx-shell .desktop-message-stack { max-width: min(calc(100% - 100px), 360px); }
+  .wx-shell .wx-space-notice { max-width: min(calc(100% - 100px), 300px); }
+  .wx-shell .desktop-message-media { max-width: 100%; height: auto; object-fit: contain; }
+  .campus-moments.space-feed-screen { width: min(100%, 480px); margin-inline: auto; }
+  .desktop-chat-screen.ending-transition-screen,
+  .wx-shell.ending-transition-shell { animation: none; transform: none; }
+}

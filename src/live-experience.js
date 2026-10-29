@@ -87,7 +87,9 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     if(!admitted||!isEventActive(admitted,client.now())||admitted.url!==current.url){closePortal('活动入口已关闭，请留意主持人通知');return;}
     url.searchParams.set('campusParentOrigin',location.origin);url.searchParams.set('campusAttempt',attemptId);
     frame=document.createElement('iframe');frame.title=current.label;frame.referrerPolicy='same-origin';
-    frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-pointer-lock');
+    // The post-game project link is opened only by a deliberate click in tasay.
+    const projectLinks=current.workId==='tasay'?' allow-popups allow-popups-to-escape-sandbox':'';
+    frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-pointer-lock'+projectLinks);
     // Keep the host's announcement/pause layer above every experience.
     frame.setAttribute('allow','fullscreen \'none\'');frame.src=url.href;
     frame.addEventListener('load',()=>{bridge();if(!ACTIVITY_WORKS.some(w=>w.id===opened?.workId))loading('页面已载入，等待作品确认就绪；此时尚未计为已打开。');});

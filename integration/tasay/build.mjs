@@ -21,10 +21,13 @@ for(const name of ['src','index.html','package.json','tsconfig.app.json','66c8ec
 await mkdir(join(stage,'public'),{recursive:true});
 await cp(join(source,'public'),join(stage,'public'),{recursive:true,filter:path=>!path.endsWith('.md')});
 await symlink(join(source,'node_modules'),join(stage,'node_modules'),'dir');
+// Keep restored narrative and mobile UI reproducible without changing the upstream checkout.
+await cp(join(here,'ui-overrides'),stage,{recursive:true});
 await mkdir(join(stage,'.empty-env'),{recursive:true});
 let entry=await readFile(join(stage,'src/main.tsx'),'utf8');
 if(!entry.includes('<BrowserRouter>'))throw new Error('BrowserRouter entry changed; review adapter before rebuilding.');
 entry='import "./campus-adapter.js";\n'+entry.replace('<BrowserRouter>','<BrowserRouter basename={import.meta.env.BASE_URL}>');
+entry+='\nimport "./campus-mobile.css";\n';
 await writeFile(join(stage,'src/main.tsx'),entry);
 let llm=await readFile(join(stage,'src/services/api/llmClient.ts'),'utf8');
 const old='return (import.meta.env[key] as string | undefined)?.trim() ?? "";';
@@ -56,5 +59,5 @@ try{for(const line of (await readFile(join(source,'.env'),'utf8')).split(/\r?\n/
 async function scan(directory){for(const entry of await readdir(directory,{withFileTypes:true})){const path=join(directory,entry.name);if(entry.isDirectory())await scan(path);else if(/\.(js|json|html|css)$/.test(entry.name)){const content=await readFile(path,'utf8');if(privateValues.some(value=>content.includes(value)))throw new Error('Build contains a private configuration value; do not deploy.');}}}
 await scan(output);
 const revision=spawnSync('git',['-C',source,'rev-parse','HEAD'],{encoding:'utf8'}).stdout?.trim()||null;
-await writeFile(join(output,'activity-build.json'),JSON.stringify({workId:'tasay',name:'过拟合恋人',base:'/works/tasay/',sourceRevision:revision,adapterVersion:1,level:'page_opened',privateEnvIncluded:false},null,2)+'\n');
+await writeFile(join(output,'activity-build.json'),JSON.stringify({workId:'tasay',name:'过拟合恋人',base:'/works/tasay/',sourceRevision:revision,storyRevision:"original-9d9d37d",adapterVersion:1,level:'page_opened',privateEnvIncluded:false},null,2)+'\n');
 console.log(JSON.stringify({workId:'tasay',output,sourceRevision:revision,sourcePreserved:true,privateEnvIncluded:false}));

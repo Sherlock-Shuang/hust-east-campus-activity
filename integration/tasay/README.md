@@ -12,12 +12,52 @@ node integration/tasay/build.mjs --source /absolute/path/to/ta-say
 
 复制白名单为正式 `src`、`public` 运行资源、入口 HTML、构建类型配置和两张被源模块引用的剧情 PNG。不会复制 `.env`、竞品数据、制作资料或旧 `dist`。
 
-副本只进行接入层变换：
+副本进行以下接入层与校园界面变换：
 
 - `BrowserRouter` 添加 `/works/tasay/` basename；所有既有剧情路由保持原逻辑。
 - 模型请求改为同源服务端代理，移除浏览器 Authorization；`.env` 不参与 Vite 构建。构建后再次比对私有值，防止密钥混入产物。
 - 将 `report={activeReport}` 的既有 nullable 类型错误规范为 `report={activeReport ?? undefined}`，不改报告内容。
-- 主入口先载入活动适配脚本，暂停故事定时器、动画帧、媒体和交互；恢复保留剩余时长。未改剧情条件、结束条件、原有存档键或叙事文本。
+- 主入口先载入活动适配脚本，暂停故事定时器、动画帧、媒体和交互；恢复保留剩余时长。
+
+## 原版剧情恢复（2026-10-29）
+
+按用户要求撤回“回声项目—多窗口调查—身份替代”改写。`ui-overrides/src/config/hardcodedCopy.ts` 与 `src/features/reply/replyFallbacks.ts` 精确取自原项目提交 `9d9d37df8bbb0a7fd67e95600688d99b94c7e052`，作为持久化叙事基准；不从当前未提交的改写文案构建。朋友圈恢复该提交的原动态。聊天页移除新增调查任务、核对提示、预填疑问入口。
+
+原主线保持：甜蜜开场 → 第三次发送开始的连续消息改写 → 第 15 条对话出现监控图和“我会一直盯着你” → 第 28 条对话触发定位 → “回头／骗你的／我无处不在” → 原真相与梦醒文案。删稿、读档和朋友圈异常保持原行为。计数包含双方非系统消息，不是玩家发送次数。真相按钮恢复“梦醒”；保留直接进入聊天以及聊天内呈现尾声的现有容器。通关后的可选项目入口见下节，不改变主线流程。
+
+保留手机微信布局、防拉伸、输入法、草稿、滚动、存储容错及异步取消修复。恢复版使用 `ta-say:original-story:*` 独立存档，旧版 `ta-say:session`、`ta-say:persisted` 和 `ta-say:investigation-ui:v1` 不删除或覆盖；首次打开恢复版从原开场开始，之后正常续玩。
+
+## 通关后项目入口（2026-10-29）
+
+在真相页点击“梦醒”完成故事后，结局、聊天信息菜单和手机“发现 / 我”中解锁“她不一样 · 恋情分析室”。入口始终放在原过拟合恋人体验内，沿用校园主持人对该作品的开放、暂停和返回控制，不新增地图地点或独立作品。
+
+页面提供 [she-love-me 开源仓库](https://github.com/863401402/she-love-me)、MIT 许可链接和可复制给电脑 AI 编程助手的使用指令；不是在线聊天分析器。复制失败时选择文本供手动复制。项目按其支持的 JSON / Markdown 格式接收用户自行提供的记录，网页不上传或读取聊天数据。
+
+通关状态基于既有 `finishWakeUp()`，保存在当前浏览器；刷新、重玩、返回校园不会清除。额外完成标记 `ta-say:she-love-me:completed` 只保存布尔值。兼容旧版和恢复版 persisted 中 `version === 2 && hasFinishedGame === true` 的完成位，不导入旧剧情或聊天。仅打开作品、返回校园、打开真相页不算完成。
+
+使用原生模态 dialog 保持键盘焦点、Escape 返回和背景滚动位置，手机采用全屏可滚动页面。校园 iframe 仅对 tasay 添加用户点击外链所需的 popup 权限，其余作品不变。
+
+验证：`TASAY_SOURCE=/absolute/path/to/ta-say node --test integration/tasay/she-love-project.test.mjs`；构建后运行 `BASE_URL=http://127.0.0.1:5178 node scripts/verify-tasay-unlock.mjs` 检查存储兼容、原生弹窗和窄屏。`CAMPUS_ROOT=/absolute/path/to/built/campus node scripts/verify-tasay-unlock-flow.mjs` 会使用临时服务和数据目录，从实际聊天走到梦醒，并检查 iframe 外链、主持人暂停、重玩、刷新、返回和关闭入口；不连接正式活动数据。
+
+## 手机微信布局（2026-10-28）
+
+`ui-overrides/` 是校园版的持久化界面源，构建时覆盖到 `.staging/`，不会回写原 `ta-say`。入口最后加载 `src/campus-mobile.css`，其手机规则适用宽度 ≤860px 或 ≤1024px 的短横屏；桌面继续三栏布局。
+
+- 聊天列表与聊天页分屏；列表包含搜索、通讯录、发现和我，所有入口连接现有联系人、收藏及朋友圈。
+- 聊天页采用 48px 顶栏、40px 方形头像、灰底、白/绿色气泡、居中分组时间与底部输入栏。读档和虚构退出移入右上角菜单，正常返回列表不触发退出剧情。
+- 表情插入、更多面板、多行输入、中文输入法保护、发送保持焦点；本作品继续使用文字交流。
+- 草稿写入防抖并在页面隐藏/失焦时保存；会话切换记住本次浏览中的滚动位置。读历史时新回复不抢滚动，底部阅读时跟随文本、图片与视口高度变化。
+- 朋友圈使用封面、右下头像、连续白底动态。原收藏/群聊内容、朋友圈访问次数和故事转场保持。
+- `useChatViewport` 处理本窗口与同源 iframe 的可见区域，保留双指缩放、横竖屏与安全区；提供减弱动态效果支持。跨源宿主和不改变视口的浮动键盘需由宿主/设备另行处理。
+
+验证命令：
+
+```sh
+node --test integration/tasay/adapter.test.mjs integration/tasay/proxy.test.mjs integration/tasay/chat-viewport.test.mjs
+node scripts/verify-tasay-mobile.mjs
+```
+
+浏览器回归使用隔离上下文并拦截模型接口；设备仿真不等同于真实 iOS/Android 软键盘验证。可交互手机预览在 `/artifacts/tasay-mobile-2026-10-28/preview.html`。
 
 ## 模型代理
 

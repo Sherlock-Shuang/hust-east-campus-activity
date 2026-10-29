@@ -1,0 +1,228 @@
+/* The adapter owns this mobile presentation. Desktop keeps the source layout. */
+.campus-moments .campus-moments-mobile-only { display: none; }
+
+@media (max-width: 860px), (max-width: 1024px) and (max-height: 540px) {
+  .campus-moments.space-feed-screen {
+    min-height: 100dvh;
+    padding: 0 max(0px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(0px, env(safe-area-inset-left));
+    background: #fff;
+    color: #191919;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .campus-moments .campus-moments-mobile-only { display: block; }
+  .campus-moments .space-mobile-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr) 88px;
+    align-items: center;
+    min-height: calc(48px + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 4px 0;
+    border-bottom: 1px solid #ededed;
+    background: #f7f7f7;
+    color: #191919;
+    font-size: 17px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .campus-moments .space-mobile-topbar button {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    padding: 0 10px;
+    border-radius: 0;
+    background: transparent;
+    color: #191919;
+    font-size: 17px;
+    font-weight: 400;
+    text-align: left;
+  }
+  .campus-moments .campus-moments-back-chevron {
+    width: 11px;
+    height: 19px;
+    position: relative;
+    margin-right: 3px;
+  }
+  .campus-moments .campus-moments-back-chevron::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 4px;
+    width: 10px;
+    height: 10px;
+    border-left: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+  }
+  .campus-moments .space-feed-shell { width: 100%; margin: 0; display: block; }
+  .campus-moments .space-cover-card {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+  .campus-moments .space-cover-image {
+    position: relative;
+    height: clamp(190px, 58vw, 280px);
+    overflow: hidden;
+    background: radial-gradient(circle at 73% 25%, #dedacc 0 8%, transparent 8.4%), linear-gradient(180deg, #9cafb1, #c0c4b8);
+  }
+  .campus-moments .space-cover-image::before,
+  .campus-moments .space-cover-image::after {
+    content: "";
+    position: absolute;
+    border-radius: 50% 50% 0 0;
+  }
+  .campus-moments .space-cover-image::before {
+    width: 112%; height: 220px; right: -28%; bottom: -105px;
+    background: #718577; transform: rotate(-12deg);
+  }
+  .campus-moments .space-cover-image::after {
+    width: 125%; height: 210px; left: -26%; bottom: -130px;
+    background: #425f54; transform: rotate(9deg);
+  }
+  .campus-moments .space-cover-meta {
+    position: relative;
+    display: block;
+    min-height: 88px;
+    padding: 0;
+  }
+  .campus-moments .space-cover-eyebrow,
+  .campus-moments .space-cover-title,
+  .campus-moments .space-cover-actions { display: none; }
+  .campus-moments .campus-moments-cover-intro { padding: 46px 18px 20px; }
+  .campus-moments .space-cover-subtitle {
+    max-width: none;
+    margin: 0;
+    color: #999;
+    font-size: 12px;
+    line-height: 1.7;
+    text-align: right;
+  }
+  .campus-moments .space-profile-chip {
+    position: absolute;
+    top: -43px;
+    right: 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .campus-moments .space-profile-name {
+    display: block;
+    padding-top: 15px;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 600;
+    text-shadow: 0 1px 3px #142d2b60;
+  }
+  .campus-moments .space-profile-avatar {
+    width: 72px;
+    height: 72px;
+    border: 2px solid #fff;
+    border-radius: 6px;
+    background: #c5a798;
+    color: #fff;
+    box-shadow: none;
+    font-size: 28px;
+    font-weight: 500;
+  }
+  .campus-moments .space-feed-layout,
+  .campus-moments .space-feed-list,
+  .campus-moments .space-sidebar-stack { display: block; margin: 0; padding: 0; }
+  .campus-moments .space-sidebar-card { display: contents; }
+  .campus-moments .space-sidebar-label,
+  .campus-moments .space-sidebar-actions,
+  .campus-moments .space-alert-index { display: none; }
+  .campus-moments .space-feed-card,
+  .campus-moments .space-alert-card {
+    position: relative;
+    display: block;
+    min-width: 0;
+    margin: 0;
+    padding: 18px 16px 18px 68px;
+    border: 0;
+    border-bottom: 1px solid #ededed;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+  .campus-moments .space-feed-card-header,
+  .campus-moments .space-feed-card-meta { display: block; }
+  .campus-moments .space-feed-card-avatar {
+    position: absolute;
+    left: 16px;
+    top: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 4px;
+    background: #a1b3a0;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 500;
+  }
+  .campus-moments .campus-moments-partner-avatar,
+  .campus-moments .campus-moments-post-night .space-feed-card-avatar { background: #c5a798; }
+  .campus-moments .campus-moments-post-echo .space-feed-card-avatar { background: #8b9caa; }
+  .campus-moments .campus-moments-notice-avatar { background: #a4aea9; }
+  .campus-moments .space-feed-card-meta strong,
+  .campus-moments .campus-moments-update-heading strong {
+    display: block;
+    color: #576b95;
+    font-size: 17px;
+    font-weight: 500;
+    line-height: 24px;
+    overflow-wrap: anywhere;
+  }
+  .campus-moments .space-feed-card-meta > span { display: none; }
+  .campus-moments .space-feed-card-copy,
+  .campus-moments .space-alert-card > p {
+    margin: 4px 0 0;
+    color: #191919;
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .campus-moments .space-memory-note {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 0;
+    margin-top: 11px;
+    padding: 9px;
+    border-radius: 0;
+    background: #f7f7f7;
+    color: #555;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    overflow-wrap: anywhere;
+  }
+  .campus-moments .campus-moments-note-mark {
+    flex: 0 0 30px;
+    width: 30px;
+    height: 34px;
+    border: 1px solid #d7dcd8;
+    background: linear-gradient(#c1ccc4, #c1ccc4) 6px 10px / 16px 2px no-repeat,
+      linear-gradient(#c1ccc4, #c1ccc4) 6px 16px / 16px 2px no-repeat,
+      linear-gradient(#c1ccc4, #c1ccc4) 6px 22px / 11px 2px no-repeat, #e9eeea;
+  }
+  .campus-moments .campus-moments-post-time {
+    margin-top: 11px;
+    color: #999;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 18px;
+  }
+}
+
+@media (max-width: 1024px) and (max-height: 540px) {
+  .campus-moments .space-cover-image { height: 160px; }
+}
