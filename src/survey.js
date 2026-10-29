@@ -1027,7 +1027,7 @@ function render(now) {
 camera.position.set(500, 1600, 900);
 liveControl = createLiveExperience({THREE,scene,camera,canvas,container,
   getPlayer:()=>commute?.player,
-  getInteriors:()=>campus?.optoEntry?[campus.optoEntry]:[],
+  getInteriors:()=>campus?.optoEntries||[],
   setSuspended(value){liveFrozen=value;commute?.setSuspended(value);controls.enabled=!value&&!commute?.player.active;needsRender=true;},
   invalidate:()=>{needsRender=true;},notify:toast,
 });

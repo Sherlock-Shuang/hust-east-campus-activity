@@ -4,7 +4,7 @@ import {mountAudienceUI} from './audience-ui.js';
 import {ACTIVITY_WORKS} from './activity-catalog.js';
 import {mountMobileViewport} from './mobile-viewport.js';
 import {createSkyQrExperience} from './sky-qr.js';
-import {nearbyInterior} from './building-interiors.js';
+import {nearbyInterior,crossedInteriorDoor,interiorReturnSnapshot} from './building-interiors.js';
 import './live-experience.css';
 
 export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,getInteriors=()=>[],setSuspended,invalidate,notify}) {
@@ -21,7 +21,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   const $=selector=>root.querySelector(selector),pause=$('.live-pause'),announcement=$('.live-announcement'),portalView=$('.live-portal-view'),prompt=$('.live-portal-prompt'),labels=$('.live-marker-labels');
   const worldGroup=new THREE.Group();worldGroup.name='activity-beacons';scene.add(worldGroup);
   let client,audienceUI,skyQr,items=[],visualSignature='',uiSignature='',nearest=null,opened=null,frame=null,frameOrigin=null,lastPaint=0,lastUpdate=0,lastFrozen=false,connectedOnce=false,disposed=false;
-  let loadingTimer,returnPose=null,restorePending=true;
+  let loadingTimer,returnPose=null,restorePending=true,previousInteriorPosition=null,pendingInteriorReturn=null;
   const visited=new Set(),visiting=new Set(),visitRetry=new Map();
   let restoreFocus=null,wasPaused=false;
   const projected=new THREE.Vector3();
@@ -36,25 +36,30 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       setInert(frozen);setSuspended(frozen);
       if(!frozen&&restoreFocus?.isConnected)restoreFocus.focus({preventScroll:true});
     }
+    if(!frozen&&pendingInteriorReturn&&getPlayer()?.restoreActivityPose?.(pendingInteriorReturn)){
+      pendingInteriorReturn=null;previousInteriorPosition=null;
+    }
   }
   function bridge(){
-    if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage({type:'campus:activity',attemptId:opened?.attemptId,paused:!!client.state.paused,announcement:isEventActive(client.state.announcement,client.now())?client.state.announcement:null,serverTime:client.now()},frameOrigin);
+    if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage({type:'campus:activity',attemptId:opened?.attemptId,paused:!!client.state.paused||!!skyQr?.isOpen,announcement:isEventActive(client.state.announcement,client.now())?client.state.announcement:null,serverTime:client.now()},frameOrigin);
   }
   function loading(message,status='loading'){
     const el=$('.live-portal-loading');el.hidden=!message;el.dataset.status=status;el.textContent=message;
-    if(status==='error'){const retry=document.createElement('button');retry.type='button';retry.textContent='重试';retry.onclick=()=>{const portal=opened;closePortal();openPortal(portal);};el.append(retry);}
+    if(status==='error'){const retry=document.createElement('button');retry.type='button';retry.textContent='重试';retry.onclick=()=>{const portal=opened;closePortal(undefined,{restoreInterior:false});openPortal(portal);};el.append(retry);}
   }
   function record(type,details={},options={}){return audienceUI.client.event(type,details,options);}
   const position=()=>{const s=getPlayer()?.state;return s?{x:s.x,y:s.y,z:s.z}:null;};
   function rememberPose(){returnPose=getPlayer()?.captureActivityPose?.();if(returnPose)try{sessionStorage.setItem('campus-return-pose',JSON.stringify({audienceId:audienceUI.client.identity.id,pose:returnPose}));}catch{}}
   function attemptEvent(type,details={},options={}){if(!opened?.openingStarted)return Promise.resolve();return record(type,{pointId:opened.id,workId:opened.workId||opened.id,attemptId:opened.attemptId,...details},options);}
-  function closePortal(reason){
+  function closePortal(reason,{restoreInterior=true}={}){
     if(!opened)return;
+    const buildingReturn=restoreInterior&&opened.kind==='building-interior'?interiorReturnSnapshot(returnPose,opened):null;
     attemptEvent('returned');clearTimeout(loadingTimer);
     try{sessionStorage.removeItem('campus-return-pose');}catch{}
     frame?.contentWindow?.postMessage({type:'campus:dispose',attemptId:opened.attemptId},frameOrigin);
     $('.live-portal-frame').replaceChildren();portalView.hidden=true;frame=null;frameOrigin=null;opened=null;
-    loading('');updateFrozen();invalidate();if(!client.state.paused)canvas.focus({preventScroll:true});if(reason)notify(reason);
+    pendingInteriorReturn=buildingReturn;loading('');updateFrozen();previousInteriorPosition=null;
+    invalidate();if(!client.state.paused)canvas.focus({preventScroll:true});if(reason)notify(reason);
   }
   async function openPortal(portal){
     if(portal.kind==='building-interior')return openInterior(portal);
@@ -100,10 +105,10 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     loadingTimer=setTimeout(()=>{if(opened?.attemptId===attemptId&&!opened.ready)loading('资源仍在加载。可继续等待，或返回后重试；尚未计为已打开。');},90000);
     updateFrozen();$('.live-portal-bar button').focus();invalidate();
   }
-  function openInterior(requested){
+  function openInterior(requested,crossedFrom=null){
     if(client.state.paused||opened||skyQr?.isOpen||!audienceUI.registered)return;
-    const player=getPlayer(),current=player?.active&&nearbyInterior(getInteriors(),player.state);
-    if(!current||current.id!==requested.id)return notify('请步行靠近光电楼 C118 入口');
+    const player=getPlayer(),current=player?.active&&(crossedFrom?crossedInteriorDoor(getInteriors(),crossedFrom,player.state):nearbyInterior(getInteriors(),player.state));
+    if(!current||current.id!==requested.id)return notify('请步行靠近光电楼开启的玻璃门');
     const attemptId=crypto.randomUUID(),url=new URL(current.url,location.href);
     opened={...current,attemptId,openingStarted:false,ready:false};frameOrigin=url.origin;rememberPose();updateFrozen();
     $('.live-portal-bar > span').textContent=current.label;prompt.hidden=true;portalView.hidden=false;
@@ -191,8 +196,15 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
         if(!visited.has(portal.id)&&!visiting.has(portal.id)&&Date.now()>(visitRetry.get(portal.id)||0)){visiting.add(portal.id);record('visit',{pointId:portal.id,position:position()},{required:true}).then(()=>{visited.add(portal.id);visitRetry.delete(portal.id);}).catch(()=>{visitRetry.set(portal.id,Date.now()+15000);}).finally(()=>visiting.delete(portal.id));}
       }}
     }
-    if(!nearest&&player?.active&&audienceUI?.registered&&!state.paused&&!opened&&!skyQr?.isOpen)nearest=nearbyInterior(getInteriors(),player.state);
-    prompt.hidden=!nearest;if(nearest){prompt.querySelector('strong').textContent=nearest.label;prompt.querySelector('span').textContent=nearest.kind==='building-interior'?'室内参观':'体验入口';}
+    const interiorEnabled=!document.hidden&&player?.active&&audienceUI?.registered&&!state.paused&&!opened&&!skyQr?.isOpen;
+    if(interiorEnabled){
+      const interiors=getInteriors(),currentPosition={...player.state};
+      const previousPosition=previousInteriorPosition,crossed=crossedInteriorDoor(interiors,previousPosition,currentPosition);
+      previousInteriorPosition=currentPosition;
+      if(crossed){openInterior(crossed,previousPosition);nearest=null;previousInteriorPosition=null;}
+      else if(!nearest)nearest=nearbyInterior(interiors,player.state);
+    }else previousInteriorPosition=null;
+    prompt.hidden=!nearest;if(nearest){prompt.querySelector('strong').textContent=nearest.label;prompt.querySelector('span').textContent=nearest.kind==='building-interior'?'室内参观':'体验入口';prompt.querySelector('small').textContent=nearest.kind==='building-interior'?'走进门内 / Enter / 点击进入':'Enter 进入';}
     root.dataset.paused=String(state.paused);root.dataset.revision=String(state.revision);root.dataset.markerCount=String(markers.length);root.dataset.portalCount=String(portals.length);
   }
   client=createLiveClient({onState:()=>{queueMicrotask(()=>refresh(true));},onConnection(connected){

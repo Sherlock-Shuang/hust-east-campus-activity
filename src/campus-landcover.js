@@ -33,7 +33,7 @@ function capsule(a,b,r){const angle=Math.atan2(b[1]-a[1],b[0]-a[0]),ring=[];for(
 /** Source-constrained planting plan. This does not change source geometry, road
  * width or ground elevations. It also excludes sports/parking, which the old
  * woodland-only sampler omitted. Park labels alone do not imply a planted lawn. */
-export function planCampusLandcover(model,{frame,geoToLocal,maxTrees=7800,maxShrubs=1500,photoOpenLawns=[]}={}){
+export function planCampusLandcover(model,{frame,geoToLocal,maxTrees=7800,maxShrubs=1500,photoOpenLawns=[],hardscapeExclusions=[]}={}){
   if(!model?.records||!frame||typeof geoToLocal!=='function')throw new TypeError('Source model and projection required');
   const local=c=>{const p=geoToLocal({longitude:c[0],latitude:c[1],height:0,coordinateSystem:'EPSG:4326'},frame);return[p.x??p.east,p.z??-p.north];};
   const obstacles=[],cells=new Map(),cellSize=35,coverages=[],trees=[],shrubs=[];
@@ -53,6 +53,17 @@ export function planCampusLandcover(model,{frame,geoToLocal,maxTrees=7800,maxShr
   function blocked(x,z,radius=0){
     const reach=Math.ceil(radius/cellSize),cx=Math.floor(x/cellSize),cz=Math.floor(z/cellSize),seen=new Set();
     for(let ix=-reach;ix<=reach;ix++)for(let iz=-reach;iz<=reach;iz++)for(const o of cells.get(`${cx+ix}/${cz+iz}`)||[]){if(seen.has(o))continue;seen.add(o);if(pointInLandcover(x,z,o.polygons))return true;const m=o.margin+radius;for(const p of o.polygons)for(const ring of p)for(let i=0;i<ring.length;i++)if(sqSegment(x,z,ring[i],ring[(i+1)%ring.length])<m*m)return true;}return false;
+  }
+  // Reconstructed access surfaces are distinct from open grass. Clear both
+  // planted objects and the ground-cover polygons without editing source GIS.
+  for(const [index,exclusion] of hardscapeExclusions.entries())if(exclusion?.polygons?.length){
+    // Overlapping stair treads and landings must be unified once; subtracting
+    // dozens of almost coincident cuts from woodland repeatedly is expensive.
+    // Derived presentation polygons share nominal edges; snap only these
+    // exclusion copies to 1 mm so floating-point treads cannot leave slivers.
+    const snapped=exclusion.polygons.map(p=>p.map(r=>r.map(v=>v.map(n=>Math.round(n*1000)/1000))));
+    const polygons=polygonClipping.union(...snapped);
+    for(const [part,polygon] of polygons.entries())addObstacle([polygon],.4,'architecture-access',`${exclusion.id||`architecture-access-${index}`}${part?`:${part}`:''}`);
   }
   const treeCells=new Map();
   function addTree(p){if(trees.length>=maxTrees||blocked(p.x,p.z))return false;const cx=Math.floor(p.x/6),cz=Math.floor(p.z/6);for(let x=-1;x<=1;x++)for(let z=-1;z<=1;z++)for(const t of treeCells.get(`${cx+x}/${cz+z}`)||[])if((p.x-t.x)**2+(p.z-t.z)**2<(((p.spacing||5.1)+(t.spacing||5.1))*.5)**2)return false;trees.push(p);const key=`${cx}/${cz}`;if(!treeCells.has(key))treeCells.set(key,[]);treeCells.get(key).push(p);return true;}

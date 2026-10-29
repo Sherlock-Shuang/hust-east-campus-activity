@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {nearbyInterior} from '../src/building-interiors.js';
+import {nearbyInterior,crossedInteriorDoor,interiorReturnSnapshot} from '../src/building-interiors.js';
 import {campusLandmarkArrival} from '../src/campus-landmark-arrival.js';
 import {indoorMovement,createC118Navigation,crossedC118Door} from '../src/c118-navigation.js';
 import {planOptoC118Interior} from '../src/opto-c118-interior.js';
@@ -10,6 +10,29 @@ test('interior entry requires on-foot proximity at the actual ground elevation',
   assert.equal(nearbyInterior(entries,state).kind,'building-interior');
   for(const change of [{x:40},{y:10},{mode:'roadster'},{mode:'scooter'},{mode:'hoverboard'}])assert.equal(nearbyInterior(entries,{...state,...change}),null);
   assert.equal(nearbyInterior(entries,{...state,mode:'spider'}).workId,'opto-c118');
+});
+const door={id:'opto-c118-main',x:0,z:-.65,y:2.82,radius:2,doorGate:{center:{x:0,z:0},normal:{x:0,z:1},halfWidth:2.4,frontDepth:1.8,backDepth:2.2},returnPose:{x:0,z:1.5,y:2.82}};
+const walker=(x,z,changes={})=>({x,z,y:2.82,mode:'walk',grounded:true,...changes});
+test('door admission uses the actual raised doorway, not a circle through walls or underneath its floor',()=>{
+  assert.equal(nearbyInterior([door],walker(0,1)).id,door.id);
+  for(const state of [walker(3,0),walker(0,3),walker(0,0,{y:.14}),walker(0,0,{grounded:false}),walker(0,0,{mode:'scooter'}),walker(0,-3)])assert.equal(nearbyInterior([door],state),null);
+  assert.equal(nearbyInterior([{...door,doorGate:{}}],walker(0,0)),null);
+});
+test('only an outside-to-inside walk through the clear doorway auto-enters the hall',()=>{
+  const before=walker(.2,.8),inside=walker(.2,-.2);
+  assert.equal(crossedInteriorDoor([door],before,inside).workId,'opto-c118');
+  assert.equal(crossedInteriorDoor([door],walker(0,.1,{mode:'spider'}),walker(0,-2.8,{mode:'spider'})).id,door.id,'fast grounded crossing is detected by its plane intersection, not the final trigger radius');
+  for(const [a,b] of [[null,inside],[inside,inside],[inside,before],[walker(3,.8),walker(3,-.2)],[before,{...inside,y:5}],[before,{...inside,grounded:false}],[before,{...inside,mode:'spider'}],[walker(0,30),inside]])assert.equal(crossedInteriorDoor([door],a,b),null);
+  const rotated={...door,doorGate:{...door.doorGate,normal:{x:1,z:0}},x:-.65,z:0};
+  assert.equal(crossedInteriorDoor([rotated],walker(.8,.2),walker(-.2,.2)).id,door.id);
+});
+test('return preserves character and camera while clearing momentum and placing the walker outside the same door',()=>{
+  const saved={mode:'spider',view:'third',pitch:.2,lookHeading:1.2,state:{...walker(0,-.2),yaw:1,vx:3,vz:2,verticalSpeed:4,speed:5}},snapshot=JSON.stringify(saved);
+  const returned=interiorReturnSnapshot(saved,door);
+  assert.equal(returned.mode,saved.mode);assert.equal(returned.view,'third');assert.equal(returned.lookHeading,1.2);
+  assert.equal(returned.state.z,1.5);assert.equal(returned.state.y,2.82);assert.equal(returned.state.speed,0);
+  assert.equal(crossedInteriorDoor([door],null,returned.state),null);
+  assert.equal(JSON.stringify(saved),snapshot,'saved pose is not mutated');
 });
 test('standard campus URL does not change spawn, explicit landmarks are named and bounded',()=>{
   assert.equal(campusLandmarkArrival({},'unknown'),null);

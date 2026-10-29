@@ -37,7 +37,10 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   for(let i=1;i<points.length;i++)if(!finite(points[i].progress))points[i].progress=points[i-1].progress+Math.hypot(points[i].x-points[i-1].x,points[i].z-points[i-1].z);
   const length=route.length??points.at(-1).progress,buildings=polygonRecords(world.buildings),water=polygonRecords(world.water),bounds=world.bounds;
   const bridgeSurfaceCells=new Map(),bridgeSolidCells=new Map(),walkSurfaceCells=new Map(),barrierCells=new Map(),surfaceCell=24;
-  const bridgeSurfaces=[...(route.roadSurfaces||[]),...(world.walkSurfaces||[]).filter(s=>s.bridge)].filter(s=>s.bridge&&s.polygon?.length>=3&&finite(s.surfaceY));
+  // Photo-aligned stair/arcade models replace a source road's generic flat
+  // bridge. Exclude only the old ribbon; retain the replacement deck and steps.
+  const replacedRoadIds=new Set(world.replacedRoadIds||[]);
+  const bridgeSurfaces=[...(route.roadSurfaces||[]).filter(s=>!replacedRoadIds.has(s.sourceId)),...(world.walkSurfaces||[]).filter(s=>s.bridge)].filter(s=>s.bridge&&s.polygon?.length>=3&&finite(s.surfaceY));
   // Elevated decks are slabs, not columns extending to the ground. Keep the
   // source height and the same thickness as the rendered bridge ribbon.
   const bridgeSolids=bridgeSurfaces.filter(s=>s.surfaceY>BASE_Y+.35).map(s=>({...s,id:`bridge-deck:${s.sourceId??''}`,label:'桥面净空不足',minHeight:s.surfaceY-(s.deckDepth??.75),height:s.surfaceY,rings:[s.polygon]}));
@@ -222,7 +225,13 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     let support;
     for(const surface of candidates){
       if(surface.surfaceY>referenceY+STEP_UP||support&&support.surfaceY>=surface.surfaceY||!inRing({x,z},surface.polygon))continue;
-      if(radius&&![[radius,0],[-radius,0],[0,radius],[0,-radius]].every(([dx,dz])=>candidates.some(v=>Math.abs(v.surfaceY-surface.surfaceY)<.15&&inRing({x:x+dx,z:z+dz},v.polygon))))continue;
+      if(radius&&![[radius,0],[-radius,0],[0,radius],[0,-radius]].every(([dx,dz])=>{
+        const p={x:x+dx,z:z+dz};
+        if(candidates.some(v=>Math.abs(v.surfaceY-surface.surfaceY)<.15&&inRing(p,v.polygon)))return true;
+        // At a shared edge, part of the foot can already rest on an adjacent
+        // solid landing or tread. It need not also be tagged as a bridge.
+        return (walkSurfaceCells.get(`${Math.floor(p.x/surfaceCell)}/${Math.floor(p.z/surfaceCell)}`)||[]).some(v=>Math.abs(v.surfaceY-surface.surfaceY)<=STEP_UP+EPS&&inRing(p,v.polygon)&&!(v.holes||[]).some(h=>inRing(p,h)));
+      }))continue;
       support=surface;
     }
     return support;
@@ -292,7 +301,10 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       // a discontinuity across the entire footprint before contactPose tilts
       // the vehicle, while still allowing the existing continuous ramps.
       if(bodies.some(p=>Math.abs(contactAt(p.x,p.z,p.radius,y).height-oldGround.height)>STEP_UP+(delta+Math.hypot(p.x-previous.x,p.z-previous.z))*.25))return'桥面边缘';
-      if(oldGround.onBridge&&oldGround.height>BASE_Y+.35&&bodies.some(p=>{const g=contactAt(p.x,p.z,p.radius,y);return!g.onBridge&&g.raised;}))return'桥面边缘';
+      // A stair landing is a solid raised surface, even without the bridge
+      // flag. Crossing onto it at the same level must not form an invisible
+      // fence; keep rejecting an actual unsupported height discontinuity.
+      if(oldGround.onBridge&&oldGround.height>BASE_Y+.35&&bodies.some(p=>{const g=contactAt(p.x,p.z,p.radius,y);return!g.onBridge&&g.raised&&Math.abs(g.height-oldGround.height)>STEP_UP;}))return'桥面边缘';
     }
     return'';
   }

@@ -6,7 +6,7 @@ import { createGeoScene } from '../src/geo-scene.js';
 import { createLocalFrame, geoToLocal } from '../src/geospatial.js';
 import { pointInLandcover } from '../src/campus-landcover.js';
 import { waterFootprint } from '../src/water-details.js';
-import { createEinsteinSquare, planEinsteinSquare, EINSTEIN_SQUARE_SOURCE_ID } from '../src/einstein-square.js';
+import { createEinsteinSquare, planEinsteinSquare, EINSTEIN_SQUARE_SOURCE_ID, EINSTEIN_SQUARE_ALIGNMENT } from '../src/einstein-square.js';
 
 function fixture() {
   const data = JSON.parse(readFileSync(new URL('../public/data/east-campus.geojson', import.meta.url), 'utf8'));
@@ -34,7 +34,7 @@ test('Einstein square uses the mapped park, retains its source data, and does no
   } finally { model.dispose(); }
 });
 
-test('mapped transverse road remains open and the statue is north of it', () => {
+test('statue is on the southern court, with continuous approach and the road behind the separate pergola', () => {
   const { frame, model } = fixture();
   try {
     const plan = planEinsteinSquare(model, { frame, geoToLocal });
@@ -47,6 +47,31 @@ test('mapped transverse road remains open and the statue is north of it', () => 
     }
     for (const step of plan.steps) assert.ok(step.polygon.every(p => pointInLandcover(p.x, p.z, plan.polygons)));
     assert.ok(plan.platform.polygon.every(p => pointInLandcover(p.x, p.z, plan.polygons)));
+    assert.ok(plan.statue.z > Math.max(a.z, b.z) + 30, 'statue must be south of the transverse road, never on the grass cap');
+    const registered = geoToLocal({ longitude: EINSTEIN_SQUARE_ALIGNMENT.statue[0], latitude: EINSTEIN_SQUARE_ALIGNMENT.statue[1], coordinateSystem: 'EPSG:4326' }, frame);
+    const front = geoToLocal({ longitude: EINSTEIN_SQUARE_ALIGNMENT.frontAxis[0], latitude: EINSTEIN_SQUARE_ALIGNMENT.frontAxis[1], coordinateSystem: 'EPSG:4326' }, frame);
+    assert.equal(plan.statue.x, registered.x);
+    assert.equal(plan.statue.z - registered.z, 3, 'user site correction moves only the statue three metres south');
+    assert.equal(plan.statue.yaw, Math.atan2(front.x - registered.x, front.z - registered.z), 'south-facing axis must not rotate with the small adjustment');
+    assert.deepEqual(plan.pavingCenter, { x: registered.x, z: registered.z }, 'round paving keeps its registered centre');
+    assert.deepEqual(plan.statue.registeredCoordinate, EINSTEIN_SQUARE_ALIGNMENT.statue);
+    const corrected = geoToLocal({ longitude: plan.statue.coordinate[0], latitude: plan.statue.coordinate[1], coordinateSystem: 'EPSG:4326' }, frame);
+    assert.ok(Math.hypot(corrected.x - plan.statue.x, corrected.z - plan.statue.z) < 1e-6, 'reported coordinate follows the local adjustment');
+    const court = geoToLocal({ longitude: EINSTEIN_SQUARE_ALIGNMENT.pergolaCourt[0], latitude: EINSTEIN_SQUARE_ALIGNMENT.pergolaCourt[1], coordinateSystem: 'EPSG:4326' }, frame);
+    const worldCourt = { x: plan.statue.x + plan.pergola.x * Math.cos(plan.statue.yaw) + plan.pergola.z * Math.sin(plan.statue.yaw), z: plan.statue.z - plan.pergola.x * Math.sin(plan.statue.yaw) + plan.pergola.z * Math.cos(plan.statue.yaw) };
+    assert.ok(Math.hypot(worldCourt.x - court.x, worldCourt.z - court.z) < 1e-8, 'northern corridor remains fixed in campus coordinates');
+    const old = geoToLocal({ longitude: 114.4301, latitude: 30.51682, coordinateSystem: 'EPSG:4326' }, frame);
+    assert.equal(pointInLandcover(old.x, old.z, plan.polygons), false, 'northern cap is restored to the original grass layer');
+    assert.ok(plan.pergola.z < -18 && plan.pergola.z > -24, 'northern court has an independently registered centre');
+    assert.ok(plan.pergolaColumns.some(c => c.z < -29), 'curved corridor reaches its observed northern arc');
+    const arrival = plan.arrival;
+    assert.ok(arrival && arrival.z > plan.statue.z && arrival.y === .16);
+    for (let i = 0; i <= 20; i++) {
+      const t = i / 20, x = arrival.x + (plan.statue.x - arrival.x) * t, z = arrival.z + (plan.statue.z - arrival.z) * t;
+      assert.ok(pointInLandcover(x, z, plan.polygons), 'the walking approach does not cross the transverse road');
+    }
+    assert.ok(plan.barriers.every(b => !pointInLandcover(arrival.x, arrival.z, [[b.polygon.map(p => [p.x, p.z])]])), 'tour arrival is clear of all solid objects');
+    assert.ok(Math.abs(arrival.yaw - Math.atan2(arrival.x - plan.statue.x, arrival.z - plan.statue.z)) < 1e-10);
   } finally { model.dispose(); }
 });
 
@@ -60,7 +85,8 @@ test('stairs have walkable rises matching geometry and raised sides have barrier
       for (const step of steps) { assert.ok(Math.abs(step.surfaceY - y - .12) < 1e-8); y = step.surfaceY; }
       assert.equal(y, layer.plan.platform.surfaceY);
     }
-    assert.ok(layer.infrastructure.barriers.some(b => b.id === 'einstein-platform-edge-0--6'));
+    assert.equal(layer.infrastructure.barriers.filter(b => b.id.startsWith('einstein-platform-edge-')).length, 64);
+    assert.equal(layer.plan.pergolaColumns.length, 22);
     assert.ok(layer.infrastructure.walkSurfaces.some(s => s.kind === 'plaza'));
     assert.ok(layer.infrastructure.barriers.every(b => b.minHeight >= 0 && b.height > b.minHeight));
     layer.dispose();

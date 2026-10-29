@@ -69,6 +69,19 @@ test('clipped ground cover never repaints any hardscape exclusion polygon',()=>{
   const sports=model.records.find(r=>r.category==='sports'&&r.shapes?.length);assert.ok(sports);assert.ok(plan.obstacles.some(o=>o.id===sports.id));
 });
 
+test('new building approaches clear trees, shrubs and ground cover without changing the mapped planting',()=>{
+  const tree=plan.trees.find(t=>t.positionStatus==='sampled-inside-source-planting-polygon');
+  assert.ok(tree);
+  const polygon=[[[[tree.x-6,tree.z-6],[tree.x+6,tree.z-6],[tree.x+6,tree.z+6],[tree.x-6,tree.z+6],[tree.x-6,tree.z-6]]]];
+  const before=JSON.stringify(model.records.map(r=>r.feature));
+  const access=planCampusLandcover(model,{frame,geoToLocal,hardscapeExclusions:[{id:'test-building-approach',polygons:polygon}]});
+  assert.ok(access.obstacles.some(o=>o.id==='test-building-approach'));
+  assert.ok(!access.trees.some(t=>pointInLandcover(t.x,t.z,polygon)));
+  assert.ok(!access.shrubs.some(t=>pointInLandcover(t.x,t.z,polygon)));
+  assert.ok(!access.coverages.some(c=>pointInLandcover(tree.x,tree.z,c.polygons)));
+  assert.equal(JSON.stringify(model.records.map(r=>r.feature)),before);
+});
+
 test('canopy LOD reduces actual submitted triangles and retains six crown forms',()=>{
   const trees=[0,1,2,3,4,5].map(i=>({x:i*9,z:0,height:12,radius:4,seed:i/6,form:['spreading','oval','upright'][i%3]})),layer=createTreeLayer(THREE,trees,{detail:'forest',whitewash:false});
   assert.equal(layer.counts.variants,6);assert.equal(layer.counts.distantCanopyTrianglesPerTree,128);
