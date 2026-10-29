@@ -3,6 +3,12 @@
  * The displayed datum plane is flat because no surveyed terrain is supplied.
  * OSM source tags are observations, not a claim of survey-grade accuracy.
  */
+export function setCartographicLinesVisible(group,visible){
+  // Plan-map lines deliberately ignore depth. They must not remain over the
+  // rendered buildings/statues when using the volumetric reconstruction.
+  group.traverse(object=>{if(object.isLine)object.visible=!!visible;});
+}
+
 export function createGeoScene(THREE, scene, featureCollection, frame, projectionFn) {
   if(featureCollection?.type!=='FeatureCollection'||!Array.isArray(featureCollection.features))throw new TypeError('Expected a GeoJSON FeatureCollection.');
   if(frame?.sourceDatum!=='EPSG:4326'||frame?.units!=='metres')throw new TypeError('An explicit WGS84 local frame in metres is required.');

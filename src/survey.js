@@ -6,10 +6,12 @@ import {
   localToGeo,
   geodesicDistance,
 } from "./geospatial.js";
-import { createGeoScene } from "./geo-scene.js";
+import { createGeoScene,setCartographicLinesVisible } from "./geo-scene.js";
 import { createWaterDetails } from "./water-details.js";
 import { applyRiverTerrain } from "./river-terrain.js";
 import { createCampus3D } from "./campus-3d.js";
+import {mergeCampusExtension} from './campus-data-merge.js';
+import {campusLandmarkArrival} from './campus-landmark-arrival.js';
 import { createCommuteExperience } from "./commute-experience.js";
 import { mountCampusReferenceAtlas } from './campus-reference-atlas.js';
 import { createCampusSports } from './campus-sports.js';
@@ -129,6 +131,7 @@ let fc,
   needsRender = true,
   viewMode = "oblique";
 let liveControl, liveFrozen = false;
+let pendingLandmark=new URLSearchParams(location.search).get('place');
 const qualityUI=mountPerformanceUI({document,storage:getQualityStorage(),mode:qualityBudget.mode,onChange(mode){performanceQuality.setMode(mode);applyPerformanceBudget();canvas.focus({preventScroll:true});}});
 function applyPerformanceBudget(){
   qualityBudget=performanceQuality.budget;
@@ -280,7 +283,7 @@ mountCampusReferenceAtlas({container,button:$("campus-reference-toggle"),onFocus
   viewMode='oblique';$("oblique").classList.add('active');$("top").classList.remove('active');needsRender=true;
 }});
 function globalBox() {
-  const bbox = sourceManifest.scope?.recommendedViewBbox || fc.requestedBbox;
+  const bbox = fc.viewBbox || sourceManifest.scope?.recommendedViewBbox || fc.requestedBbox;
   if (bbox?.length === 4) {
     const b = new THREE.Box3();
     for (const longitude of [bbox[0], bbox[2]])
@@ -528,6 +531,7 @@ function applyLayers() {
   waterDetails?.setVisible(threeD && layerSettings.water);
   commute?.setVisible(threeD);
   grid.visible = !threeD;
+  setCartographicLinesVisible(model.group,!threeD);
   model.setLayerVisible("building", layerSettings.building && !threeD);
   model.setLayerVisible("road", layerSettings.road && !threeD);
   model.setLayerVisible("poi", !threeD);
@@ -974,6 +978,10 @@ function render(now) {
     if (t >= 1) animation = null;
   }
   const tickStart=performance.now();
+  if(pendingLandmark&&!liveFrozen&&commute?.player){
+    const pose=campusLandmarkArrival(campus,pendingLandmark);pendingLandmark=null;
+    if(pose){const arrived=commute.player.enterAt(pose);if(!arrived?.ok)toast('该导览位置暂不可达，请从校园步行前往');}
+  }
   if (!liveFrozen && commute?.tick(dt)) needsRender = true;
   if(!liveFrozen&&!document.hidden&&layerSettings.symbolic&&commute?.running&&campus?.tick?.(dt,camera))needsRender=true;
   tickWork+=performance.now()-tickStart;
@@ -1019,19 +1027,21 @@ function render(now) {
 camera.position.set(500, 1600, 900);
 liveControl = createLiveExperience({THREE,scene,camera,canvas,container,
   getPlayer:()=>commute?.player,
+  getInteriors:()=>campus?.optoEntry?[campus.optoEntry]:[],
   setSuspended(value){liveFrozen=value;commute?.setSuspended(value);controls.enabled=!value&&!commute?.player.active;needsRender=true;},
   invalidate:()=>{needsRender=true;},notify:toast,
 });
 requestAnimationFrame(render);
 try {
-  const [data, manifest] = await Promise.all([
+  const [data, manifest, extension] = await Promise.all([
     fetch("./data/east-campus.geojson").then((r) => {
       if (!r.ok) throw new Error("建筑数据尚未就绪");
       return r.json();
     }),
     fetch("./data/source-manifest.json").then((r) => (r.ok ? r.json() : {})),
+    fetch('./data/opto-southeast.geojson').then(r=>{if(!r.ok)throw new Error('光电大楼补充地图未能载入');return r.json();}),
   ]);
-  await loadDataset(data, manifest);
+  await loadDataset(mergeCampusExtension(data,extension), manifest);
 } catch (error) {
   $("load-screen").querySelector("span").textContent = "数据尚未加载";
   $("load-screen").querySelector("small").textContent = error.message;
@@ -1070,6 +1080,7 @@ $("export-model").onclick = async () => {
     snapshot.setLayerVisible("road", false);
     snapshot.setLayerVisible("poi", false);
     snapshot.setLayerVisible("sports", false);
+    setCartographicLinesVisible(snapshot.group,false);
     snapshot.group.userData = {
       description:
         "3D campus reconstructed from OpenStreetMap footprints. Heights, facade details and road widths include explicit estimates; not a measured digital twin.",

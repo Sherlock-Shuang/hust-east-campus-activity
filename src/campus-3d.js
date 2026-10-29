@@ -19,6 +19,8 @@ import { alignEastNineColumnFeet } from './east-nine-ground-contact.js';
 import { collectEastNineAccess } from './east-nine-access.js';
 import { createYunyuanDetails } from './yunyuan-details.js';
 import {streetFootprint,polygonsOverlap} from './street-clearance.js';
+import {createEinsteinSquare} from './einstein-square.js';
+import {createOptoBuilding,OPTO_BUILDING_ID} from './opto-building.js';
 
 /** Low road-edge stones, derived from the existing road ribbons. Accesses are
  * left open wherever another mapped road or footpath reaches the edge. These
@@ -65,7 +67,7 @@ export function planCampusRoadEdges(roads) {
 export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
   if (!model?.records || !frame || typeof geoToLocal !== 'function') throw new TypeError('Source scene records and an explicit projection are required.');
   const architecture=createArchitecturalMaterials(THREE),surfaces=createSurfaceMaterials(THREE);
-  let forestLayer=null;const detailDisposers=[];
+  let forestLayer=null,optoBuilding=null;const detailDisposers=[];
   const group = new THREE.Group(); group.name = '校园三维重建 · 源轮廓与估算外观';
   group.userData = { units: 'metres', reconstruction: true, terrain: 'flat display datum; no measured terrain' };
   const layers = new Map(), records = new Map(), materials = new Map(), sharedGeometries = new Set(), warnings = [];
@@ -244,6 +246,11 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     const record = { id: r.id, feature: r.feature, group: holder, height, baseHeight, profile: p, category: 'building', parts: parts.map(part => part.id), derivedBuilding:!!r.derivedBuilding }; records.set(r.id, record);
     if(model.sportsInfrastructure?.replacedBuildingIds?.includes(r.id)){record.displayMode='photo-inferred-low-stand';holder.userData.renderedBy='campus-sports';continue;}
     if(r.derivedBuilding){holder.userData.footprintEvidence=r.footprintEvidence;holder.userData.sourceCategory=r.sourceCategory;holder.userData.derivedBuilding=true;}
+    if(r.id===OPTO_BUILDING_ID){
+      optoBuilding=createOptoBuilding(THREE,r,{frame,geoToLocal});
+      holder.add(optoBuilding.group);detailDisposers.push(optoBuilding.dispose);
+      record.height=33;record.displayMode='opto-source-courtyards-photo-informed';continue;
+    }
     if (r.id === eastNineId) {
       try {
       const detailed = createEastNineDetails(THREE, r, { ...p, parts }); holder.add(detailed.group || detailed);if(detailed.disposeArchitecturalTextures)detailDisposers.push(detailed.disposeArchitecturalTextures);
@@ -399,7 +406,9 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
   // Source planting footprints are reconstructed as separate canopy, shrub and
   // ground-cover layers. Sampling excludes roads, buildings, water and sports.
   const lawnLandmarks=createCampusLawnLandmarks(THREE,model,{frame,geoToLocal,surfaces});
-  forestLayer=createCampusLandcover(THREE,model,{frame,geoToLocal,surfaces,photoOpenLawns:lawnLandmarks.plan.lawns});
+  const einsteinSquare=createEinsteinSquare(THREE,model,{frame,geoToLocal});
+  layer('environment').add(einsteinSquare.group);detailDisposers.push(einsteinSquare.dispose);
+  forestLayer=createCampusLandcover(THREE,model,{frame,geoToLocal,surfaces,photoOpenLawns:[...lawnLandmarks.plan.lawns,{polygons:einsteinSquare.plan.polygons}]});
   layer('environment').add(forestLayer.group);
   counts.trees=forestLayer.counts.trees;
   counts.shrubs=forestLayer.counts.shrubs;
@@ -426,6 +435,15 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     model.architectureInfrastructure={...access,
       replacedBuildingIds:[...(access.replacedBuildingIds||[]),...compositeInfrastructure.replacedBuildingIds],
       walkSurfaces:[...(access.walkSurfaces||[]),...compositeInfrastructure.walkSurfaces]};
+  }
+  {
+    const access=model.architectureInfrastructure||{};
+    const opto=optoBuilding?.infrastructure||{};
+    model.architectureInfrastructure={...access,
+      replacedBuildingIds:[...(access.replacedBuildingIds||[]),...(opto.replacedBuildingIds||[])],
+      buildings:[...(access.buildings||[]),...(opto.buildings||[])],
+      barriers:[...(access.barriers||[]),...einsteinSquare.infrastructure.barriers,...(opto.barriers||[])],
+      walkSurfaces:[...(access.walkSurfaces||[]),...einsteinSquare.infrastructure.walkSurfaces,...(opto.walkSurfaces||[])]};
   }
   const forecourt=createEastNineForecourt(THREE,model,{surfaces,existingTrees:forestLayer.plan.trees,heightAt:eastNineGround.heightAt});
   layer('environment').add(forecourt.group);detailDisposers.push(forecourt.dispose);counts.forecourtPlantInstances=forecourt.plan.planting.plants.length;
@@ -461,6 +479,8 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
   function update(camera,{viewportHeight=800,detailDistanceScale=1}={}){
     const detailScale=Number.isFinite(detailDistanceScale)?Math.max(.35,Math.min(1.5,detailDistanceScale)):1;
     forestLayer?.update?.(camera,{detailDistanceScale:detailScale});
+    einsteinSquare.update?.(camera);
+    optoBuilding?.update?.(camera,{detailDistanceScale:detailScale});
     yunyuanForecourt.update(camera,{detailDistanceScale:detailScale});
     aquaticPlants.update?.(camera,{viewportHeight});
     if(!camera){for(const {b,distant,selection,roadEdges,visible}of facadeLods){visible.length=0;if(!distant)for(let i=0;i<b.matrices.length;i++)if(!roadEdges||!detailedRoadIds.has(b.ids[i]))visible.push(i);selection.update(visible);}fullDetail=true;return;}
@@ -481,5 +501,7 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     geometries.forEach(g => g.dispose()); usedMaterials.forEach(m => m.dispose()); group.removeFromParent();
   }
   function tick(dt,camera){return forecourt.update?.(dt,camera)||false;}
-  return { group, records, counts, layers, warnings, roadEdgePlan, landcoverPlan:forestLayer?.plan, lawnLandmarkPlan:lawnLandmarks.plan, dynamicGroups:forecourt.dynamicGroup?[forecourt.dynamicGroup]:[], tick, update, setVisible, setLayerVisible, setDetailedRoadIds, dispose };
+  return { group, records, counts, layers, warnings, roadEdgePlan,
+    optoEntry:optoBuilding?{...optoBuilding.entry,label:'光电信息大楼 · C118 报告厅'}:null,optoViewpoints:optoBuilding?.viewpoints,
+    einsteinSquarePlan:einsteinSquare.plan, landcoverPlan:forestLayer?.plan, lawnLandmarkPlan:lawnLandmarks.plan, dynamicGroups:forecourt.dynamicGroup?[forecourt.dynamicGroup]:[], tick, update, setVisible, setLayerVisible, setDetailedRoadIds, dispose };
 }

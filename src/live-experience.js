@@ -4,9 +4,10 @@ import {mountAudienceUI} from './audience-ui.js';
 import {ACTIVITY_WORKS} from './activity-catalog.js';
 import {mountMobileViewport} from './mobile-viewport.js';
 import {createSkyQrExperience} from './sky-qr.js';
+import {nearbyInterior} from './building-interiors.js';
 import './live-experience.css';
 
-export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,setSuspended,invalidate,notify}) {
+export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,getInteriors=()=>[],setSuspended,invalidate,notify}) {
   const disposeMobileViewport=mountMobileViewport();
   const root=document.createElement('div');root.id='live-experience';
   root.innerHTML=`
@@ -56,6 +57,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     loading('');updateFrozen();invalidate();if(!client.state.paused)canvas.focus({preventScroll:true});if(reason)notify(reason);
   }
   async function openPortal(portal){
+    if(portal.kind==='building-interior')return openInterior(portal);
     if(client.state.paused||opened)return;
     if(!audienceUI.registered)return notify('请先填写昵称参与活动');
     if(!client.connected)return notify('活动连接恢复后再进入');
@@ -98,6 +100,23 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     loadingTimer=setTimeout(()=>{if(opened?.attemptId===attemptId&&!opened.ready)loading('资源仍在加载。可继续等待，或返回后重试；尚未计为已打开。');},90000);
     updateFrozen();$('.live-portal-bar button').focus();invalidate();
   }
+  function openInterior(requested){
+    if(client.state.paused||opened||skyQr?.isOpen||!audienceUI.registered)return;
+    const player=getPlayer(),current=player?.active&&nearbyInterior(getInteriors(),player.state);
+    if(!current||current.id!==requested.id)return notify('请步行靠近光电楼 C118 入口');
+    const attemptId=crypto.randomUUID(),url=new URL(current.url,location.href);
+    opened={...current,attemptId,openingStarted:false,ready:false};frameOrigin=url.origin;rememberPose();updateFrozen();
+    $('.live-portal-bar > span').textContent=current.label;prompt.hidden=true;portalView.hidden=false;
+    loading('正在准备 C118 报告厅…');
+    url.searchParams.set('campusParentOrigin',location.origin);url.searchParams.set('campusAttempt',attemptId);
+    frame=document.createElement('iframe');frame.title=current.label;frame.referrerPolicy='same-origin';
+    frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-pointer-lock');frame.setAttribute('allow',"fullscreen 'none'");frame.src=url.href;
+    frame.addEventListener('load',bridge);
+    frame.addEventListener('error',()=>{if(opened?.attemptId!==attemptId)return;opened.failed=true;loading('报告厅加载失败，可以重试或返回校园。','error');});
+    $('.live-portal-frame').replaceChildren(frame);$('.live-portal-bar button').focus();
+    loadingTimer=setTimeout(()=>{if(opened?.attemptId===attemptId&&!opened.ready)loading('报告厅仍在加载，可返回校园后重试。');},30000);
+    invalidate();
+  }
   $('.live-portal-bar button').addEventListener('click',()=>closePortal());
   prompt.addEventListener('click',()=>nearest&&openPortal(nearest));
   function keyboard(event){
@@ -113,7 +132,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       const work=ACTIVITY_WORKS.find(w=>w.id===opened.workId);
       if(event.data.workId&&event.data.workId!==opened.workId)return;
       bridge();
-      if(!opened.ready&&['page_opened','runtime_ready'].includes(event.data.level)&&(event.data.level==='runtime_ready'||work?.ready!=='runtime_ready')){
+      if(!opened.ready&&['page_opened','runtime_ready'].includes(event.data.level)&&(event.data.level==='runtime_ready'||(work?.ready!=='runtime_ready'&&opened.kind!=='building-interior'))){
         opened.ready=true;clearTimeout(loadingTimer);loading('');attemptEvent('opened',{readyLevel:event.data.level});
       }
     }
@@ -147,7 +166,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     const markers=state.markers.filter(m=>isEventActive(m,now)),portals=state.portals.filter(p=>isEventActive(p,now));
     const signature=JSON.stringify([markers,portals]);
     if(signature!==visualSignature){visualSignature=signature;rebuild(markers,portals);}
-    if(opened&&!frame){const current=portals.find(p=>p.id===opened.id);if(!current||current.url!==opened.url)closePortal('活动入口已关闭，请留意主持人通知');}
+    if(opened&&!frame&&opened.kind!=='building-interior'){const current=portals.find(p=>p.id===opened.id);if(!current||current.url!==opened.url)closePortal('活动入口已关闭，请留意主持人通知');}
     skyQr?.refresh({visible:state.skyQrVisible===true,portalOpen:!!opened,blocked:!audienceUI?.registered});
     portalView.inert=state.paused||!!skyQr?.isOpen;
     const nextUI=JSON.stringify([state.paused,state.pauseMessage,activeAnnouncement,state.phase,state.skyQrVisible]);
@@ -172,7 +191,8 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
         if(!visited.has(portal.id)&&!visiting.has(portal.id)&&Date.now()>(visitRetry.get(portal.id)||0)){visiting.add(portal.id);record('visit',{pointId:portal.id,position:position()},{required:true}).then(()=>{visited.add(portal.id);visitRetry.delete(portal.id);}).catch(()=>{visitRetry.set(portal.id,Date.now()+15000);}).finally(()=>visiting.delete(portal.id));}
       }}
     }
-    prompt.hidden=!nearest;if(nearest)prompt.querySelector('strong').textContent=nearest.label;
+    if(!nearest&&player?.active&&audienceUI?.registered&&!state.paused&&!opened&&!skyQr?.isOpen)nearest=nearbyInterior(getInteriors(),player.state);
+    prompt.hidden=!nearest;if(nearest){prompt.querySelector('strong').textContent=nearest.label;prompt.querySelector('span').textContent=nearest.kind==='building-interior'?'室内参观':'体验入口';}
     root.dataset.paused=String(state.paused);root.dataset.revision=String(state.revision);root.dataset.markerCount=String(markers.length);root.dataset.portalCount=String(portals.length);
   }
   client=createLiveClient({onState:()=>{queueMicrotask(()=>refresh(true));},onConnection(connected){
