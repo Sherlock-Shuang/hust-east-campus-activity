@@ -1028,6 +1028,7 @@ camera.position.set(500, 1600, 900);
 liveControl = createLiveExperience({THREE,scene,camera,canvas,container,
   getPlayer:()=>commute?.player,
   getInteriors:()=>campus?.optoEntries||[],
+  getWallText:()=>campus?.group.visible&&campus.layers.get('building')?.visible?campus.aiMuralPlan:[],
   setSuspended(value){liveFrozen=value;commute?.setSuspended(value);controls.enabled=!value&&!commute?.player.active;needsRender=true;},
   invalidate:()=>{needsRender=true;},notify:toast,
 });

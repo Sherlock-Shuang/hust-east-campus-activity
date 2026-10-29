@@ -1,4 +1,5 @@
 import {createLiveClient} from './live-client.js';
+import {projectWallTextRects,avoidWallText} from './activity-label-layout.js';
 import {isEventActive} from './live-state.js';
 import {mountAudienceUI} from './audience-ui.js';
 import {ACTIVITY_WORKS} from './activity-catalog.js';
@@ -7,7 +8,7 @@ import {createSkyQrExperience} from './sky-qr.js';
 import {nearbyInterior,crossedInteriorDoor,interiorReturnSnapshot} from './building-interiors.js';
 import './live-experience.css';
 
-export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,getInteriors=()=>[],setSuspended,invalidate,notify}) {
+export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,getInteriors=()=>[],getWallText=()=>[],setSuspended,invalidate,notify}) {
   const disposeMobileViewport=mountMobileViewport();
   const root=document.createElement('div');root.id='live-experience';
   root.innerHTML=`
@@ -228,10 +229,14 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       if(now-lastUpdate<66)return false;lastUpdate=now;
       camera.updateMatrixWorld();
       const width=canvas.clientWidth,height=canvas.clientHeight;
+      const textRects=projectWallTextRects(THREE,camera,getWallText(),width,height);
       for(const item of items){
         const {data,group,label}=item;projected.set(data.x,Math.min(data.height*.65,22),data.z).project(camera);
         label.hidden=client.state.paused||projected.z>1||projected.z< -1||Math.abs(projected.x)>1||Math.abs(projected.y)>1;
-        label.style.left=`${(projected.x*.5+.5)*width}px`;label.style.top=`${(-projected.y*.5+.5)*height}px`;
+        const x=(projected.x*.5+.5)*width,y=(-projected.y*.5+.5)*height;
+        let labelY=y;
+        if(!label.hidden&&textRects.length){const size=item.labelSize??={width:label.offsetWidth,height:label.offsetHeight};labelY=avoidWallText(x,y,size.width,size.height,textRects,height);}
+        label.style.left=`${x}px`;label.style.top=`${labelY}px`;
         if(!client.state.paused&&!reduced?.matches){const phase=client.now()/1300+group.position.x*.01;item.material.uniforms.intensity.value=.8+Math.sin(phase)*.12;const scale=1+Math.sin(phase)*.045;item.ring.scale.setScalar(scale);}
       }
       if(client.state.paused||reduced?.matches)return false;

@@ -18,3 +18,5 @@
 编辑 `AI_WALL_MESSAGES` 可改路边短句；`planCampusAIMurals` 中的命名点位控制主要墙面。修改时需核对实际渲染的墙面偏移，而不是直接贴在 GIS 原始边上。
 
 运行 `node --test tests/campus-ai-murals.test.mjs`：验证正式场景接入、源数据保持不变、出生点朝向与视线、展示框/实墙承托、路边可见性。浏览器还需查看默认出生视角和阴影中的文字效果；几何测试不能替代实际文字渲染检查。
+
+Activity labels use `activity-label-layout.js` to avoid nearby visible text rectangles. Only their screen labels move; host-configured map coordinates, beams and entry admission remain unchanged. Label sizes are cached, and projection shares the existing 66 ms activity-update interval.
