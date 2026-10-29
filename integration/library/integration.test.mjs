@@ -33,7 +33,7 @@ test('generated manifest only contains runtime files with matching byte/hash met
   assert(main.includes("campus-library-save-v1"));assert(main.includes("last=now;if(campusSuspended)return;pollController"));
   assert(main.includes('suspended=suspended||campusSuspended;'));
   assert(!main.includes("fetch('/story/config.json')"));
-  // Original victory/door implementation is copied unchanged; no synthetic completion added.
+  // The activity entrance is open, while original victory/story conditions remain earned.
   const original=await readFile(path.join(assets,'library/hub/journey.mjs'),'utf8');
   assert(original.includes("state.completed.isaac&&state.completed.wanyan&&state.story.birthday.status==='done'"));
 });

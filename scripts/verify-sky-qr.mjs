@@ -11,7 +11,7 @@ import {randomBytes} from 'node:crypto';
 import assert from 'node:assert/strict';
 
 const root=fileURLToPath(new URL('..',import.meta.url));
-const out=path.join(root,'artifacts/sky-qr-world-2026-10-29');
+const out=path.join(root,'artifacts/sky-qr-only-2026-10-30');
 const exists=file=>access(file).then(()=>true,()=>false);
 const bundledPlaywright=path.join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs');
 const moduleName=process.env.PLAYWRIGHT_MODULE||(await exists(bundledPlaywright)?pathToFileURL(bundledPlaywright).href:'playwright');
@@ -42,7 +42,7 @@ async function newContext(options={}){
       const response=await route.fetch();let body=await response.text();
       const group=/([\w$]+)\.name="activity-sky-qr"/,camera=/new [\w$.]+\(44,1,1,(?:12e3|12000)\)/;
       assert.ok(group.test(body)&&camera.test(body),'Expected scene/camera anchors in built campus bundle');
-      body=body.replace(group,(match,name)=>`(${match},Object.defineProperty(globalThis,'__readSkyQrWorld',{value:()=>({position:${name}.position.toArray(),matrix:${name}.matrixWorld.toArray(),meshes:${name}.children.map(m=>({matrix:m.matrixWorld.toArray(),depthTest:m.material.depthTest}))})}))`);
+      body=body.replace(group,(match,name)=>`(${match},Object.defineProperty(globalThis,'__readSkyQrWorld',{value:()=>({visible:${name}.visible,position:${name}.position.toArray(),matrix:${name}.matrixWorld.toArray(),meshes:${name}.children.map(m=>({matrix:m.matrixWorld.toArray(),scale:m.scale.toArray(),depthTest:m.material.depthTest}))})}))`);
       body=body.replace(camera,match=>`(c=>{Object.defineProperty(globalThis,'__readSkyQrCamera',{value:()=>({position:c.position.toArray(),quaternion:c.quaternion.toArray(),forwardY:-c.matrixWorld.elements[9]})});return c})(${match})`);
       return route.fulfill({response,body});
     }
@@ -71,31 +71,28 @@ async function expectQr(page,visible){
     const data=document.querySelector('#live-experience')?.dataset;
     return data?.skyQrVisible===String(expected)&&data?.skyQrState===(expected?'ready':'hidden');
   },visible,{timeout:45000});
-  await page.locator('.sky-qr-open').waitFor({state:visible?'visible':'hidden'});
-  if(!visible)await page.locator('.sky-qr-overlay').waitFor({state:'hidden'});
+  await page.waitForFunction(expected=>globalThis.__readSkyQrWorld().visible===expected,visible);
+  await checkNoQrUi(page,visible?'Visible QR':'Hidden QR');
 }
 async function snapshot(page,name){
   activePage=page;
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   await page.screenshot({path:path.join(out,`${name}.png`)});
 }
-async function imageMetrics(page){
-  await page.waitForFunction(()=>{const image=document.querySelector('.sky-qr-image');return image?.complete&&image.naturalWidth>0&&image.naturalHeight>0;});
-  return page.locator('.sky-qr-image').evaluate(image=>{
-    const rect=image.getBoundingClientRect(),style=getComputedStyle(image);
-    const overlay=document.querySelector('.sky-qr-overlay').getBoundingClientRect();
-    return {naturalWidth:image.naturalWidth,naturalHeight:image.naturalHeight,
-      width:rect.width,height:rect.height,x:rect.x,y:rect.y,right:rect.right,bottom:rect.bottom,
-      fit:style.objectFit,transform:style.transform,filter:style.filter,
-      overlay:{x:overlay.x,y:overlay.y,right:overlay.right,bottom:overlay.bottom},
-      viewport:{width:innerWidth,height:innerHeight},documentWidth:document.documentElement.scrollWidth};
-  });
+async function checkNoQrUi(page,name){
+  const screen=await page.locator('#live-experience').evaluate(root=>({
+    elements:root.querySelectorAll('.sky-qr-open,.sky-qr-overlay,.sky-qr-dialog,.sky-qr-image,.sky-qr-close,[aria-label="微信二维码原图"]').length,
+    hasInstructions:/抬头扫码|查看原图|打开原图|扫码添加微信|长按图片识别/.test(root.textContent),
+    modalOpen:root.classList.contains('is-sky-qr-open'),
+    overflow:document.documentElement.scrollWidth>innerWidth+1
+  }));
+  check(`${name}: no QR button, dialog, instructions or screen overflow`,screen.elements===0&&!screen.hasInstructions&&!screen.modalOpen&&!screen.overflow,screen);
 }
 const worldSnapshot=page=>page.evaluate(()=>globalThis.__readSkyQrWorld());
 const cameraSnapshot=page=>page.evaluate(()=>globalThis.__readSkyQrCamera());
 async function verifyWorldPlacement(page){
   const fixed=await worldSnapshot(page);
-  check('QR has the fixed 2,400m world position and normal depth testing',JSON.stringify(fixed.position)===JSON.stringify([LEARNING_BOARD.x,2400,LEARNING_BOARD.z])&&fixed.meshes.every(mesh=>mesh.depthTest),fixed);
+  check('QR has the fixed 2,400m world position and normal depth testing',JSON.stringify(fixed.position)===JSON.stringify([LEARNING_BOARD.x,2400,LEARNING_BOARD.z])&&fixed.meshes.every(mesh=>mesh.depthTest&&mesh.scale[0]===1200&&mesh.scale[1]===1200),fixed);
   await page.locator('#map-canvas').focus();await page.keyboard.press('KeyC');
   await page.waitForFunction(()=>globalThis.__readSkyQrCamera().forwardY<.1);await snapshot(page,'desktop-level');
   await page.mouse.move(600,500);await page.waitForTimeout(100);const beforeTurn=await cameraSnapshot(page);
@@ -116,32 +113,16 @@ async function verifyWorldPlacement(page){
   check('Resize never changes the QR world size or pose',JSON.stringify(await worldSnapshot(page))===JSON.stringify(fixed));
   await page.setViewportSize({width:1440,height:960});
 }
-function checkImage(name,metrics){
-  const ratio=metrics.width/metrics.height,natural=metrics.naturalWidth/metrics.naturalHeight;
-  const uncropped=['contain','scale-down'].includes(metrics.fit)||metrics.fit!=='cover'&&Math.abs(ratio-natural)<.01;
-  const fits=metrics.x>=-1&&metrics.y>=-1&&metrics.right<=metrics.viewport.width+1&&metrics.bottom<=metrics.viewport.height+1;
-  const overlayFits=metrics.overlay.x>=-1&&metrics.overlay.y>=-1&&metrics.overlay.right<=metrics.viewport.width+1&&metrics.overlay.bottom<=metrics.viewport.height+1;
-  check(`${name}: complete original image fits without cropping or stretching`,uncropped&&fits&&overlayFits&&metrics.documentWidth<=metrics.viewport.width+1&&metrics.width>0&&metrics.height>0,metrics);
-}
 async function checkPauseClear(page,name){
-  await page.locator('.live-pause').waitFor({state:'visible'});
-  const filters=await page.locator('.live-pause').evaluate(el=>{const style=getComputedStyle(el);return {backdrop:style.backdropFilter||style.webkitBackdropFilter||'none',filter:style.filter};});
-  check(`${name}: paused campus does not blur the QR`,[filters.backdrop,filters.filter].every(value=>value==='none'||!value.includes('blur(')),filters);
-}
-async function checkOpenButtonFits(page,name){
-  const bounds=await page.locator('.sky-qr-open').evaluate(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight};});
-  check(`${name}: original-image button stays on screen`,bounds.x>=-1&&bounds.y>=-1&&bounds.right<=bounds.width+1&&bounds.bottom<=bounds.height+1,bounds);
-}
-async function checkViewerControls(page,name){
-  const controls=await page.locator('.sky-qr-close').evaluate(button=>{
-    const dialog=button.closest('[role="dialog"]').getBoundingClientRect(),rect=button.getBoundingClientRect();
-    return {x:rect.x,y:rect.y,right:rect.right,bottom:rect.bottom,
-      dialog:{x:dialog.x,y:dialog.y,right:dialog.right,bottom:dialog.bottom},
-      headingPosition:getComputedStyle(button.parentElement).position};
+  await page.waitForFunction(()=>document.querySelector('#live-experience')?.dataset.paused==='true');
+  const filters=await page.locator('.live-pause').evaluate(el=>{
+    const style=getComputedStyle(el);
+    return {backdrop:style.backdropFilter||style.webkitBackdropFilter||'none',filter:style.filter,background:style.backgroundColor,
+      visibleChildren:[...el.children].filter(child=>getComputedStyle(child).display!=='none').length};
   });
-  const inside=controls.x>=controls.dialog.x-1&&controls.y>=controls.dialog.y-1&&controls.right<=controls.dialog.right+1&&controls.bottom<=controls.dialog.bottom+1;
-  const linkVisible=await page.locator('.sky-qr-overlay a').isVisible();
-  check(`${name}: close control and original-image link remain visible inside the dialog`,inside&&controls.headingPosition!=='fixed'&&linkVisible,{...controls,linkVisible});
+  check(`${name}: pause leaves only the sky QR visible`,[filters.backdrop,filters.filter].every(value=>value==='none'||!value.includes('blur('))&&filters.background==='rgba(0, 0, 0, 0)'&&filters.visibleChildren===0,filters);
+  check(`${name}: the host pause still freezes player input`,await page.locator('#map-canvas').evaluate(el=>el.inert));
+  await checkNoQrUi(page,name);
 }
 
 try{
@@ -176,14 +157,8 @@ try{
   await admin.locator('#toggle-pause').click();
   await checkPauseClear(page,'Desktop');await checkPauseClear(second,'Second client');
   await snapshot(page,'desktop-paused-sky');
-  await page.locator('.sky-qr-open').click();await page.locator('.sky-qr-overlay').waitFor({state:'visible'});
-  checkImage('Desktop paused viewer',await imageMetrics(page));await checkViewerControls(page,'Desktop paused viewer');
-  await snapshot(page,'desktop-original');
-  await page.locator('.sky-qr-close').click();await page.locator('.sky-qr-overlay').waitFor({state:'hidden'});
-  check('Closing the viewer preserves the host pause',app.getState().paused&&await page.locator('#map-canvas').evaluate(el=>el.inert));
-  await page.locator('.sky-qr-open').click();await page.locator('.sky-qr-overlay').waitFor({state:'visible'});
   await admin.locator('#hide-sky-qr').click();await Promise.all([expectQr(page,false),expectQr(second,false)]);
-  check('Admin hide closes an already-open original viewer',await page.locator('.sky-qr-overlay').evaluate(el=>el.hidden));
+  check('Hiding the sky QR preserves the host pause',app.getState().paused&&await page.locator('#map-canvas').evaluate(el=>el.inert));
 
   await admin.locator('#show-sky-qr').click();await Promise.all([expectQr(page,true),expectQr(second,true)]);
   await checkPauseClear(page,'Paused redisplay');
@@ -192,7 +167,7 @@ try{
   await secondContext.setOffline(true);
   await admin.locator('#hide-sky-qr').click();await expectQr(page,false);
   await secondContext.setOffline(false);await expectQr(second,false);
-  check('Reconnection receives a hide missed while offline',await second.locator('.sky-qr-open').isHidden());
+  check('Reconnection receives a hide missed while offline',!(await worldSnapshot(second)).visible);
   await admin.locator('#show-sky-qr').click();await Promise.all([expectQr(page,true),expectQr(second,true)]);
 
   // Restore the real player pose before pausing: suspended players defer restore.
@@ -201,21 +176,18 @@ try{
   await mobileContext.addInitScript(({audienceId,pose})=>sessionStorage.setItem('campus-return-pose',JSON.stringify({audienceId,pose})),{audienceId:identity.audience.id,pose:skyPose});
   const phone=await newPage(mobileContext,'phone');await openCampus(phone);await expectQr(phone,true);
   await admin.locator('#toggle-pause').click();
-  await checkPauseClear(phone,'Phone portrait');await checkOpenButtonFits(phone,'Phone portrait');
+  await checkPauseClear(phone,'Phone portrait');
   await snapshot(phone,'mobile-portrait-sky');
-  await phone.locator('.sky-qr-open').tap();await phone.locator('.sky-qr-overlay').waitFor({state:'visible'});
-  checkImage('Phone portrait viewer',await imageMetrics(phone));await checkViewerControls(phone,'Phone portrait viewer');await snapshot(phone,'mobile-portrait-original');
+  const mobileWorld=await worldSnapshot(phone);
   await phone.setViewportSize({width:844,height:390});
   await phone.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-  checkImage('Phone landscape viewer',await imageMetrics(phone));await checkViewerControls(phone,'Phone landscape viewer');await snapshot(phone,'mobile-landscape-original');
-  await phone.locator('.sky-qr-close').tap();await phone.locator('.sky-qr-overlay').waitFor({state:'hidden'});
-  await checkOpenButtonFits(phone,'Phone landscape');await snapshot(phone,'mobile-landscape-sky');
-  await phone.locator('.sky-qr-open').tap();await phone.locator('.sky-qr-overlay').waitFor({state:'visible'});
+  await checkPauseClear(phone,'Phone landscape');await snapshot(phone,'mobile-landscape-sky');
+  check('Mobile rotation keeps the same 3D QR geometry',JSON.stringify(await worldSnapshot(phone))===JSON.stringify(mobileWorld));
   await admin.locator('#hide-sky-qr').click();await Promise.all([expectQr(page,false),expectQr(second,false),expectQr(phone,false)]);
-  check('Host hide closes the mobile viewer too',await phone.locator('.sky-qr-overlay').evaluate(el=>el.hidden));
+  check('Host hide removes the mobile sky QR too',!(await worldSnapshot(phone)).visible);
   const beforeReload=qrRequests.filter(request=>request.page==='desktop-one').length;
   await page.reload({waitUntil:'domcontentloaded'});await expectQr(page,false);
-  check('Hidden reload does not load the original image',qrRequests.filter(request=>request.page==='desktop-one').length===beforeReload);
+  check('Hidden reload does not load the QR texture',qrRequests.filter(request=>request.page==='desktop-one').length===beforeReload);
   await admin.locator('#toggle-pause').click();await page.locator('.live-pause').waitFor({state:'hidden'});
   check('No browser runtime errors',errors.length===0,errors);
   check('No browser request reached another origin',blockedRequests.length===0,blockedRequests);

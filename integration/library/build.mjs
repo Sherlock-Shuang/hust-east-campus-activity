@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {publicWanyanData} from './wanyan-public-text.mjs';
 import {loadWanyanRuntime} from './wanyan-runtime.mjs';
+import {openActivityLibraryDoor,openActivityLibraryDocument} from './activity-door.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const LIBRARY='/works/library/',WANYAN='/works/wanyan/';
@@ -60,7 +61,7 @@ export async function buildLibrary({sourceRoot,outputRoot,wanyanBuildRoot}){
   for(const file of ['wanyan-touch.mjs','wanyan-touch-gamepad.mjs','wanyan-skill-state.mjs'])await put(`wanyan/${file}`,await readFile(path.join(here,file),'utf8'));
   await put('library/isaac-touch.mjs',await readFile(path.join(here,'isaac-touch.mjs'),'utf8'));
   await put('wanyan/pointer-lock-compat.js',await readFile(path.join(here,'wanyan-pointer-lock.js'),'utf8'));
-  await copy(`${app}/viewer/index.html`,'library/index.html',s=>mobileAssets(injectAdapter(rebaseLibraryText(s),'library'),LIBRARY).replace('src="/works/library/hub/main.mjs"','src="/works/library/hub/main.mjs?v=mobile-20261028"'));
+  await copy(`${app}/viewer/index.html`,'library/index.html',s=>openActivityLibraryDocument(mobileAssets(injectAdapter(rebaseLibraryText(s),'library'),LIBRARY)));
   await tree(`${app}/viewer/hub`,'library/hub',name=>/\.(?:m?js|css)$/.test(name),async source=>{
     let s=rebaseLibraryText(source).replaceAll('library-save-v1','campus-library-save-v1').replaceAll('library-view-mode','campus-library-view-mode');
     if(s.includes('function frame(now){')){
@@ -94,6 +95,7 @@ export async function buildLibrary({sourceRoot,outputRoot,wanyanBuildRoot}){
       s=replaceExactly(s,"throw error;}\nconst gamepads", "window.campusWorkAdapter?.fail('图书馆剧情资源未能载入');throw error;}\nconst gamepads",'library story failure');
       s+=await readFile(path.join(here,'library-hooks.txt'),'utf8');
       s+=await readFile(path.join(here,'library-touch-hooks.txt'),'utf8');
+      s=openActivityLibraryDoor(s);
     }
     return s;
   });
@@ -149,6 +151,7 @@ export async function buildLibrary({sourceRoot,outputRoot,wanyanBuildRoot}){
   const games=entries.find(e=>e.file==='library/api/games.json');entries.push({...games,url:LIBRARY+'api/games'});
   transforms.push('Runtime root URLs rebased to /works/library/ and /works/wanyan/', 'Public neutral story preserves original step types, delays, reply counts and completion conditions; original story/avatars excluded', 'Library save and camera preferences use campus-only storage keys', 'Activity bridge adds pause and real readiness signals; no completion or victory is synthesized', 'Isaac runtime helper personal attribution anonymized; its menu and real victory bridge retained', 'Unity activity canvas catches known pointer-lock platform refusals and keeps ordinary mouse input; unrelated Unity errors still fail');
   transforms.push('Campus mobile controls share original movement or keyboard inputs, release on pause/cancel/resize, and never modify game completion', 'Mobile library phone uses full viewport and native text input; mobile rendering caps DPR at 1.1 and suspends the library background while the phone is open');
+  transforms.push('Activity library entrance is visibly open and traversable from the start, including after reset and restore; real game and story completion remain unchanged');
   const manifest={schemaVersion:1,generatedAt:new Date().toISOString(),sourceVersion:project.version,prefixes:[LIBRARY,WANYAN],entries,transforms,sourceChecks,unityRuntime:unityRuntime.provenance};
   await writeFile(path.join(outputRoot,'library-manifest.json'),JSON.stringify(manifest,null,2)+'\n');
   // Re-read source hashes after copying so concurrent edits cannot silently create a mixed release.

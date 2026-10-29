@@ -607,16 +607,16 @@
     "/works/library/": {
       "chunks": [
         {
-          "url": "/_activity_assets/bda89aafbf37b8188fb067bdbe7c5d272ae88916ce75b830125cfc48c3105f62.bin",
+          "url": "/_activity_assets/b3917f4b9402ab9e8d70fc682a5de95a324c58e083258d2f29e32a8c3f281830.bin",
           "encoding": "gzip",
-          "bytes": 4306,
-          "storedBytes": 1867,
-          "sha256": "5682296b1c94856e576bebb1f626b0a43b1f268849e00c83d3e700b9fb9f4d0e"
+          "bytes": 4321,
+          "storedBytes": 1873,
+          "sha256": "25ae0f841bd4e7ae893611eeca1e8e9b1375df1244dee3a7c7c979f30e732fdb"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 4306,
-      "sha256": "5682296b1c94856e576bebb1f626b0a43b1f268849e00c83d3e700b9fb9f4d0e"
+      "bytes": 4321,
+      "sha256": "25ae0f841bd4e7ae893611eeca1e8e9b1375df1244dee3a7c7c979f30e732fdb"
     },
     "/works/library/activity-adapter.js": {
       "chunks": [
@@ -810,16 +810,16 @@
     "/works/library/hub/main.mjs": {
       "chunks": [
         {
-          "url": "/_activity_assets/55b01291468d0fe981803de5412b31345ae1690b5617cd778a817dceca67bfc5.bin",
+          "url": "/_activity_assets/be70c60bd0c83f35dc4aeb56dc352e61c5ab5421f8aef0e92a9e270e795229c7.bin",
           "encoding": "gzip",
-          "bytes": 37234,
-          "storedBytes": 11958,
-          "sha256": "4725dae49e474a5bfdb121dec0ee6c3ea8fc162bc71709a43e83d39cc7f34461"
+          "bytes": 37138,
+          "storedBytes": 11943,
+          "sha256": "bc414bdbdd4562a4bf445c2388f58556d337475c388fdd29667d0b734eafe394"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 37234,
-      "sha256": "4725dae49e474a5bfdb121dec0ee6c3ea8fc162bc71709a43e83d39cc7f34461"
+      "bytes": 37138,
+      "sha256": "bc414bdbdd4562a4bf445c2388f58556d337475c388fdd29667d0b734eafe394"
     },
     "/works/library/hub/phone.css": {
       "chunks": [
@@ -950,16 +950,16 @@
     "/works/library/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/bda89aafbf37b8188fb067bdbe7c5d272ae88916ce75b830125cfc48c3105f62.bin",
+          "url": "/_activity_assets/b3917f4b9402ab9e8d70fc682a5de95a324c58e083258d2f29e32a8c3f281830.bin",
           "encoding": "gzip",
-          "bytes": 4306,
-          "storedBytes": 1867,
-          "sha256": "5682296b1c94856e576bebb1f626b0a43b1f268849e00c83d3e700b9fb9f4d0e"
+          "bytes": 4321,
+          "storedBytes": 1873,
+          "sha256": "25ae0f841bd4e7ae893611eeca1e8e9b1375df1244dee3a7c7c979f30e732fdb"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 4306,
-      "sha256": "5682296b1c94856e576bebb1f626b0a43b1f268849e00c83d3e700b9fb9f4d0e"
+      "bytes": 4321,
+      "sha256": "25ae0f841bd4e7ae893611eeca1e8e9b1375df1244dee3a7c7c979f30e732fdb"
     },
     "/works/library/isaac-source/SWF运行样本/The Binding of Isaac.swf": {
       "chunks": [
@@ -1237,16 +1237,16 @@
     "/works/library/story/config.json": {
       "chunks": [
         {
-          "url": "/_activity_assets/1f48828a1384a5c313e68ab06aba1167c8fc71a67db04c94d92ff88bb4fdfbc2.bin",
+          "url": "/_activity_assets/7be29f2f5dcc52a0c4ac9d1ffa68e9839e8622f5028b684e11eb99c4d86b3eaf.bin",
           "encoding": "gzip",
-          "bytes": 1537,
-          "storedBytes": 814,
-          "sha256": "d899e0c04a66cfac95ad56a5487c1fabdaf00af70a261ed7b8fa3c6301bc1dbf"
+          "bytes": 1549,
+          "storedBytes": 824,
+          "sha256": "611ae56c8a8b04b6e182b67e3637e73e78167b64134e245225978e6d8ea8eab9"
         }
       ],
       "mime": "application/json; charset=utf-8",
-      "bytes": 1537,
-      "sha256": "d899e0c04a66cfac95ad56a5487c1fabdaf00af70a261ed7b8fa3c6301bc1dbf"
+      "bytes": 1549,
+      "sha256": "611ae56c8a8b04b6e182b67e3637e73e78167b64134e245225978e6d8ea8eab9"
     },
     "/works/library/touch-controls.css": {
       "chunks": [

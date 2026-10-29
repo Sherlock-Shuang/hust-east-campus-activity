@@ -1,4 +1,5 @@
 import {createLiveClient} from './live-client.js';
+import {mountAnnouncementNotice} from './live-announcement.js';
 import {projectWallTextRects,avoidWallText} from './activity-label-layout.js';
 import {isEventActive} from './live-state.js';
 import {mountAudienceUI} from './audience-ui.js';
@@ -15,7 +16,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     <div class="live-connection" role="status">正在连接活动</div>
     <div class="live-marker-labels" aria-label="活动地点"></div>
     <div class="live-pause" tabindex="-1" hidden><div class="live-pause-symbol" aria-hidden="true"><i></i><i></i></div><span>校园暂时静止</span><p></p><small>请留意活动公告，恢复后可继续探索</small></div>
-    <section class="live-announcement" role="status" aria-live="polite" aria-atomic="true" hidden><span class="live-announcement-tag">校园广播</span><h2></h2><p></p><span class="live-announcement-time"></span></section>
+    <section class="live-announcement" role="status" aria-live="polite" aria-atomic="true" hidden></section>
     <button class="live-portal-prompt" hidden><span>体验入口</span><strong></strong><small>Enter 进入</small></button>
     <section class="live-portal-view" aria-label="体验程序" hidden><div class="live-portal-bar"><span></span><small>校园位置已保留</small><button type="button">返回校园</button></div><div class="live-portal-loading" role="status" hidden></div><div class="live-portal-frame"></div></section>`;
   container.append(root);
@@ -25,6 +26,10 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   let loadingTimer,returnPose=null,restorePending=true,previousInteriorPosition=null,pendingInteriorReturn=null;
   const visited=new Set(),visiting=new Set(),visitRetry=new Map();
   let restoreFocus=null,wasPaused=false;
+  const announcementNotice=mountAnnouncementNotice(announcement,{onDismiss(){
+    if(opened)frame?.focus();else if(!lastFrozen)canvas.focus({preventScroll:true});
+    invalidate();
+  }});
   const projected=new THREE.Vector3();
   const reduced=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
   const interactionRoots=[document.querySelector('body > header'),document.querySelector('.transport-selector'),canvas,...container.querySelectorAll('.view-toolbar,#inspect,#measurement,#mobile-controls,#mobile-orientation-hint,#mobile-enable-touch,#transport-interact,#resume-exploration')].filter(Boolean);
@@ -178,8 +183,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     const nextUI=JSON.stringify([state.paused,state.pauseMessage,activeAnnouncement,state.phase,state.skyQrVisible]);
     if(nextUI!==uiSignature||force){
       uiSignature=nextUI;pause.hidden=!state.paused;pause.querySelector('p').textContent=state.pauseMessage||'请稍候，活动即将继续';
-      announcement.hidden=!activeAnnouncement;
-      if(activeAnnouncement){announcement.dataset.tone=activeAnnouncement.tone;announcement.querySelector('h2').textContent=activeAnnouncement.title;announcement.querySelector('p').textContent=activeAnnouncement.body;announcement.querySelector('.live-announcement-time').textContent=activeAnnouncement.endAt?`持续至 ${new Date(activeAnnouncement.endAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}`:'';}
+      announcementNotice.update(activeAnnouncement);
       root.classList.toggle('is-paused',state.paused);updateFrozen();bridge();invalidate();
       audienceUI?.phase(state.phase);
       portalView.inert=state.paused||!!skyQr?.isOpen;
@@ -242,6 +246,6 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       if(client.state.paused||reduced?.matches)return false;
       if(now-lastPaint>=100){lastPaint=now;return true;}return false;
     },
-    dispose(){disposed=true;disposeMobileViewport();clearInterval(timer);client.dispose();closePortal();skyQr.dispose();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},
+    dispose(){disposed=true;announcementNotice.dispose();disposeMobileViewport();clearInterval(timer);client.dispose();closePortal();skyQr.dispose();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},
   };
 }
