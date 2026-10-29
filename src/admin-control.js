@@ -11,6 +11,7 @@ let presets = [], mapReady = false, mapView = null, defaultMapView = null, pollI
 let pauseMessageDirty = false, pauseMessageBase = '';
 let phaseDirty=false, phaseBase='', audienceData=null, audiencePending=false, selectedAudienceId=null, selectedAudience=null, detailLimit=100, searchTimer, detailRequest=0;
 let launchDirty=false, launchBase='', launchSelection=new Set();
+let skyQrReady = false;
 const defaultPauseMessage = '请稍候，活动即将继续';
 let selection = { x: 58.2, z: 17.6, label: '东九 B/C 前场' };
 const NS = 'http://www.w3.org/2000/svg';
@@ -51,6 +52,15 @@ function connection(online) {
 function setBusy(value) {
   busy = value;
   document.querySelectorAll('#dashboard button, #dashboard input, #dashboard textarea, #dashboard select').forEach(el => { el.disabled = value; });
+  renderSkyQr();
+}
+function renderSkyQr() {
+  const ready = loggedIn && skyQrReady && Boolean(snapshot);
+  const visible = ready && snapshot.state.skyQrVisible === true;
+  $('sky-qr-status').textContent = ready ? (visible ? '已显示' : '已收起') : '等待同步';
+  $('sky-qr-status').dataset.status = visible ? 'active' : 'off';
+  $('show-sky-qr').disabled = busy || !ready || visible;
+  $('hide-sky-qr').disabled = busy || !ready || !visible;
 }
 async function request(path, options = {}) {
   const headers = { ...options.headers };
@@ -73,18 +83,21 @@ async function request(path, options = {}) {
 }
 function showLogin(message = '') {
   loggedIn = false; csrfToken = ''; $('dashboard').hidden = true; $('login-screen').hidden = false;
+  skyQrReady = false; renderSkyQr();
   launchDirty=false;launchBase='';launchSelection.clear();delete $('activity-choices').dataset.signature;
   audienceData=null;selectedAudienceId=null;selectedAudience=null;detailRequest++;$('audience-list').replaceChildren();$('audience-detail').replaceChildren();delete $('audience-list').dataset.signature;delete $('audience-detail').dataset.signature;
   $('login-error').textContent = message;
 }
 function showDashboard() {
   loggedIn = true; $('login-screen').hidden = true; $('dashboard').hidden = false;
+  skyQrReady = false; renderSkyQr();
   $('admin-password').value = '';
 }
 function applySnapshot(data) {
   if (!data?.state) return;
   if (snapshot && data.state.revision < snapshot.state.revision) return;
   snapshot = data;
+  skyQrReady = loggedIn;
   syncPauseMessage();
   if (Number.isFinite(data.serverTime)) serverOffset = data.serverTime - Date.now();
   connection(true);
@@ -116,6 +129,7 @@ async function mutate(change, message) {
 function renderState() {
   if (!snapshot) return;
   const state = snapshot.state;
+  renderSkyQr();
   syncPhase();
   document.querySelector('.session-bar').dataset.paused = String(state.paused);
   $('session-title').textContent = state.paused ? '全场已暂停' : `当前阶段 · ${state.phase?.label||'自由探索'}`;
@@ -551,6 +565,8 @@ $('toggle-pause').addEventListener('click', () => {
   const target = !snapshot?.state.paused, applyMessageEdit = capturePauseMessageEdit();
   mutate(state => { applyMessageEdit(state); state.paused = target; }, target ? '暂停指令已发布，在线玩家将进入暂停状态。' : '恢复指令已发布，玩家可以继续探索。').then(ok => { if (ok) syncPauseMessage(true); });
 });
+$('show-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = true; }, '二维码已在校园天空显示。'));
+$('hide-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = false; }, '天空二维码已收起。'));
 $('save-pause-message').addEventListener('click', () => {
   const applyMessageEdit = capturePauseMessageEdit();
   mutate(state => applyMessageEdit(state), '暂停提示已保存。').then(ok => { if (ok) syncPauseMessage(true); });

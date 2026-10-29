@@ -1,4 +1,11 @@
 // Activity coordinates use the existing campus ENU frame. No source geometry is changed.
+// Area centroid of east-field way/1023821172, on the central soccer surface.
+// y matches its 0.066 m paint surface; the underlying grass is at 0.058 m.
+export const LEARNING_BOARD = Object.freeze({
+  id:'sports-learning-board',label:'操场留言板',
+  x:428.44619,y:.066,z:58.80678,radius:12,maxPlayerY:5,
+  yaw:.105,width:5.4,height:3.8,
+});
 export const ACTIVITY_WORKS = Object.freeze([
   {id:'library',name:'书境图书馆',description:'走进书境，探索原有旅程与书中游戏。',url:'/works/library/',ready:'runtime_ready'},
   {id:'wanyan',name:'黑神话.晚言',description:'进入晚言的真实 Unity 网页游戏。',url:'/works/wanyan/',ready:'runtime_ready'},

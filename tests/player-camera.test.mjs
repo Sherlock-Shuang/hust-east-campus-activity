@@ -49,6 +49,35 @@ test('a thin building wall shortens the trailing camera without putting it throu
   assert.ok(aboveRoof.position.z > 17);
 });
 
+test('a first-person walker can look almost straight up while other stateless camera limits stay unchanged', () => {
+  const state = { mode: 'walk', x: 24, y: 10, z: -35, yaw: .7 };
+  const eyePitch = pose => Math.atan2(pose.position.y - pose.target.y, Math.hypot(pose.position.x - pose.target.x, pose.position.z - pose.target.z));
+  const up = calculatePlayerCamera(state, { view: 'first', pitch: -10 });
+  near(eyePitch(up), -1.5);
+  near(up.position.y, state.y + 1.58);
+  assert.ok(up.target.y - up.position.y > 9.97, 'the final camera target reaches overhead, not just the stored input pitch');
+  for (const mode of ['walk', 'boat', 'scooter', 'roadster', 'helicopter', 'hoverboard', 'spider']) {
+    const subject = { ...state, mode };
+    assert.deepEqual(calculatePlayerCamera(subject, { view: 'third', pitch: -10 }), calculatePlayerCamera(subject, { view: 'third', pitch: -.65 }));
+    if (mode !== 'walk') near(eyePitch(calculatePlayerCamera(subject, { view: 'first', pitch: -10 })), -.65);
+  }
+});
+
+test('the walking first-person rig reaches overhead and retains the existing vehicle and downward limits', () => {
+  const eyePitch = pose => Math.atan2(pose.position.y - pose.target.y, Math.hypot(pose.position.x - pose.target.x, pose.position.z - pose.target.z));
+  for (const mode of ['walk', 'boat', 'scooter', 'roadster', 'helicopter', 'hoverboard']) {
+    const state = { mode, x: 24, y: 10, z: -35, yaw: .7, grounded: true, speed: 0 };
+    const rig = createVehicleCameraRig(); rig.reset(state);
+    const up = rig.update(state, 0, { view: 'first', pitch: -10, snap: true });
+    near(eyePitch(up), mode === 'walk' ? -1.5 : -.35);
+    const down = rig.update(state, 0, { view: 'first', pitch: 10, snap: true });
+    near(eyePitch(down), .85);
+    rig.reset(state);
+    const third = rig.update(state, 0, { view: 'third', pitch: -10, snap: true });
+    near(Math.atan2(third.position.y - third.target.y, Math.hypot(third.position.x - third.target.x, third.position.z - third.target.z)), mode === 'walk' ? -1.5 : -.35);
+  }
+});
+
 test('an open building courtyard does not obstruct a camera contained within its hole', () => {
   const courtyard = { rings: [rectangle(-20, -20, 20, 20), rectangle(-8, -8, 8, 8)], height: 20 };
   const clear = calculatePlayerCamera({ mode: 'walk', x: 0, y: 0, z: 0, yaw: 0 });
@@ -518,6 +547,63 @@ function layeredDeck({top=8,thickness=.75,ring=rectangle(-20,-20,20,20)}={}){
   groundAt.solidsInBounds=()=>[deck];
   return groundAt;
 }
+
+test('walking third-person sky aim leaves the collision-safe eye unchanged on ground and both sides of a bridge',()=>{
+  const wall={rings:[rectangle(-2,3,2,3.04)],height:18};
+  const cases=[
+    {name:'ground wall',y:.14,groundAt:()=>.14,world:{buildings:[wall]}},
+    {name:'under bridge',y:.14,groundAt:layeredDeck({top:3}),world:{buildings:[]}},
+    {name:'bridge top wall',y:8,groundAt:layeredDeck(),world:{buildings:[wall]}},
+  ];
+  for(const item of cases){
+    const state={mode:'walk',x:0,y:item.y,z:0,yaw:0,speed:0,grounded:true};
+    const level=createVehicleCameraRig(),sky=createVehicleCameraRig();level.reset(state);sky.reset(state);
+    const options={view:'third',lookLocked:true,groundAt:item.groundAt,world:item.world,snap:true};
+    let normal=level.update(state,0,{...options,pitch:0}),up=sky.update(state,0,{...options,pitch:-1.5});
+    assert.deepEqual(up.position,normal.position,`${item.name}: an optical target cannot pull the eye across a wall or deck`);
+    assert.ok(up.position.y>=state.y+1.04,`${item.name}: the camera stays at chest height instead of crouching into the ground`);
+    if(item.name==='under bridge'){
+      assert.ok(up.position.y<2,'the eye remains below the deck');
+      assert.ok(up.target.y>3,'the sky look-at point may cross a ceiling without moving the camera through it');
+    }else assert.ok(up.position.z<3,'the boom stops before the wall');
+    for(let i=0;i<45;i++){
+      level.rotate(.02);sky.rotate(.02);
+      normal=level.update(state,1/60,{...options,snap:false,pitch:0});up=sky.update(state,1/60,{...options,snap:false,pitch:-1.5});
+      assert.deepEqual(up.position,normal.position,'render-only sky targets never feed the following frame collision solver');
+      const length=Math.hypot(up.target.x-up.position.x,up.target.y-up.position.y,up.target.z-up.position.z);
+      assert.ok((up.target.y-up.position.y)/length>.995);
+    }
+  }
+});
+
+test('walking third-person sky look recentres and changes views without an angular cut',()=>{
+  const state={mode:'walk',x:0,y:.14,z:0,yaw:0,speed:0,grounded:true},rig=createVehicleCameraRig();rig.reset(state);
+  const options={lookLocked:true,groundAt:()=>.14};
+  const direction=p=>{const v=[p.target.x-p.position.x,p.target.y-p.position.y,p.target.z-p.position.z],length=Math.hypot(...v);return v.map(n=>n/length);};
+  const angle=(a,b)=>Math.acos(Math.max(-1,Math.min(1,a.reduce((sum,n,i)=>sum+n*b[i],0))));
+  let pose=rig.update(state,0,{...options,view:'third',pitch:.25,snap:true}),previous=direction(pose);
+  for(let i=0;i<60;i++){
+    pose=rig.update(state,1/60,{...options,view:'third',pitch:-1.5});
+    const current=direction(pose);assert.ok(angle(previous,current)<.14,'a large input gesture is spread over frames');previous=current;
+  }
+  assert.ok(previous[1]>.995);rig.recenter(state);
+  for(let i=0;i<60;i++){
+    pose=rig.update(state,1/60,{...options,view:'third'});
+    const current=direction(pose);assert.ok(angle(previous,current)<.11,'C returns from the sky without snapping down');previous=current;
+  }
+  near(previous[1],-Math.sin(.25),.001);
+  pose=rig.update(state,0,{...options,view:'third',pitch:-1.5,snap:true});previous=direction(pose);
+  for(const change of [{view:'first',pitch:.04,frames:8},{view:'third',pitch:-1.5,frames:30},{view:'first',pitch:.04,frames:30}]){
+    pose=rig.update(state,0,{...options,...change,snap:true});
+    assert.ok(angle(previous,direction(pose))<1e-6,'even an interrupted transition starts at the rendered optical direction');
+    for(let i=0;i<change.frames;i++){
+      pose=rig.update(state,1/60,{...options,...change});
+      const current=direction(pose);assert.ok(angle(previous,current)<.14,'the stored lift follows the 360ms view transition');previous=current;
+      assert.ok(pose.position.y>.5);
+    }
+  }
+  near(previous[1],-Math.sin(.04),.001);
+});
 
 test('real Guanggu viaduct keeps first and third person on the ground below the deck',()=>{
   const source=JSON.parse(readFileSync(new URL('../public/data/east-campus.geojson',import.meta.url),'utf8'));

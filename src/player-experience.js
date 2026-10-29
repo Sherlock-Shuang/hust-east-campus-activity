@@ -4,7 +4,7 @@ import { installRoadsterReferences } from './roadster-references.js';
 import { createPlayerMotion } from './player-motion.js';
 import { createPlayerModels } from './player-models.js';
 import { createWebSwingAudio } from './web-swing-audio.js';
-import { createVehicleCameraRig, createTraversalCameraRig } from './player-camera.js';
+import { createVehicleCameraRig, createTraversalCameraRig, WALK_MIN_PITCH } from './player-camera.js';
 import { getBuildingProfile } from './building-profiles.js';
 import { getReconstructionBuildings } from './campus-feature-selection.js';
 import { createPlayerPointerLock } from './player-pointer-lock.js';
@@ -70,6 +70,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     onError(){notify(pointerLock.supported?'暂未锁定鼠标：请先点一下游戏画面，再按 L；仍可直接移动鼠标环视。':'当前浏览器不支持鼠标锁定，仍可移动鼠标环视；在 Chrome 中打开此预览可使用锁定。');},
   });
   function clearInput(){if(!suspended)motion.clearActionInputs?.();keys.clear();held.clear();mobileHeld.clear();mobileAxes={forward:0,sideways:0};mobileControls?.reset();pulses.clear();cruise=false;liftTarget=null;landing=false;drag=null;mouseLook=null;held.delete('mouse-swing');webAudio.setActive(false);}
+  function clampLookPitch(value){return Math.max(motion.state.mode==='walk'?WALK_MIN_PITCH:-.35,Math.min(.85,value));}
   function recenter(preserveVehicleCamera=false,smooth=false){mouseLook=null;yawOffset=0;pitch=view==='first'?.04:motion.state.mode==='spider'?.18:motion.state.mode==='hoverboard'?.12:motion.state.mode==='roadster'?.15:.25;distance=undefined;manualPitch=false;lookHold=0;spiderCamera.reset(motion.state);if(smooth)vehicleCamera.recenter(motion.state);else if(!preserveVehicleCamera)vehicleCamera.reset(motion.state,motion.state.yaw);}
   function setImmersive(value){immersive=!!value;document.body.classList.toggle('spider-immersive',active&&motion.state.mode==='spider'&&immersive);document.body.classList.toggle('drive-immersive',active&&['roadster','hoverboard'].includes(motion.state.mode)&&driveImmersive);window.dispatchEvent(new Event('resize'));}
   function stopSuitView(){if(!suitView)return;suitView=false;recenter();updateUI();}
@@ -210,7 +211,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     const result=motion.placeWalker(pose);
     if(!result.ok)return result;
     initialized=true;view='first';enter('walk');
-    if(Number.isFinite(pose.pitch)){pitch=Math.max(-.35,Math.min(.85,pose.pitch));manualPitch=true;cameraFrame(0,true);invalidate();}
+    if(Number.isFinite(pose.pitch)){pitch=clampLookPitch(pose.pitch);manualPitch=true;cameraFrame(0,true);invalidate();}
     return result;
   }
   function exit(){
@@ -268,7 +269,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(suitView){suitAngle-=dx;suitPitch=Math.max(-.35,Math.min(.85,suitPitch+dy));}
     else{
       if(motion.state.mode==='spider')spiderCamera.rotate(-dx);else{yawOffset-=dx;vehicleCamera.rotate(-dx);}
-      if(dy){pitch=Math.max(-.35,Math.min(.85,pitch+dy));manualPitch=true;}
+      if(dy){pitch=clampLookPitch(pitch+dy);manualPitch=true;}
     }
     lookHold=1.5;
   }
@@ -426,7 +427,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(interaction?.mounted&&saved.mode==='scooter')models.setScooterAppearance(interaction.mounted.item.appearance);
     initialized=true;
     enter(saved.mode);if(!active||motion.state.mode!==saved.mode)return false;
-    view=saved.view;pitch=Number.isFinite(saved.pitch)?Math.max(-1.4,Math.min(1.4,saved.pitch)):.25;
+    view=saved.view;pitch=Number.isFinite(saved.pitch)?Math.max(saved.mode==='walk'?WALK_MIN_PITCH:-1.4,Math.min(1.4,saved.pitch)):.25;
     camera.near=view==='first'?.06:.12;camera.updateProjectionMatrix();
     yawOffset=Number.isFinite(saved.yawOffset)?saved.yawOffset:0;manualPitch=!!saved.manualPitch;distance=Number.isFinite(saved.distance)?Math.max(1,Math.min(100,saved.distance)):undefined;
     const restoredHeading=Number.isFinite(saved.lookHeading)?saved.lookHeading:motion.state.yaw;

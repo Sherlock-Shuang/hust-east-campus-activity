@@ -3,6 +3,7 @@ import {isEventActive} from './live-state.js';
 import {mountAudienceUI} from './audience-ui.js';
 import {ACTIVITY_WORKS} from './activity-catalog.js';
 import {mountMobileViewport} from './mobile-viewport.js';
+import {createSkyQrExperience} from './sky-qr.js';
 import './live-experience.css';
 
 export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,setSuspended,invalidate,notify}) {
@@ -18,7 +19,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   container.append(root);
   const $=selector=>root.querySelector(selector),pause=$('.live-pause'),announcement=$('.live-announcement'),portalView=$('.live-portal-view'),prompt=$('.live-portal-prompt'),labels=$('.live-marker-labels');
   const worldGroup=new THREE.Group();worldGroup.name='activity-beacons';scene.add(worldGroup);
-  let client,audienceUI,items=[],visualSignature='',uiSignature='',nearest=null,opened=null,frame=null,frameOrigin=null,lastPaint=0,lastUpdate=0,lastFrozen=false,connectedOnce=false,disposed=false;
+  let client,audienceUI,skyQr,items=[],visualSignature='',uiSignature='',nearest=null,opened=null,frame=null,frameOrigin=null,lastPaint=0,lastUpdate=0,lastFrozen=false,connectedOnce=false,disposed=false;
   let loadingTimer,returnPose=null,restorePending=true;
   const visited=new Set(),visiting=new Set(),visitRetry=new Map();
   let restoreFocus=null,wasPaused=false;
@@ -27,7 +28,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   const interactionRoots=[document.querySelector('body > header'),document.querySelector('.transport-selector'),canvas,...container.querySelectorAll('.view-toolbar,#inspect,#measurement,#mobile-controls,#mobile-orientation-hint,#mobile-enable-touch,#transport-interact,#resume-exploration')].filter(Boolean);
   const setInert=frozen=>interactionRoots.forEach(el=>{el.inert=frozen;});
   function updateFrozen(){
-    const frozen=!!client?.state.paused||!!opened||!audienceUI?.registered;
+    const frozen=!!client?.state.paused||!!opened||!!skyQr?.isOpen||!audienceUI?.registered;
     if(frozen!==lastFrozen){
       lastFrozen=frozen;
       if(frozen){restoreFocus=document.activeElement;document.exitPointerLock?.();}
@@ -145,14 +146,16 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     const signature=JSON.stringify([markers,portals]);
     if(signature!==visualSignature){visualSignature=signature;rebuild(markers,portals);}
     if(opened&&!frame){const current=portals.find(p=>p.id===opened.id);if(!current||current.url!==opened.url)closePortal('活动入口已关闭，请留意主持人通知');}
-    const nextUI=JSON.stringify([state.paused,state.pauseMessage,activeAnnouncement,state.phase]);
+    skyQr?.refresh({visible:state.skyQrVisible===true,portalOpen:!!opened,blocked:!audienceUI?.registered});
+    portalView.inert=state.paused||!!skyQr?.isOpen;
+    const nextUI=JSON.stringify([state.paused,state.pauseMessage,activeAnnouncement,state.phase,state.skyQrVisible]);
     if(nextUI!==uiSignature||force){
       uiSignature=nextUI;pause.hidden=!state.paused;pause.querySelector('p').textContent=state.pauseMessage||'请稍候，活动即将继续';
       announcement.hidden=!activeAnnouncement;
       if(activeAnnouncement){announcement.dataset.tone=activeAnnouncement.tone;announcement.querySelector('h2').textContent=activeAnnouncement.title;announcement.querySelector('p').textContent=activeAnnouncement.body;announcement.querySelector('.live-announcement-time').textContent=activeAnnouncement.endAt?`持续至 ${new Date(activeAnnouncement.endAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}`:'';}
       root.classList.toggle('is-paused',state.paused);updateFrozen();bridge();invalidate();
       audienceUI?.phase(state.phase);
-      portalView.inert=state.paused;
+      portalView.inert=state.paused||!!skyQr?.isOpen;
       if(state.paused&&!wasPaused){document.exitPointerLock?.();pause.focus({preventScroll:true});}
       wasPaused=state.paused;
     }
@@ -176,6 +179,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     $('.live-connection').dataset.connected=String(connected);
   }});
   audienceUI=mountAudienceUI(root,{onChange(){queueMicrotask(()=>{updateFrozen();refresh(true);});}});
+  skyQr=createSkyQrExperience({THREE,scene,root,invalidate,onOpenChange(){updateFrozen();refresh(true);}});
   updateFrozen();
   const pagehide=()=>{if(opened?.openingStarted)attemptEvent('returned',{}, {keepalive:true});};window.addEventListener('pagehide',pagehide);
   const timer=setInterval(()=>refresh(),200);
@@ -199,6 +203,6 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       if(client.state.paused||reduced?.matches)return false;
       if(now-lastPaint>=100){lastPaint=now;return true;}return false;
     },
-    dispose(){disposed=true;disposeMobileViewport();clearInterval(timer);client.dispose();closePortal();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},
+    dispose(){disposed=true;disposeMobileViewport();clearInterval(timer);client.dispose();closePortal();skyQr.dispose();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},
   };
 }

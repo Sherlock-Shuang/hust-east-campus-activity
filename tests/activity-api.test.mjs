@@ -39,6 +39,18 @@ test('Turso configuration rejects local filesystem production URLs and missing c
   assert.throws(()=>createTursoDatabase({}),/configuration/);
   assert.throws(()=>createTursoDatabase({TURSO_DATABASE_URL:'file:/tmp/private.db',TURSO_AUTH_TOKEN:'test'}),/remote/);
 });
+test('serverless sky QR state uses the shared boolean schema and survives handler replacement',async t=>{
+  const f=await fixture(t),initial=(await (await f.request('/api/live/state')).json()).state;
+  assert.equal(initial.skyQrVisible,false);
+  const invalid=await f.request('/api/admin/state',{method:'PUT',headers:{Cookie:f.admin.cookie,'X-CSRF-Token':f.admin.csrf},body:JSON.stringify({state:{...initial,skyQrVisible:'true'},expectedRevision:initial.revision})});
+  assert.equal(invalid.status,400);
+  const shown=await f.save({...initial,skyQrVisible:true});assert.equal(shown.skyQrVisible,true);
+  await f.restart();
+  assert.deepEqual((await (await f.request('/api/live/state',{},1)).json()).state,shown);
+  const hidden=await f.save({...shown,skyQrVisible:false});assert.equal(hidden.skyQrVisible,false);
+  await f.restart();
+  assert.deepEqual((await (await f.request('/api/live/state',{},1)).json()).state,hidden);
+});
 test('two independent libSQL clients preserve identity, admin sessions, revision CAS and origin protection',async t=>{
   const f=await fixture(t),initial=await (await f.request('/api/live/state')).json();
   assert.deepEqual(initial.state.portals.map(p=>p.workId),['library','wanyan','tasay']);

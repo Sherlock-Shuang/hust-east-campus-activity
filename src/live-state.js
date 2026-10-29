@@ -1,6 +1,6 @@
 // Shared, dependency-free schema for the activity console and campus clients.
 export function createDefaultLiveState() {
-  return {schemaVersion:1,revision:0,paused:false,pauseMessage:'请稍候，活动即将继续',phase:{id:'explore',label:'自由探索',guidance:'自由探索校园；作品开放与集合安排以主持人通知为准。'},announcement:null,markers:[],portals:[]};
+  return {schemaVersion:1,revision:0,paused:false,skyQrVisible:false,pauseMessage:'请稍候，活动即将继续',phase:{id:'explore',label:'自由探索',guidance:'自由探索校园；作品开放与集合安排以主持人通知为准。'},announcement:null,markers:[],portals:[]};
 }
 export function isEventActive(item, now = Date.now()) {
   return !!item && item.enabled !== false && (item.startAt == null || now >= item.startAt) && (item.endAt == null || now < item.endAt);
@@ -37,7 +37,7 @@ export function validateLiveState(input) {
   if(value.schemaVersion!==1)fail('不支持的活动状态版本');
   const revision=number(value.revision,'版本',0,Number.MAX_SAFE_INTEGER);
   if(!Number.isInteger(revision))fail('版本必须是整数');
-  const output={schemaVersion:1,revision,paused:bool(value.paused,'暂停状态'),pauseMessage:text(value.pauseMessage,'暂停提示',240,'请稍候，活动即将继续'),announcement:null,markers:[],portals:[]};
+  const output={schemaVersion:1,revision,paused:bool(value.paused,'暂停状态'),skyQrVisible:bool(value.skyQrVisible,'天空二维码显示状态',false),pauseMessage:text(value.pauseMessage,'暂停提示',240,'请稍候，活动即将继续'),announcement:null,markers:[],portals:[]};
   const phase=value.phase??createDefaultLiveState().phase;object(phase,'活动阶段');
   output.phase={id:id(phase.id),label:text(phase.label,'阶段名称',40,undefined,true),guidance:text(phase.guidance,'阶段引导',400,'')};
   if(value.announcement!=null){

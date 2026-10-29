@@ -230,6 +230,70 @@ test('mouse look keeps first-person aim when idle and rebases after HUD exit, bl
   assert.ok(f.camera.position.distanceTo(switched)<.1,'a view switch discards the old mouse coordinate');
 });
 
+test('walking first-person mouse look reaches the overhead sky without moving the eye and both views accept the same range',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enterAt({x:24,z:-35,yaw:.7});f.tick(.5);
+  const eye=f.camera.position.clone();
+  f.canvas.emit('pointerenter',{clientX:600,clientY:650});
+  f.canvas.emit('pointermove',{clientX:600,clientY:0});f.tick(.5);
+  assert.equal(f.experience.captureActivityPose().pitch,-1.5);
+  assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y>.995);
+  assert.ok(f.camera.position.distanceTo(eye)<1e-8,'looking up rotates the eye without lifting the player');
+  f.key('KeyV');f.tick(.5);assert.equal(f.experience.captureActivityPose().pitch,.25);
+  f.canvas.emit('pointerenter',{clientX:600,clientY:700});f.canvas.emit('pointermove',{clientX:600,clientY:0});f.tick(.5);
+  assert.equal(f.experience.captureActivityPose().pitch,-1.5,'third-person sky look accepts the same upward input');
+  assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y>.995);
+  f.key('KeyV');f.tick(.5);assert.equal(f.experience.captureActivityPose().pitch,.04,'switching back still starts with the normal forward view');
+});
+
+test('default walking third-person mouse look reaches the sky and survives return without changing pause behavior',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter('walk');f.tick(.5);
+  assert.equal(f.experience.captureActivityPose().view,'third');
+  const start={x:f.experience.state.x,z:f.experience.state.z};
+  f.canvas.emit('pointerenter',{clientX:600,clientY:700});f.canvas.emit('pointermove',{clientX:600,clientY:0});f.tick(.8);
+  const saved=f.experience.captureActivityPose(),orientation=f.camera.quaternion.clone(),eye=f.camera.position.clone();
+  assert.equal(saved.view,'third');assert.equal(saved.pitch,-1.5);
+  assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y>.995);
+  assert.ok(f.camera.position.y>=f.experience.state.y+1.04,'sky look does not put the eye near the player feet');
+  assert.deepEqual({x:f.experience.state.x,z:f.experience.state.z},start);
+  f.experience.setSuspended(true);
+  f.canvas.emit('pointermove',{clientX:900,clientY:700});f.key('KeyC');f.key('KeyV');f.tick(1);
+  assert.ok(f.camera.quaternion.equals(orientation));assert.deepEqual(f.camera.position,eye);
+  f.experience.setSuspended(false);f.tick(.5);assert.ok(orientation.angleTo(f.camera.quaternion)<.001);
+  f.experience.exit();assert.equal(f.experience.restoreActivityPose(saved),true);f.tick(.8);
+  assert.equal(f.experience.captureActivityPose().view,'third');assert.equal(f.experience.captureActivityPose().pitch,-1.5);
+  assert.ok(orientation.angleTo(f.camera.quaternion)<.001,'restored third-person sky view persists beyond its initial frame');
+  const beforeSwitch=f.camera.quaternion.clone();f.key('KeyV');
+  assert.ok(beforeSwitch.angleTo(f.camera.quaternion)<.001,'V keeps the current direction at transition start');
+  let previous=f.camera.quaternion.clone();for(let i=0;i<30;i++){f.tick(1/60);assert.ok(previous.angleTo(f.camera.quaternion)<.14);previous=f.camera.quaternion.clone();}
+  assert.ok(Math.abs(f.camera.getWorldDirection(new THREE.Vector3()).y+Math.sin(.04))<.001);
+});
+
+test('walking first-person pointer lock can look overhead while retaining its downward bound',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});enablePointerLock(f);f.experience.enterAt({x:24,z:-35,yaw:0});f.key('KeyL');
+  assert.equal(f.doc.pointerLockElement,f.canvas);
+  f.doc.emit('mousemove',{movementX:0,movementY:-1200});f.tick(.5);
+  assert.equal(f.experience.captureActivityPose().pitch,-1.5);
+  assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y>.995);
+  f.doc.emit('mousemove',{movementX:0,movementY:2000});f.tick(.5);
+  assert.equal(f.experience.captureActivityPose().pitch,.85);
+  assert.ok(Math.abs(f.camera.getWorldDirection(new THREE.Vector3()).y+Math.sin(.85))<.001);
+});
+
+test('an overhead walking pose survives activity return and recentres to the original forward pitch',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});
+  f.experience.enterAt({x:24,z:-35,yaw:.7,pitch:-2});f.tick(.5);
+  const saved=f.experience.captureActivityPose(),looking=f.camera.quaternion.clone();
+  assert.equal(saved.pitch,-1.5,'enterAt accepts the full look-up range and safely clamps beyond it');
+  f.key('KeyC');f.tick(.5);assert.equal(f.experience.captureActivityPose().pitch,.04);
+  assert.ok(Math.abs(f.camera.getWorldDirection(new THREE.Vector3()).y+Math.sin(.04))<.001);
+  f.experience.exit();assert.equal(f.experience.restoreActivityPose(saved),true);f.tick(1);
+  assert.equal(f.experience.captureActivityPose().pitch,-1.5);
+  assert.ok(looking.angleTo(f.camera.quaternion)<.001,'the restored overhead view remains after the saved camera frame');
+  f.experience.enter('roadster');f.tick(.5);
+  f.canvas.emit('pointerenter',{clientX:600,clientY:650});f.canvas.emit('pointermove',{clientX:600,clientY:0});f.tick(.5);
+  assert.equal(f.experience.captureActivityPose().pitch,-.35,'mounting a vehicle restores its existing first-person range');
+});
+
 test('mouse look and Spider web hold coexist, but entering from a pressed HUD button cannot fire a web',t=>{
   const f=fixture(t);f.experience.enter('spider');
   f.canvas.emit('pointerenter',{clientX:200,clientY:200,buttons:1});f.canvas.emit('pointermove',{clientX:240,clientY:200,buttons:1});f.tick(.2);
@@ -809,6 +873,40 @@ test('touch look has 1.5 times mouse sensitivity while ordinary mouse gain stays
   assert.ok(Math.abs((finger.yawOffset-original.yawOffset)/(mouse.yawOffset-original.yawOffset)-1.5)<1e-9);
   assert.ok(Math.abs((finger.pitch-original.pitch)/(mouse.pitch-original.pitch)-1.5)<1e-9);
   touch(f.canvas,'pointerup',20);
+});
+
+test('right-side touch drags can look overhead in first person and mobile recenter restores forward view',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enterAt({x:24,z:-35,yaw:0});f.tick(.5);
+  const start={x:f.experience.state.x,z:f.experience.state.z};
+  for(const pointerId of [21,22]){
+    assert.equal(sceneTouchDown(f,pointerId,{clientX:600,clientY:360}).propagationStopped,undefined);
+    touch(f.canvas,'pointermove',pointerId,{clientX:600,clientY:0});
+    touch(f.canvas,'pointerup',pointerId);f.tick(.5);
+  }
+  assert.equal(f.experience.captureActivityPose().pitch,-1.5);
+  assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y>.995);
+  f.tick(2);assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y>.995,'releasing the drag keeps the sky in view');
+  assert.deepEqual({x:f.experience.state.x,z:f.experience.state.z},start,'right-side look never starts the movement joystick');
+  f.mobileAction('recenter').emit('click',{detail:0});f.tick(.5);
+  assert.equal(f.experience.captureActivityPose().pitch,.04);
+  assert.ok(Math.abs(f.camera.getWorldDirection(new THREE.Vector3()).y+Math.sin(.04))<.001);
+});
+
+test('default walking third-person touch look reaches the sky and mobile recenter is gradual',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('walk');f.tick(.5);
+  assert.equal(f.experience.captureActivityPose().view,'third');
+  const start={x:f.experience.state.x,z:f.experience.state.z};
+  for(const pointerId of [21,22]){
+    assert.equal(sceneTouchDown(f,pointerId,{clientX:600,clientY:360}).propagationStopped,undefined);
+    touch(f.canvas,'pointermove',pointerId,{clientX:600,clientY:0});touch(f.canvas,'pointerup',pointerId);f.tick(.6);
+  }
+  assert.equal(f.experience.captureActivityPose().pitch,-1.5);
+  assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y>.995);
+  assert.deepEqual({x:f.experience.state.x,z:f.experience.state.z},start);
+  let previous=f.camera.quaternion.clone();f.mobileAction('recenter').emit('click',{detail:0});
+  for(let i=0;i<60;i++){f.tick(1/60);assert.ok(previous.angleTo(f.camera.quaternion)<.11,'mobile recenter cannot cut straight down from the sky');previous=f.camera.quaternion.clone();}
+  assert.equal(f.experience.captureActivityPose().view,'third');assert.equal(f.experience.captureActivityPose().pitch,.25);
+  assert.ok(Math.abs(f.camera.getWorldDirection(new THREE.Vector3()).y+Math.sin(.25))<.001);
 });
 
 test('touch sideways walking uses the same camera basis as keys and does not orbit after release',t=>{

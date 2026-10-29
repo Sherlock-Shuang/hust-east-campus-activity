@@ -10,6 +10,8 @@ const CAMERA = {
   spider: { distance: 5.8, aim: 1.05, eye: 1.65 },
 };
 const CLEARANCE = .24;
+// A walker can look almost straight up without crossing the vertical pole.
+export const WALK_MIN_PITCH = -1.5;
 const footprintBounds = new WeakMap();
 const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
 const mix = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t });
@@ -137,7 +139,7 @@ export function calculatePlayerCamera(state, { view = 'third', yawOffset = 0, pi
   const actionFov = 2.4*action.launch-1.2*action.approach;
   const framing = spider ? { fov: (view === 'first' ? 56 : 58) + (comfortable ? 0 : (view === 'first' ? 10 : 12) * speedFactor + zipPulse * 2 + actionFov), speedFactor } : null;
   const yaw = finite(heading, finite(state.yaw, 0)) + finite(yawOffset, 0);
-  const angle = Math.max(-.65, Math.min(1.3, finite(pitch, .25)));
+  const angle = Math.max(view === 'first' && state.mode === 'walk' ? WALK_MIN_PITCH : -.65, Math.min(1.3, finite(pitch, .25)));
   const origin = { x: finite(state.x, 0), y: finite(state.y, 0), z: finite(state.z, 0) };
   const sin = Math.sin(yaw), cos = Math.cos(yaw);
   if (view === 'first') {
@@ -323,13 +325,13 @@ export function createVehicleCameraRig() {
   let ready=false, heading=0, position=null, target=null, previousOrigin=null;
   let speed=0, fov=58, pitch=.15, lead=0, activeMode=null, activeView=null;
   let velocity={x:0,y:0,z:0};
-  let transition=null, renderedPosition=null, renderedTarget=null, renderedFov=58;
+  let transition=null, renderedPosition=null, renderedTarget=null, renderedFov=58, renderedLift=0;
   let centering=false,centeringHeading=null,firstHeading=0;
   let followRelease=1;
   function reset(state, angle=state.yaw||0) {
     heading=wrapAngle(angle);ready=false;position=null;target=null;previousOrigin=null;
     firstHeading=heading;speed=Math.abs(finite(state.speed,0));velocity={x:0,y:0,z:0};
-    activeMode=null;activeView=null;lead=0;transition=null;renderedPosition=null;renderedTarget=null;centering=false;centeringHeading=null;followRelease=1;
+    activeMode=null;activeView=null;lead=0;transition=null;renderedPosition=null;renderedTarget=null;renderedLift=0;centering=false;centeringHeading=null;followRelease=1;
   }
   function rotate(delta) { heading=wrapAngle(heading+finite(delta,0));centering=false;centeringHeading=null; }
   function recenter(state) {
@@ -347,7 +349,7 @@ export function createVehicleCameraRig() {
     const origin={x:finite(state.x,0),y:finite(state.y,0),z:finite(state.z,0)};
     const teleport=previousOrigin&&Math.hypot(origin.x-previousOrigin.x,origin.y-previousOrigin.y,origin.z-previousOrigin.z)>25;
     if (ready&&activeMode===state.mode&&activeView!==view&&!teleport) {
-      transition={elapsed:0,position:{},target:{},fov:renderedFov};
+      transition={elapsed:0,position:{},target:{},fov:renderedFov,lift:renderedLift};
       for (const key of ['x','y','z']) {
         transition.position[key]=renderedPosition[key]-previousOrigin[key];
         transition.target[key]=renderedTarget[key]-previousOrigin[key];
@@ -374,8 +376,11 @@ export function createVehicleCameraRig() {
       if (centering&&Math.abs(wrapAngle(followHeading-heading))<.001) {heading=followHeading;centering=false;centeringHeading=null;}
     }
     const ratio=Math.min(1,speed/profile.speedScale),speedBlend=ratio*ratio*(3-2*ratio);
-    const desiredPitch=Math.max(-.35,Math.min(.85,finite(options.pitch,view==='first'?.025:profile.pitch)));
-    pitch=snap?desiredPitch:damp(pitch,desiredPitch,options.lookLocked&&view==='first'?40:board?(options.lookLocked?24:9):options.lookLocked?24:14,h);
+    const desiredPitch=Math.max(state.mode==='walk'?WALK_MIN_PITCH:-.35,Math.min(.85,finite(options.pitch,view==='first'?.025:profile.pitch)));
+    const nextPitch=snap?desiredPitch:damp(pitch,desiredPitch,options.lookLocked&&view==='first'?40:board?(options.lookLocked?24:9):options.lookLocked?24:14,h);
+    // Large sky gestures and recentering should not rotate the entire view in
+    // one frame. Small input deltas retain the existing response.
+    pitch=!snap&&state.mode==='walk'&&view==='third'&&(pitch<0||desiredPitch<0)?pitch+Math.max(-4.5*h,Math.min(4.5*h,nextPitch-pitch)):nextPitch;
     const baseFov=finite(options.baseFov,profile.fov+(view==='first'&&state.mode==='roadster'?3:0));
     const desiredFov=baseFov+(options.comfortable?0:profile.widen*speedBlend);
     fov=snap?desiredFov:fov+Math.max(-14*h,Math.min(14*h,damp(fov,desiredFov,4.5,h)-fov));
@@ -400,8 +405,11 @@ export function createVehicleCameraRig() {
       const reach=Math.max(3,Math.min(35,finite(options.distance,profile.distance+(options.comfortable?0:profile.pullback*speedBlend))));
       const look={x:bodyTarget.x-Math.sin(bodyHeading)*lead,y:bodyTarget.y,z:bodyTarget.z-Math.cos(bodyHeading)*lead};
       const clearLook=clipCameraSegment(bodyTarget,look,options);
-      const desiredPosition={x:origin.x+Math.sin(heading)*Math.cos(pitch)*reach,
-        y:bodyTarget.y+Math.sin(pitch)*reach,z:origin.z+Math.cos(heading)*Math.cos(pitch)*reach};
+      // Looking above the horizon rotates a walker's optical axis, not the
+      // boom into the ground. Keep the eye at chest height or above.
+      const boomPitch=state.mode==='walk'?Math.max(0,pitch):pitch;
+      const desiredPosition={x:origin.x+Math.sin(heading)*Math.cos(boomPitch)*reach,
+        y:bodyTarget.y+Math.sin(boomPitch)*reach,z:origin.z+Math.cos(heading)*Math.cos(boomPitch)*reach};
       desiredPosition.y=Math.max(desiredPosition.y,groundHeight(options.groundAt,desiredPosition)+CLEARANCE+.18);
       desired={position:desiredPosition,target:clearLook};
       if (snap) {position={...desired.position};target={...desired.target};velocity={x:0,y:0,z:0};}
@@ -427,6 +435,7 @@ export function createVehicleCameraRig() {
       position.y=Math.max(position.y,groundHeight(options.groundAt,position)+CLEARANCE+.18);
     }
     let outputPosition={...position},outputTarget={...target},outputFov=fov;
+    let outputLift=state.mode==='walk'&&view==='third'?Math.max(0,Math.min(1,pitch/WALK_MIN_PITCH)):0;
     if (transition) {
       transition.elapsed+=h;
       const t=Math.min(1,transition.elapsed/.36),ease=t*t*(3-2*t);
@@ -437,13 +446,23 @@ export function createVehicleCameraRig() {
       }
       outputPosition=mix(oldPosition,position,ease);outputTarget=mix(oldTarget,target,ease);
       outputFov=transition.fov+(fov-transition.fov)*ease;
+      outputLift=transition.lift+(outputLift-transition.lift)*ease;
       const bodyTarget={x:origin.x,y:origin.y+profile.aim,z:origin.z};
       outputTarget=clipCameraSegment(bodyTarget,outputTarget,options);
       outputPosition=clipCameraSegment(outputTarget,outputPosition,options,.3);
       if (t===1) transition=null;
     }
     ready=true;activeMode=state.mode;activeView=view;previousOrigin=origin;
-    renderedPosition=outputPosition;renderedTarget=outputTarget;renderedFov=outputFov;
+    // Keep structural targets for collision and view transitions. A skyward
+    // look-at point is only an orientation, never a new camera collision ray.
+    renderedPosition=outputPosition;renderedTarget=outputTarget;renderedFov=outputFov;renderedLift=outputLift;
+    if(outputLift>0){
+      const dx=outputTarget.x-outputPosition.x,dy=outputTarget.y-outputPosition.y,dz=outputTarget.z-outputPosition.z;
+      const horizontal=Math.hypot(dx,dz),length=Math.max(.1,Math.hypot(horizontal,dy));
+      const baseAngle=Math.atan2(-dy,horizontal),angle=baseAngle+(WALK_MIN_PITCH-baseAngle)*outputLift;
+      const forwardX=horizontal>1e-6?dx/horizontal:-Math.sin(heading),forwardZ=horizontal>1e-6?dz/horizontal:-Math.cos(heading);
+      outputTarget={x:outputPosition.x+forwardX*Math.cos(angle)*length,y:outputPosition.y-Math.sin(angle)*length,z:outputPosition.z+forwardZ*Math.cos(angle)*length};
+    }
     return {...desired,position:outputPosition,target:outputTarget,heading,fov:outputFov,roll:0,speedFactor:speedBlend,transitioning:!!transition};
   }
   return {reset,recenter,rotate,update,get heading(){return heading;},get transitioning(){return !!transition;}};
