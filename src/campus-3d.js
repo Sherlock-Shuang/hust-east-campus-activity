@@ -504,6 +504,7 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     const detailScale=Number.isFinite(detailDistanceScale)?Math.max(.35,Math.min(1.5,detailDistanceScale)):1;
     forestLayer?.update?.(camera,{detailDistanceScale:detailScale});
     einsteinSquare.update?.(camera);
+    aiMurals.update(camera);
     optoBuilding?.update?.(camera,{detailDistanceScale:detailScale});
     optoApproach.update?.(camera,{detailDistanceScale:detailScale});
     southPrecinct.update?.(camera,{detailDistanceScale:detailScale});

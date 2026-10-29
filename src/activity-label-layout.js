@@ -3,8 +3,9 @@
 export function projectWallTextRects(THREE,camera,items,width,height){
   const rects=[],point=new THREE.Vector3();
   for(const item of items){
+    if(item.visible===false)continue;
     const dx=camera.position.x-item.x,dz=camera.position.z-item.z;
-    if(dx*item.nx+dz*item.nz<=0||dx*dx+dz*dz>120*120)continue;
+    if(dx*item.nx+dz*item.nz<=0||dx*dx+dz*dz>(item.maxDistance??120)**2)continue;
     const points=[];
     for(const u of[-.5,.5])for(const v of[-.5,.5]){
       point.set(item.x+item.nz*item.width*u,item.y+item.height*v,item.z-item.nx*item.width*u).project(camera);

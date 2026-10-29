@@ -17,7 +17,8 @@ test('text avoidance uses only nearby front-facing, on-screen signs',()=>{
   const camera=new THREE.PerspectiveCamera(65,16/9,.1,1000);
   camera.position.set(0,1.7,0);camera.updateMatrixWorld();
   const visible={x:0,y:2,z:-10,width:6,height:2,nx:0,nz:1};
-  const items=[visible,{...visible,nz:-1},{...visible,z:10},{...visible,z:-200},{...visible,x:50}];
+  const items=[visible,{...visible,nz:-1},{...visible,z:10},{...visible,z:-200},{...visible,x:50},
+    {...visible,visible:false},{...visible,z:-50,maxDistance:40}];
   const rects=projectWallTextRects(THREE,camera,items,1280,720);
   assert.equal(rects.length,1);
   const [rect]=rects;

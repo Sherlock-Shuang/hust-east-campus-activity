@@ -1,22 +1,33 @@
-# 校园 AI 墙面文案
+# 校园墙面文字与诗
 
-活动装饰层在 `src/campus-ai-murals.js` 中配置，由正式校园入口的 `createCampus3D` 加载。它不修改源 GeoJSON、建筑轮廓、碰撞、出生点或活动控制状态。
+文字属于独立的活动装饰层，由正式校园入口的 `createCampus3D` 加载，不修改源 GeoJSON、建筑轮廓、碰撞、出生点或活动控制状态。
 
-2026-10-30 修正：此前该模块仅存在本地，线上主场没有导入，导致线上完全不显示。
+## 当前形式
 
-## 显示位置
+2026-10-30 调整为更克制的环境题字：14 处原有 AI 文案保留内容和墙面落点，缩小尺寸、取消入口的实色底板，改为灰绿／石墨色的宋体字。食堂原有展示框仍保留。所有文字使用透明背景的哑光材质，跟随建筑光照，不能隔墙看到。AI 文案在 24–65 米间柔和淡出。
 
-- 韵苑食堂出生点正前方：“AI 不止会聊天”。使用入口门玻璃上方、楼层檐线下方的实体墙面，避开雕塑。
-- 食堂旁边现有黑色展示框：“让 Agent / 操作电脑 / 搜索 · 文件 · 浏览器”。文字平面位于框前，不埋进墙体。
-- 保留食堂背墙、韵苑体育馆和东九 A 翼端墙上的主题文案。
-- 其他楼栋使用距离道路 24 米以内、正面无遮挡的窗间墙带；缩短句子，不覆盖门窗。当前合并地图共生成 14 块文案。
+另有 10 组用户提供的中英文原句，分散在侧墙、转角、廊内、湖边低墙和广场基座侧面。逐句保留原始措辞、标点和大小写，包括“重心然诺”。中文使用宋体／楷体与竖排，英文使用衬线斜体及字间留白，配以呼吸线、羽毛、山水等少量线描；浅窄低墙使用单行题字。彩蛋在 12–40 米间淡出，靠近重新显示，不新增地图光柱或提示牌。
 
-主入口两块采用深绿底、浅色粗体；其余为墙面绘字。使用少量静态纹理平面，没有新模型下载或逐帧纹理生成。材质不受阴影压暗，保留深度测试，不能隔墙看字；不使用细小立面构件的距离裁剪。
+当前合并地图共 24 块文字。使用静态 Canvas 纹理，无外部字体请求、新模型下载或逐帧纹理重绘。每帧仅做 24 次距离与透明度更新。
 
-## 修改与验证
+## 配置
 
-编辑 `AI_WALL_MESSAGES` 可改路边短句；`planCampusAIMurals` 中的命名点位控制主要墙面。修改时需核对实际渲染的墙面偏移，而不是直接贴在 GIS 原始边上。
+- `src/campus-ai-murals.js`：原 AI 文案、统一透明材质、距离淡出及正式场景接入。
+- `src/campus-poetry-art.js`：10 组原文、分行、字体与线描绘制。
+- `src/campus-poetry-placements.js`：彩蛋的既有墙面、位置、正面方向、尺寸与检查站位。墙面必须同时有实体承托与可达视点，不能只依照 GIS 边线决定。
+- `src/activity-label-layout.js`：已有活动入口标签避开附近可见题字，已经淡出的文字不再让标签移位。不会移动主持人设定的光柱或入口。
 
-运行 `node --test tests/campus-ai-murals.test.mjs`：验证正式场景接入、源数据保持不变、出生点朝向与视线、展示框/实墙承托、路边可见性。浏览器还需查看默认出生视角和阴影中的文字效果；几何测试不能替代实际文字渲染检查。
+正常入口仍从韵苑食堂出生。仅用于检查的 `?place=poem-<原文ID>` 链接由 `campus-landmark-arrival.js` 读取墙面计划中的 inspection 视点，不改变默认出生、不在玩家界面公开彩蛋列表。
 
-Activity labels use `activity-label-layout.js` to avoid nearby visible text rectangles. Only their screen labels move; host-configured map coordinates, beams and entry admission remain unchanged. Label sizes are cached, and projection shares the existing 66 ms activity-update interval.
+## 验证
+
+运行：
+
+```sh
+node --test tests/campus-ai-murals.test.mjs tests/campus-poetry-art.test.mjs tests/activity-label-layout.test.mjs
+npm run build
+```
+
+测试覆盖正式场景接入、原 GIS 不变、入口尺寸与透明底、全部原句完整、生产纹理尺寸下绘制边界、10 处各 15 个背面承托射线和 15 个站位视线（共 300 条）、近远渐隐与再次靠近恢复、活动标签避让。Canvas 测试检查绘制命令及字体度量，不能替代浏览器的实际字体和像素验收。
+
+浏览器另需检查默认出生点、英文短诗、中文长诗、廊内竖排和低墙单行的实际渲染。发布走现有 GitHub → Vercel 流程，只同步本次文字相关源码；不上传参考资料或测试截图。

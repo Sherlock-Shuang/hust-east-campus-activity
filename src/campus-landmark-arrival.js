@@ -1,5 +1,9 @@
 // Explicit shared tour links only. The normal URL still starts at 韵苑食堂.
 export function campusLandmarkArrival(campus,place){
+  if(place?.startsWith('poem-')){
+    const poem=campus?.aiMuralPlan?.find(item=>item.id===place&&item.poetryId);
+    if(poem?.inspection)return {...poem.inspection};
+  }
   if(place==='opto-passage'&&campus?.optoViewpoints?.northPassage)return {...campus.optoViewpoints.northPassage};
   if(place==='opto-rear'&&campus?.optoViewpoints?.rearEntrance)return {...campus.optoViewpoints.rearEntrance};
   if(place==='opto-left'&&campus?.optoViewpoints?.leftCourtyard)return {...campus.optoViewpoints.leftCourtyard};

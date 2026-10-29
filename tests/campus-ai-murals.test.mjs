@@ -7,7 +7,8 @@ import {createLocalFrame,geoToLocal} from '../src/geospatial.js';
 import {createGeoScene} from '../src/geo-scene.js';
 import {createCampus3D} from '../src/campus-3d.js';
 import {getCampusPlayerSpawn} from '../src/player-experience.js';
-import {planCampusAIMurals} from '../src/campus-ai-murals.js';
+import {planCampusAIMurals,createCampusAIMurals} from '../src/campus-ai-murals.js';
+import {CAMPUS_POETRY} from '../src/campus-poetry-art.js';
 
 // Use the same merged source map, reconstructed facades and initial player
 // position as the actual campus. A standalone flat-wall fixture misses signs
@@ -42,24 +43,27 @@ test('the real campus registers stable AI artwork and leaves both source maps un
   assert.equal(JSON.stringify(data),mergedBefore,'artwork does not become source GIS');
 });
 
-test('both prominent messages face the unchanged spawn within twenty metres',()=>{
+test('restrained arrival inscriptions face the unchanged spawn without large opaque billboards',()=>{
   assert.ok(spawn);
   for(const id of arrivalIds){
     const item=plan.find(p=>p.id===id);assert.ok(item,id);
     const dx=spawn.x-item.x,dz=spawn.z-item.z,distance=Math.hypot(dx,dz);
     assert.ok(distance<20,`${id}: not another sign behind a distant building`);
     assert.ok((dx*item.nx+dz*item.nz)/distance>.2,`${id}: the spawn must see the front, not the back or grazing edge of its single-sided plane`);
-    assert.ok(item.height>=1&&item.background,'arrival text has a substantial, contrasting surface');
+    assert.ok(item.width<=2.8&&item.height<=1.15,'arrival copy stays within a small facade/display inscription');
+    assert.equal(item.background,null,'transparent pigment does not cover the architecture with a billboard');
+    assert.ok(item.opacity>=.55&&item.opacity<=.78,'nearby copy remains readable without full-opacity advertising');
+    assert.ok(item.fadeStart>=10&&item.maxDistance<=65&&item.maxDistance>item.fadeStart,'arrival copy has a bounded distance fade');
     const planeNormal=new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),item.yaw);
     assert.ok(planeNormal.dot(new THREE.Vector3(item.nx,0,item.nz))>.9999,'plane rotation agrees with the source-facing normal');
   }
 });
 
-test('spawn eye-level rays reach the headline and poster without hitting the real building first',()=>{
+test('spawn eye-level rays reach both inscriptions without hitting the real building first',()=>{
   const eye=new THREE.Vector3(spawn.x,1.7,spawn.z);
   for(const id of arrivalIds){
     const item=plan.find(p=>p.id===id);
-    // Cover the headline/poster interior, not just a convenient clear centre.
+    // Cover the inscription interior, not just a convenient clear centre.
     for(const u of [-.4,0,.4])for(const v of [-.4,0,.4]){
       const target=pointOnSign(item,item.width*u,item.height*v),hit=probe(eye,target);
       assert.equal(hit,undefined,`${id} (${u},${v}) is obscured by ${hit?.object.name} before its text plane`);
@@ -67,7 +71,7 @@ test('spawn eye-level rays reach the headline and poster without hitting the rea
   }
 });
 
-test('arrival paint stays on the blank band and the poster stays within the existing display, not doors or windows',()=>{
+test('arrival paint stays on the blank band and within the existing display, not doors or windows',()=>{
   for(const id of arrivalIds){
     const item=plan.find(p=>p.id===id),normal=new THREE.Vector3(item.nx,0,item.nz);
     const expected=id==='canteen-arrival'?'canteen-entry-adjacent-solid-panel':'canteen-entry-dark-display';
@@ -83,7 +87,7 @@ test('arrival paint stays on the blank band and the poster stays within the exis
 
 test('several ambient messages remain beside mapped surface roads on their viewing side',()=>{
   const scattered=plan.filter(p=>p.id.startsWith('scattered-'));
-  assert.ok(scattered.length>=3,'arrival posters must not replace all roadside discoveries');
+  assert.ok(scattered.length>=3,'arrival text must not replace all roadside discoveries');
   const roads=model.roads.flatMap(record=>{
     const f=record.feature,t=f.properties.tags||{};if(t.bridge==='yes'||t.tunnel==='yes')return [];
     const lines=f.geometry.type==='LineString'?[f.geometry.coordinates]:f.geometry.type==='MultiLineString'?f.geometry.coordinates:[];
@@ -99,5 +103,87 @@ test('several ambient messages remain beside mapped surface roads on their viewi
     }
     assert.ok(distance<=24.05,`${p.id}: a reachable viewing-side road should be within 24m, got ${distance}`);
     assert.ok(p.lines.length===1&&[...p.lines[0]].length<=24,'narrow roadside bands use concise copy');
+    assert.ok(p.height<=.5&&p.background===null,'roadside copy stays a quiet narrow line');
+  }
+});
+
+test('all ten authored poems are attached to the real campus plan exactly once with their complete copy',()=>{
+  const poems=plan.filter(p=>p.poetryId);
+  assert.equal(poems.length,10,'an exported copy list alone is not a placed artwork');
+  assert.deepEqual(new Set(poems.map(p=>p.poetryId)),new Set(CAMPUS_POETRY.map(p=>p.id)));
+  for(const item of poems){
+    const authored=CAMPUS_POETRY.find(p=>p.id===item.poetryId);
+    assert.equal(item.text,authored.text);assert.deepEqual(item.lines,authored.lines);
+    assert.equal(item.motif,authored.motif);
+    assert.ok(item.inspection&&Number.isFinite(item.inspection.x+item.inspection.y+item.inspection.z));
+    assert.ok(item.expectedSupportNames?.length,'placement records its actual blank supporting surface');
+    assert.ok(!item.background);assert.ok(item.opacity>=.6&&item.opacity<=.85);
+    assert.ok(item.fadeStart>=8&&item.maxDistance<=45&&item.maxDistance>item.fadeStart);
+    assert.ok(Math.hypot(item.nx,item.nz)>.999&&Math.hypot(item.nx,item.nz)<1.001);
+  }
+});
+
+test('every poem footprint stays on its intended solid surface and can be seen from its inspection point',()=>{
+  for(const item of plan.filter(p=>p.poetryId)){
+    const normal=new THREE.Vector3(item.nx,0,item.nz),eye=new THREE.Vector3(item.inspection.x,item.inspection.y+1.65,item.inspection.z);
+    for(const u of [-.49,-.25,0,.25,.49])for(const v of [-.49,0,.49]){
+      const point=pointOnSign(item,item.width*u,item.height*v);
+      // Include the environment: the Einstein inscription belongs to a stone
+      // plinth there, whereas the other nine attach to reconstructed facades.
+      const hit=new THREE.Raycaster(point.clone().addScaledVector(normal,.015),normal.clone().negate(),0,.65).intersectObject(campus.group,true)[0];
+      assert.ok(hit,`${item.poetryId} (${u},${v}) floats without supporting architecture`);
+      assert.ok(item.expectedSupportNames.includes(hit.object.name),`${item.poetryId} (${u},${v}) covers ${hit.object.name} instead of its blank surface`);
+      if(item.expectedSupportFeatureId)assert.equal(hit.object.userData.featureId,item.expectedSupportFeatureId,`${item.poetryId} must not attach to a different unnamed building mesh`);
+      const delta=point.clone().sub(eye),distance=delta.length();
+      const obstruction=new THREE.Raycaster(eye,delta.normalize(),0,distance-.005).intersectObject(campus.group,true)[0];
+      assert.equal(obstruction,undefined,`${item.poetryId} inspection blocked by ${obstruction?.object.name}`);
+    }
+  }
+});
+
+test('production artwork meshes stay matte and readable nearby, fade continuously, and disappear at distance',()=>{
+  const previous=Object.getOwnPropertyDescriptor(globalThis,'document');
+  let layer;
+  // Only the canvas transport is stubbed. We exercise the actual plan,
+  // texture/material construction and update(), not a second fade formula.
+  const canvases=[];
+  Object.defineProperty(globalThis,'document',{configurable:true,value:{createElement(tag){
+    assert.equal(tag,'canvas');
+    const text=[],stack=[];
+    const ctx={font:'10px serif',textAlign:'start',globalAlpha:1,
+      measureText(value){const px=Number(this.font.match(/([\d.]+)px/)?.[1]||10);return {width:[...value].reduce((n,c)=>n+(/\s/.test(c)?.35:/[\u0000-\u007f]/.test(c)?.64:1.05),0)*px,px};},
+      fillText(value,x,y){const {width,px}=this.measureText(value),left=x-(this.textAlign==='center'?width/2:this.textAlign==='right'?width:0);text.push({value,left,right:left+width,top:y-px*.52,bottom:y+px*.52});},
+      save(){stack.push({font:this.font,textAlign:this.textAlign,globalAlpha:this.globalAlpha});},
+      restore(){Object.assign(this,stack.pop());},
+    };
+    for(const name of ['clearRect','fillRect','scale','beginPath','moveTo','lineTo','bezierCurveTo','stroke','strokeRect','arc','ellipse','fill'])ctx[name]=()=>{};
+    const canvas={width:0,height:0,text,getContext(type){assert.equal(type,'2d');return ctx;}};canvases.push(canvas);return canvas;
+  }}});
+  try{
+    layer=createCampusAIMurals(THREE,model,campus.records,{frame,geoToLocal});
+    assert.equal(layer.group.children.length,layer.plan.length,'each planned artwork has a runtime mesh');
+    assert.equal(canvases.length,layer.plan.length);
+    const camera=new THREE.PerspectiveCamera();
+    for(const [index,item]of layer.plan.entries()){
+      const mesh=layer.group.getObjectByName(`ai-wall-${item.id}`),material=mesh.material;
+      const canvas=canvases[index];
+      const commands=item.vertical||item.motif==='orbit'?[...item.lines.join('')]:item.lines;
+      assert.deepEqual(canvas.text.map(t=>t.value),commands,`${item.id}: production canvas keeps all original characters`);
+      for(const t of canvas.text)assert.ok(t.left>=0&&t.right<=canvas.width&&t.top>=0&&t.bottom<=canvas.height,`${item.id}: production texture ${canvas.width}×${canvas.height} clips ${JSON.stringify(t)}`);
+      assert.ok(material.isMeshStandardMaterial&&material.transparent&&material.roughness>=.9);
+      assert.equal(material.depthWrite,false,'small paint does not occlude later transparent rendering');
+      const at=distance=>{camera.position.set(item.x+item.nx*distance,item.y,item.z+item.nz*distance);layer.update(camera);};
+      at(2);assert.equal(mesh.visible,true);assert.ok(Math.abs(material.opacity-item.opacity)<1e-8);
+      const nearOpacity=material.opacity;
+      at((item.fadeStart+item.maxDistance)/2);assert.equal(mesh.visible,true);assert.ok(material.opacity>0&&material.opacity<nearOpacity);
+      const middleOpacity=material.opacity;
+      at(item.maxDistance-.5);assert.ok(material.opacity>=0&&material.opacity<middleOpacity);
+      at(item.maxDistance+1);assert.equal(mesh.visible,false);assert.equal(material.opacity,0);
+      at(2);assert.equal(mesh.visible,true);assert.ok(Math.abs(material.opacity-nearOpacity)<1e-8,'approaching restores readable pigment');
+    }
+  }finally{
+    if(layer?.dispose)layer.dispose();
+    else layer?.group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});
+    if(previous)Object.defineProperty(globalThis,'document',previous);else delete globalThis.document;
   }
 });
