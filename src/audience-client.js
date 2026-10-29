@@ -3,6 +3,7 @@
 export function createAudienceClient({onIdentity=()=>{},onError=()=>{},fetchImpl=fetch}={}){
   const tabId=crypto.randomUUID(),prefix='campus-event-v1:',memory=new Map();
   let audience=null,csrfToken='',disposed=false,draining=false,sequence=0,queue=Promise.resolve();
+  let identityLoaded=false,identityPending;
   async function request(path,body,keepalive=false){
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
     try{
@@ -10,12 +11,19 @@ export function createAudienceClient({onIdentity=()=>{},onError=()=>{},fetchImpl
       const data=await response.json();if(!response.ok)throw Object.assign(new Error(data.error||'活动记录暂未同步'),{status:response.status});return data;
     }finally{clearTimeout(timeout);}
   }
-  function accept(data){audience=data.audience;csrfToken=data.csrfToken||'';if(!disposed)onIdentity(audience);return audience;}
-  const ready=request('/api/audience/me').then(accept).catch(e=>{onError(e.message);onIdentity(null);return null;});
+  function accept(data){if(disposed)return null;audience=data.audience;csrfToken=data.csrfToken||'';identityLoaded=true;onIdentity(audience);return audience;}
+  function lookupIdentity(){
+    if(disposed)return Promise.resolve(null);
+    // Network recovery and an explicit join must share an in-flight lookup so
+    // a late response cannot replace the identity established by the join.
+    if(!identityPending)identityPending=request('/api/audience/me').then(accept).finally(()=>{identityPending=undefined;});
+    return identityPending;
+  }
+  const ready=lookupIdentity().catch(e=>{if(!disposed){onIdentity(null);onError(e.message);}return null;});
   async function join(nickname){
     // Finish the initial identity lookup before a join can replace its result.
     await ready;
-    const run=async()=>{await request('/api/audience/me').then(accept);if(audience)return audience;return accept(await request('/api/audience/join',{nickname,tabId}));};
+    const run=async()=>{await lookupIdentity();if(disposed)return null;if(audience)return audience;return accept(await request('/api/audience/join',{nickname,tabId}));};
     const result=await (navigator.locks?navigator.locks.request('campus-audience-join',run):run());
     heartbeat();drain();return result;
   }
@@ -83,8 +91,13 @@ export function createAudienceClient({onIdentity=()=>{},onError=()=>{},fetchImpl
     }catch(e){onError(e.message);}finally{draining=false;}
   }
   async function heartbeat(){if(audience&&!disposed)try{await request('/api/audience/heartbeat',{tabId});}catch(e){onError(e.message);}}
-  const interval=setInterval(()=>{heartbeat();drain();},15000);
-  const resume=()=>{if(!document.hidden){heartbeat();drain();}};document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
-  ready.then(()=>{heartbeat();drain();});
+  async function recover(){
+    if(disposed)return;
+    if(!identityLoaded)try{await lookupIdentity();}catch(e){if(!disposed)onError(e.message);return;}
+    heartbeat();drain();
+  }
+  const interval=setInterval(recover,15000);
+  const resume=()=>{if(!document.hidden)recover();};document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
+  ready.then(()=>{if(identityLoaded){heartbeat();drain();}});
   return {ready,join,event,flush:drain,get identity(){return audience;},get tabId(){return tabId;},dispose(){disposed=true;clearInterval(interval);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);}};
 }

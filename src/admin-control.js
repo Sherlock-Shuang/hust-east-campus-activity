@@ -12,6 +12,7 @@ let pauseMessageDirty = false, pauseMessageBase = '';
 let phaseDirty=false, phaseBase='', audienceData=null, audiencePending=false, selectedAudienceId=null, selectedAudience=null, detailLimit=100, searchTimer, detailRequest=0;
 let launchDirty=false, launchBase='', launchSelection=new Set();
 let skyQrReady = false;
+const objectEditBases = new Map();
 const defaultPauseMessage = '请稍候，活动即将继续';
 let selection = { x: 58.2, z: 17.6, label: '东九 B/C 前场' };
 const NS = 'http://www.w3.org/2000/svg';
@@ -220,6 +221,7 @@ async function objectAction(type, itemId, action) {
   }, action === 'delete' ? '已删除，玩家界面将同步更新。' : '开放状态已更新。');
 }
 function fillObjectForm(type, item) {
+  objectEditBases.set(type, clone(item));
   if(type==='portal')document.querySelector('.activity-configuration').open=true;
   $(`${type}-id`).value = item.id; $(`${type}-label`).value = item.label;
   $(`${type}-enabled`).checked = item.enabled; $(`${type}-radius`).value = item.radius;
@@ -230,6 +232,7 @@ function fillObjectForm(type, item) {
   $(`${type}-label`).focus();
 }
 function clearObjectForm(type) {
+  objectEditBases.delete(type);
   $(`${type}-form`).reset(); $(`${type}-id`).value = '';
   if(type==='portal')syncCustomWork();
   $(`${type}-submit`).textContent = type === 'marker' ? '添加光柱' : '添加入口';
@@ -239,6 +242,7 @@ function submitObject(type, event) {
   try {
     const key = type === 'marker' ? 'markers' : 'portals';
     const objectId = $(`${type}-id`).value || id(type);
+    const editing = Boolean($(`${type}-id`).value), baseline = objectEditBases.get(type);
     const coordinates = coordinateInputs.read();
     const item = { id: objectId, label: $(`${type}-label`).value.trim(), ...coordinates,
       enabled: $(`${type}-enabled`).checked, radius: Number($(`${type}-radius`).value), ...schedule(type) };
@@ -247,7 +251,10 @@ function submitObject(type, event) {
     else Object.assign(item, { workId:$('portal-work').value||$('portal-custom-work-id').value.trim()||objectId, description: $('portal-description').value.trim(), url: $('portal-url').value.trim() });
     mutate(state => {
       const index = state[key].findIndex(entry => entry.id === objectId);
-      if ($(`${type}-id`).value && index < 0) throw new Error('此项目已被删除。清空表单后可重新添加。');
+      if (editing && index < 0) throw new Error('此项目已被删除。清空表单后可重新添加。');
+      // A fresh global revision cannot detect changes made while this form was
+      // open. Compare this object's original values before replacing it.
+      if (editing && JSON.stringify(state[key][index]) !== JSON.stringify(baseline)) throw new Error('此项目已被其他管理员修改，草稿已保留。请重新点击该项目的“编辑”，载入最新内容后再修改。');
       if (index >= 0) state[key][index] = item;
       else { if (state[key].length >= 12) throw new Error('已达到 12 个的上限，请先删除不再使用的项目。'); state[key].push(item); }
     }, `${type === 'marker' ? '光柱' : '入口'}已保存${item.enabled ? '并启用' : '，当前保持关闭'}。`).then(ok => { if (ok) clearObjectForm(type); });
