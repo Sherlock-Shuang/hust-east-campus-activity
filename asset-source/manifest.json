@@ -1251,16 +1251,16 @@
     "/works/library/touch-controls.css": {
       "chunks": [
         {
-          "url": "/_activity_assets/f39648796cd001bf556211e1c014cff3ba415a08ed9ee3d9ce47ae4adeb9be0b.bin",
+          "url": "/_activity_assets/c199e66f5fa0bb5e0c9903e3bbe8f8c0dfd0a01ba0961b440f511d4ea031a603.bin",
           "encoding": "gzip",
-          "bytes": 10842,
-          "storedBytes": 2669,
-          "sha256": "3941678789ac7c5e57d4cf446a70fb13e4bf3a0eec8ef44fd48fe848a27729a0"
+          "bytes": 13569,
+          "storedBytes": 3294,
+          "sha256": "8a5fc213fb4388b5f7733adc19bbcc23ec22ad4122ba5aadd5854e892a9a4e9c"
         }
       ],
       "mime": "text/css; charset=utf-8",
-      "bytes": 10842,
-      "sha256": "3941678789ac7c5e57d4cf446a70fb13e4bf3a0eec8ef44fd48fe848a27729a0"
+      "bytes": 13569,
+      "sha256": "8a5fc213fb4388b5f7733adc19bbcc23ec22ad4122ba5aadd5854e892a9a4e9c"
     },
     "/works/library/touch-controls.mjs": {
       "chunks": [
@@ -1475,16 +1475,16 @@
     "/works/wanyan/": {
       "chunks": [
         {
-          "url": "/_activity_assets/78f4a39e820e67f654c2a14f5b00fcc1a8b75a8d89ec93e7e018bef159a5d3cf.bin",
+          "url": "/_activity_assets/25e345e3f38888e06866ef44d1523af94018d91c6b536c26685a0118c845f2e5.bin",
           "encoding": "gzip",
-          "bytes": 11520,
-          "storedBytes": 4120,
-          "sha256": "8cdc366b659c4b5c29cbc49578c14164a6467013302ab49be83110e4f7b0d8ef"
+          "bytes": 11652,
+          "storedBytes": 4155,
+          "sha256": "abb124cc4024ab4b4b0da076519f90a9cf5ccdc55c31fc5b0f916969a269b637"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 11520,
-      "sha256": "8cdc366b659c4b5c29cbc49578c14164a6467013302ab49be83110e4f7b0d8ef"
+      "bytes": 11652,
+      "sha256": "abb124cc4024ab4b4b0da076519f90a9cf5ccdc55c31fc5b0f916969a269b637"
     },
     "/works/wanyan/activity-adapter.js": {
       "chunks": [
@@ -1503,11 +1503,11 @@
     "/works/wanyan/Build/wanyan.data": {
       "chunks": [
         {
-          "url": "/_activity_assets/876c998435f957b36d8c2644d3774667410991411391b17c49907fae361b314e.bin",
+          "url": "/_activity_assets/8703c568d508a0df52b9b720ada51505babc74cb7e8ee37857b53bdc48b9a45b.bin",
           "encoding": "gzip",
           "bytes": 16777216,
-          "storedBytes": 15451988,
-          "sha256": "3ab4dd40690dfe8c5457127bdefb49907f136e8cda1951a3d419c1d4fbcb8cca"
+          "storedBytes": 15451989,
+          "sha256": "458a9ba031eb1b3e46f8d5e698620edec3bc781a786176bb40043d7d799981cc"
         },
         {
           "url": "/_activity_assets/4417a56b46a94f86f683b1bcbcb776913084095796756ec6248f4fd3cb7db52f.bin",
@@ -1517,114 +1517,114 @@
           "sha256": "70bfbfe9a5835520c3892f768ed56ba66f970546bf544fcdd54617753cae52a0"
         },
         {
-          "url": "/_activity_assets/1b423205ac3ac24b22a27712f8e45f574e30daaac2b9218cf9ef57fd060735aa.bin",
+          "url": "/_activity_assets/44b1f75dfe4f90b4f09dcdf69c6054bd143fafca4248dc4a0f4cc66cb73505f3.bin",
           "encoding": "gzip",
           "bytes": 16777216,
-          "storedBytes": 14819822,
-          "sha256": "5d8e0108fc9c44d457c69c7aa3c2ea82848a8c7c6699e1cda97103895673c310"
+          "storedBytes": 14819818,
+          "sha256": "9653fcaeed8a26dcbca02c9711023ea4cbe034a23639fef38255cb0c9423c1d2"
         },
         {
-          "url": "/_activity_assets/4b2ba7535dc624a3fedcc7b9a241a41e41c4b836d7d02fafc2886be7efdf67c8.bin",
+          "url": "/_activity_assets/dec24cdf073b7c22e34015728810ace0e5f43281557fd3bb5ff7561c78fafc57.bin",
           "encoding": "gzip",
           "bytes": 16777216,
-          "storedBytes": 15595925,
-          "sha256": "ec8a9a9e15ee9a465c0db284187e1dc50917b2d530806c09fd8f4df3d91bbcec"
+          "storedBytes": 15595926,
+          "sha256": "66534c9bcc030ae124b9eb42f52ed54f56aa95fd0850359f6a57f7a2dbfaf2d2"
         },
         {
-          "url": "/_activity_assets/f3d20bd45f77109c255ac9fc9c78698066f2db860748b1ff183ad810a181b17a.bin",
+          "url": "/_activity_assets/99659b41f3bc696e22bb17e33adb766d7301559bef85fa34eaa0aff12447d4d7.bin",
           "encoding": "gzip",
           "bytes": 16777216,
-          "storedBytes": 15296890,
-          "sha256": "1cdf67690478fc21d1f46e00f866caabefa6ce01019e682f56069a61bc9eed58"
+          "storedBytes": 15296951,
+          "sha256": "b6af6eb9dced176d9bb48ad7475c08cf42814f6e1556d0aad00513c843d5da7b"
         },
         {
-          "url": "/_activity_assets/3335cfae2a3e1a3368d06ef0612885fe30a36ee1c3abeea78fb7238e21aa0b11.bin",
+          "url": "/_activity_assets/187e7a2308ed30acedcfdac642fee019ead2f53a12f0b2cdddf3e2aa1866fb1b.bin",
           "encoding": "gzip",
           "bytes": 16777216,
-          "storedBytes": 11858766,
-          "sha256": "bed7af35a2e75191b035204fc299902c51514acba9e579b069558f4c12117829"
+          "storedBytes": 11858825,
+          "sha256": "f6faf2c795dc084621bad3f418ec70c97ac7ba752d1c72a756e265a972d6a4b2"
         },
         {
-          "url": "/_activity_assets/35cf8a4a9a4ef6ea5ce26a417609a343f7f3f5bfd9c643a573fb9315ccf2698c.bin",
+          "url": "/_activity_assets/033789ea5a26582fcfa7971be117775ca17a9de7575595835c33cbfbeccc444b.bin",
           "encoding": "gzip",
-          "bytes": 2736546,
-          "storedBytes": 743388,
-          "sha256": "4f3f0dec050f063ae95a4d8efa397f8edb6d3ab572ad823347231915888430e0"
+          "bytes": 2736670,
+          "storedBytes": 743439,
+          "sha256": "dd4301dc7e9bcf637d8af00f9d998ea354d1d056de89d9d72706947fa3222784"
         }
       ],
       "mime": "application/octet-stream",
-      "bytes": 103399842,
-      "sha256": "c388027657359be8aec1049cd53adc500eea47df8cf32673ec14f824f5f8fc83"
+      "bytes": 103399966,
+      "sha256": "339ab77e8087d4af29131263cca279f441a0343b102302d1b95c7b1fa5473310"
     },
     "/works/wanyan/Build/wanyan.framework.js": {
       "chunks": [
         {
-          "url": "/_activity_assets/8f73dd8abbd9dde0a2eb1297f94ba31dacf97b3542812e1d66e40e81ee67d2eb.bin",
+          "url": "/_activity_assets/daee4b2c6ec2ab553c3b9b1062ece694f49f3ceb08a99275fc7ec0e643cd6ddc.bin",
           "encoding": "gzip",
-          "bytes": 442699,
-          "storedBytes": 94657,
-          "sha256": "1d7030f89b9010ed5fb27dc2de42f00efc9431c876b56867ef59710d6a573cf8"
+          "bytes": 442960,
+          "storedBytes": 94730,
+          "sha256": "8456441d652207d508a93211e6bbd2380852a83093cc91ff548870bf5b3a8e63"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 442699,
-      "sha256": "1d7030f89b9010ed5fb27dc2de42f00efc9431c876b56867ef59710d6a573cf8"
+      "bytes": 442960,
+      "sha256": "8456441d652207d508a93211e6bbd2380852a83093cc91ff548870bf5b3a8e63"
     },
     "/works/wanyan/Build/wanyan.loader.js": {
       "chunks": [
         {
-          "url": "/_activity_assets/c7603424950e83076a51b40511dd21444cb56b4f907ee2305269ad0e936ddf3d.bin",
+          "url": "/_activity_assets/d2bff6edaeacf0841daf52f28b4f82f9e1c67b8acb2d162dfb623e50477433aa.bin",
           "encoding": "gzip",
           "bytes": 27675,
           "storedBytes": 9557,
-          "sha256": "a45577f37d0cca27eeb67c8bc88473609ea875c94ac6850113a7694d8292589d"
+          "sha256": "51913a5fe87140c62e0b4aa30da3e8585331152d4c6b27f8f5c59093017a9ea8"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
       "bytes": 27675,
-      "sha256": "a45577f37d0cca27eeb67c8bc88473609ea875c94ac6850113a7694d8292589d"
+      "sha256": "51913a5fe87140c62e0b4aa30da3e8585331152d4c6b27f8f5c59093017a9ea8"
     },
     "/works/wanyan/Build/wanyan.wasm": {
       "chunks": [
         {
-          "url": "/_activity_assets/e5d0aaa01cf6e297a94d1da3565e9da1caaccbd08616b097108f01ab3c867392.bin",
+          "url": "/_activity_assets/f3200a4a3fd822f6f8c8992931f30253efe1cf79be4eae78b99ded69e3d51acb.bin",
           "encoding": "gzip",
           "bytes": 16777216,
-          "storedBytes": 3747782,
-          "sha256": "aa4c9149f226caf73bd0015dfcdb6e5a399c86fc275a443cd262fd69bac82418"
+          "storedBytes": 3747711,
+          "sha256": "fee8b0f7e672cf1002c2704a8488bf0dc18ccf710e3716d3ba53a604240a6c2a"
         },
         {
-          "url": "/_activity_assets/49b974435c6b9ea93745e76a5b42e37606e91060adee25faf9e8a8828722d2a4.bin",
+          "url": "/_activity_assets/b1d9a486cbf401976ce707d19eb1d7b6a681c705102b8033e05fdd778af43673.bin",
           "encoding": "gzip",
           "bytes": 16777216,
-          "storedBytes": 4996566,
-          "sha256": "cca9803d2bf8d41f53a1202720004c77733b8c230897e362888d7fb523614a56"
+          "storedBytes": 4996498,
+          "sha256": "a0c300f29f2aa8424cecd7b0a2baae7331da4d8e08a99f549492930289823948"
         },
         {
-          "url": "/_activity_assets/b8f5c3d640903093010b009fd182a29c50336f26f2d1c00696644005719e63da.bin",
+          "url": "/_activity_assets/73443fd78eee9abbce4f073eef9bd4e86c8bf07a628be63656fad1a57a49c649.bin",
           "encoding": "gzip",
-          "bytes": 9007320,
-          "storedBytes": 2992422,
-          "sha256": "a06172f23511ed55d0954802a462aab18f2bcffc4a9d9d66f7c87ccdfa1bf352"
+          "bytes": 9007608,
+          "storedBytes": 2992608,
+          "sha256": "7f219254ade3d36a7e4870d6e5514d3075c7250c7064d7ac0e8ea10f20ca4fe7"
         }
       ],
       "mime": "application/wasm",
-      "bytes": 42561752,
-      "sha256": "e17b31f7be3bdf6c39970618fad46cdea1e47d9fa00a0523b0f576dd60cf97a7"
+      "bytes": 42562040,
+      "sha256": "d240f7273266bad8ad14e3f548cc69518b6c689d95e14986f0d322069156dffc"
     },
     "/works/wanyan/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/78f4a39e820e67f654c2a14f5b00fcc1a8b75a8d89ec93e7e018bef159a5d3cf.bin",
+          "url": "/_activity_assets/25e345e3f38888e06866ef44d1523af94018d91c6b536c26685a0118c845f2e5.bin",
           "encoding": "gzip",
-          "bytes": 11520,
-          "storedBytes": 4120,
-          "sha256": "8cdc366b659c4b5c29cbc49578c14164a6467013302ab49be83110e4f7b0d8ef"
+          "bytes": 11652,
+          "storedBytes": 4155,
+          "sha256": "abb124cc4024ab4b4b0da076519f90a9cf5ccdc55c31fc5b0f916969a269b637"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 11520,
-      "sha256": "8cdc366b659c4b5c29cbc49578c14164a6467013302ab49be83110e4f7b0d8ef"
+      "bytes": 11652,
+      "sha256": "abb124cc4024ab4b4b0da076519f90a9cf5ccdc55c31fc5b0f916969a269b637"
     },
     "/works/wanyan/pointer-lock-compat.js": {
       "chunks": [
@@ -1811,16 +1811,16 @@
     "/works/wanyan/touch-controls.css": {
       "chunks": [
         {
-          "url": "/_activity_assets/f39648796cd001bf556211e1c014cff3ba415a08ed9ee3d9ce47ae4adeb9be0b.bin",
+          "url": "/_activity_assets/c199e66f5fa0bb5e0c9903e3bbe8f8c0dfd0a01ba0961b440f511d4ea031a603.bin",
           "encoding": "gzip",
-          "bytes": 10842,
-          "storedBytes": 2669,
-          "sha256": "3941678789ac7c5e57d4cf446a70fb13e4bf3a0eec8ef44fd48fe848a27729a0"
+          "bytes": 13569,
+          "storedBytes": 3294,
+          "sha256": "8a5fc213fb4388b5f7733adc19bbcc23ec22ad4122ba5aadd5854e892a9a4e9c"
         }
       ],
       "mime": "text/css; charset=utf-8",
-      "bytes": 10842,
-      "sha256": "3941678789ac7c5e57d4cf446a70fb13e4bf3a0eec8ef44fd48fe848a27729a0"
+      "bytes": 13569,
+      "sha256": "8a5fc213fb4388b5f7733adc19bbcc23ec22ad4122ba5aadd5854e892a9a4e9c"
     },
     "/works/wanyan/touch-controls.mjs": {
       "chunks": [
@@ -1839,16 +1839,16 @@
     "/works/wanyan/wanyan-touch.mjs": {
       "chunks": [
         {
-          "url": "/_activity_assets/36d6ecc3f983aea1547f5bfffca6cf91f3388ad796bc4e1fff5ed01744375b60.bin",
+          "url": "/_activity_assets/b1edf86a110cf8475ac9f4520df0ce8c420bfd78d80cd27bc4036bf7359a21fa.bin",
           "encoding": "gzip",
-          "bytes": 3198,
-          "storedBytes": 1480,
-          "sha256": "286d9bad6d9978bfe3f1a6a8e9886d73511e6d002f8bad154f80c6b9b3c59561"
+          "bytes": 4571,
+          "storedBytes": 1991,
+          "sha256": "3b6b617fdce6a8f78123982fccab7b1502041099e17c17ca73a299c4bcee5154"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 3198,
-      "sha256": "286d9bad6d9978bfe3f1a6a8e9886d73511e6d002f8bad154f80c6b9b3c59561"
+      "bytes": 4571,
+      "sha256": "3b6b617fdce6a8f78123982fccab7b1502041099e17c17ca73a299c4bcee5154"
     },
     "/works/wanyan/wanyan-touch-gamepad.mjs": {
       "mime": "text/javascript; charset=utf-8",
@@ -1863,6 +1863,20 @@
       ],
       "bytes": 6272,
       "sha256": "39cebd20760045bd8a84bd74cdb8eee757b2db07c56dc8a304350a350403291f"
+    },
+    "/works/wanyan/wanyan-skill-state.mjs": {
+      "mime": "text/javascript; charset=utf-8",
+      "chunks": [
+        {
+          "url": "/_activity_assets/6f0fab3007c84f774590945f0fed294ca3589148da91a6ce3ec39ff39fa9c352.bin",
+          "encoding": "gzip",
+          "bytes": 1807,
+          "storedBytes": 1001,
+          "sha256": "cafb51ea92aff5e4de90bf7d980b48dd36ca57e851a4dceffc60125bad39b6cb"
+        }
+      ],
+      "bytes": 1807,
+      "sha256": "cafb51ea92aff5e4de90bf7d980b48dd36ca57e851a4dceffc60125bad39b6cb"
     }
   },
   "spa": [

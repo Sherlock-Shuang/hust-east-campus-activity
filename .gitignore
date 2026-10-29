@@ -13,3 +13,5 @@ output/
 *.log
 *.sqlite*
 *.db
+
+work-assets-source/

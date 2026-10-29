@@ -1,5 +1,6 @@
 import {createTouchControls,createTouchKeys,isTouchLayout} from './touch-controls.mjs';
 import {createTouchGamepad,TOUCH_GAMEPAD_ID} from './wanyan-touch-gamepad.mjs';
+import {skillPresentation} from './wanyan-skill-state.mjs';
 const pad=createTouchGamepad({enabled:isTouchLayout(),isDiscovered:()=>!!window.bookrealmNativeControls?.connected&&window.bookrealmNativeControls?.rawGamepad?.id===TOUCH_GAMEPAD_ID});
 const canvas=document.getElementById('unity-canvas');
 const keys=createTouchKeys(()=>canvas);
@@ -13,9 +14,30 @@ const touch=createTouchControls({kind:'wanyan',canvas,movePhases:['combat'],onRe
  toolbar:[{id:'menu',label:'暂停 / 继续',phases:['combat','paused']},{id:'confirm',label:'开始 / 确认',phases:['intro','combat']},{id:'restart',label:'重新开始',phases:['ended']},{id:'recenter',label:'镜头回正',phases:['combat']},{id:'upgrade1',label:'选择强化 1',phases:['choosing']},{id:'upgrade2',label:'选择强化 2',phases:['choosing']},{id:'upgrade3',label:'选择强化 3',phases:['choosing']}],
  actions:[{id:'heal',label:'回血',phases:['combat']},{id:'skill',label:'技能',phases:['combat']},{id:'lock',label:'锁定',phases:['combat']},{id:'heavy',label:'重击',phases:['combat']},{id:'attack',label:'普攻',phases:['combat']},{id:'dodge',label:'闪避',phases:['combat']}],
 });
+const skillButton=touch.root.querySelector('[data-touch-action="skill"]');
+let skillStatus,lastSkillUI='';
+if(skillButton){
+ const name=document.createElement('span');name.className='work-skill-name';name.textContent='技能';
+ skillStatus=document.createElement('small');skillStatus.className='work-skill-status';skillStatus.textContent='同步中';
+ name.setAttribute('aria-hidden','true');skillStatus.setAttribute('aria-hidden','true');
+ skillButton.replaceChildren(name,skillStatus);
+}
+function updateSkill(){
+ if(!skillButton)return;
+ const ui=skillPresentation(window.bookrealmNativeSkill,{phase:phase(),suspended:!!window.bookrealmControlsSuspended||document.hidden});
+ const charge=`${Math.round(ui.charge*100)}%`,stamp=`${ui.state}|${ui.label}|${ui.hint}|${charge}`;
+ if(stamp===lastSkillUI)return;lastSkillUI=stamp;
+ skillButton.dataset.skillState=ui.state;skillButton.dataset.skillReady=String(ui.ready);skillButton.dataset.skillCharged=String(ui.charged);
+ skillButton.style.setProperty('--skill-charge',charge);skillStatus.textContent=ui.label;
+ skillButton.setAttribute('aria-label',ui.hint);skillButton.title=ui.hint;
+ // These are display states only. Do not disable this button: Unity owns
+ // the existing action buffering, costs, cooldowns and input rejection.
+}
+updateSkill();
 window.campusWanyanTouchReady=()=>window.setTimeout(()=>pad.announce(),250);
 // Read-only DOM diagnostics from the actual Unity bridge, sampled at 5 Hz.
 const diagnostics=window.setInterval(()=>{
+ updateSkill();
  const s=window.bookrealmNativeControls;if(!s||!canvas)return;
  canvas.dataset.touchInput=pad.available?'gamepad':'keyboard';
  for(const key of ['yaw','pitch','lookX','lookY','moveX','moveY','playerX','playerZ'])if(Number.isFinite(s[key]))canvas.dataset[`native${key[0].toUpperCase()+key.slice(1)}`]=s[key].toFixed(3);

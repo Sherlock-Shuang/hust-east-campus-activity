@@ -7,6 +7,11 @@
 在校园项目根目录执行：
 
 ```sh
+# 首次准备技能状态桥；只在临时活动副本编译，原工程保持原样。
+node integration/library/prepare-wanyan-activity.mjs \
+  --source "/持有完整资源的生日礼物工程目录" \
+  --unity-editor "/Unity编辑器路径/Unity" \
+  --output work-assets-source/wanyan-skill
 BOOKREALM_SOURCE="/持有完整资源的生日礼物工程目录" node integration/library/build.mjs --output work-assets
 node --test integration/library/integration.test.mjs
 ```
@@ -21,7 +26,7 @@ node --test integration/library/integration.test.mjs
 | 两款书中游戏可用性 | `/works/library/api/games` |
 | 模型、角色、模块、字体与剧情 | `/works/library/model.glb`、`hero.glb`、`hub/`、`vendor/`、`story/config.json` |
 
-仅复制正式运行引用的 72 个文件，约 360 MB。图书馆模型约 122 MB，人物约 25 MB，Unity WebGL 的 data 约 99 MB、wasm 约 41 MB；按进入作品时加载。没有复制 Unity 工程、Blender 制作文件、照片目录、历史构建、QA 页面或测试夹具。以撒保留原游戏 HTML、Ruffle 运行时、剧情桥与两种已有 SWF 选择；不复制整个以撒工作区。
+仅复制正式运行引用的 73 个文件，约 360 MB。图书馆模型约 122 MB，人物约 25 MB，Unity WebGL 的 data 约 99 MB、wasm 约 41 MB；按进入作品时加载。没有复制 Unity 工程、Blender 制作文件、照片目录、历史构建、QA 页面或测试夹具。以撒保留原游戏 HTML、Ruffle 运行时、剧情桥与两种已有 SWF 选择；不复制整个以撒工作区。
 
 manifest 的 `entries` 给出每条 URL、相对运行包路径、长度、SHA-256 和 MIME。Node handler 按该白名单提供资源，支持 HEAD、ETag 和单段 Range 请求。Worker 部署可读取同一 entries；大文件分块／合并由校园部署工具负责，本目录不假装这些文件能直接满足所有静态托管单文件限额。
 
@@ -30,7 +35,7 @@ manifest 的 `entries` 给出每条 URL、相对运行包路径、长度、SHA-2
 1. 原运行层绝对 URL 重写为活动前缀；馆内 J921 改指向同一 `/works/wanyan/` 真实构建，I921 保持以撒入口。
 2. `public-story.json` 使用“访客／书境向导”与中性活动文案，头像为空。没有复制原 `story/config.json` 或 `story/avatars`。保留 intro 的 8 步／2 次回复、birthday 的 4 步／1 次回复、原延时和原流程节点标识，因此条件判断没有改变。
 3. 活动存档使用 `campus-library-save-v1`、`campus-library-view-mode`，不覆盖原礼物存档。原主角、原游戏玩法、原有真实胜利回调保持。
-4. 以撒活动副本的 `story.js` 将一处作者真实姓名提示改为中性同行者提示；原脚本不变。Unity 可执行文件和 SWF 原样复制；Unity data 仅将四处场景称呼“归心”改为“圣所”（见下文）。没有从运行包导出原素材，也没有声称对编译内容做完整隐私扫描或另行授予再分发许可。
+4. 以撒活动副本的 `story.js` 将一处作者真实姓名提示改为中性同行者提示；原脚本不变。SWF 原样复制；Unity 使用经过哈希校验的活动版构建，增加只读技能状态桥，随后将 data 内四处场景称呼“归心”改为“圣所”（见下文）。没有从运行包导出原素材，也没有声称对编译内容做完整隐私扫描或另行授予再分发许可。
 5. 图书馆活动副本新增外部暂停：冻结主循环和手柄轮询、停止输入、暂停手机及其音频，并向嵌套游戏发送已有 `bookrealm:controls`。原暂停／视角／游戏按键保留，Esc 没有被活动桥劫持。
 6. 晚言通过已有 `bookrealmControlsSuspended` 接入原战斗暂停边界；退出时尝试 `unityInstance.Quit()`，父层移除 iframe 释放运行时。
 7. 晚言活动画布对已知浏览器 Pointer Lock 拒绝作非致命降级，保留普通鼠标／键盘；同时捕获同步异常和 Promise 拒绝，不伪造锁定成功。真正的 Unity 运行错误和资源下载失败仍报告失败。降级只作用于活动副本，不修改编译游戏或原工程。
@@ -70,7 +75,7 @@ manifest 的 `entries` 给出每条 URL、相对运行包路径、长度、SHA-2
 
 ## 晚言活动版场景称呼
 
-`wanyan-public-text.mjs` 严格解析 UnityWebData 与 IL2CPP v108 字面量表，只将四处完整文案中的“归心”改成“圣所”，包括开场提示、进入按钮和原胜利提示。等长 UTF-8 替换保持容器及元数据偏移，整包仅20个字节变化；未知版本、异常边界或文案变化会拒绝构建。`.wasm`、战斗、胜利回调和存档不变，原礼物包不写入。原包哈希保留在 manifest.sourceChecks；测试把四个名称还原后，要求整包SHA256与原包完全一致。
+`wanyan-public-text.mjs` 严格解析 UnityWebData 与 IL2CPP v108 字面量表，只将四处完整文案中的“归心”改成“圣所”，包括开场提示、进入按钮和原胜利提示。等长 UTF-8 替换保持容器及元数据偏移，整包仅20个字节变化；未知版本、异常边界或文案变化会拒绝构建。该文字转换不改 `.wasm`、战斗、胜利回调和存档，原礼物包不写入。当前构建先从活动Unity副本导出只读技能桥，输入哈希保留在 manifest.unityRuntime；测试把四个名称还原后，要求整包SHA256与该次活动Unity输出完全一致。
 
 活动HTML使用 `wanyan.data?campus-text=sanctum-v1` 避免旧缓存继续显示原称呼，资源路由仍为同一个data文件。字体已包含“圣”“所”，不增加字体下载。构建输出不能位于原工程内部。
 
@@ -90,4 +95,19 @@ manifest 的 `entries` 给出每条 URL、相对运行包路径、长度、SHA-2
 node --test integration/library/integration.test.mjs integration/library/touch-controls.test.mjs integration/library/wanyan-touch-gamepad.test.mjs integration/library/wanyan-public-text.test.mjs
 ```
 
-测试包含首个空槽、逐帧多次读取、停指与抬手、并行移动／镜头／攻击、重新落指、取消／旋转／暂停、物理手柄合并与热插拔、恢复原浏览器 API，以及原 wasm／SWF 完全一致、Unity data 仅原四处“圣所”称呼转换。实际 Unity 浏览器运行和手机真机体验由校园主流程分别验收，不能用输入模拟测试冒充真机表现。
+测试包含首个空槽、逐帧多次读取、停指与抬手、并行移动／镜头／攻击、重新落指、取消／旋转／暂停、物理手柄合并与热插拔、恢复原浏览器 API，以及Unity可执行文件与经过校验的活动构建一致、SWF原样保留、Unity data仅四处“圣所”称呼转换。实际 Unity 浏览器运行和手机真机体验由校园主流程分别验收，不能用输入模拟测试冒充真机表现。
+
+
+## 技能按钮就绪反馈
+
+技能按钮读取 Unity 原生 `bookrealmNativeSkill` v1：`focus/maxEnergy/cost/cooldown/charged/canCast/active`。原规则消耗50能量、能量上限100；达到消耗门槛且冷却结束出现金环，原 `CanCastNow` 确认可释放时出现柔和金色光晕。释放后按真实冷却显示秒数、恢复暗色；能量不足显示还差多少。暂停、结束、后台冻结及未取得有效状态时不会亮起。按钮不额外禁用，不改变原输入缓冲或战斗规则；减少动态效果偏好下停止呼吸动画。
+
+原编译包没有技能数据导出，因此本轮需要重建活动Unity可执行文件。`prepare-wanyan-activity.mjs` 在系统临时目录创建独立工程副本，仅为 `EmberGamepad.Publish` 增加只读调用，新增状态JS桥及Editor构建/属性边界检查。原 `EmberGame.cs`、角色/场景/战斗资源和原交付包不写入；没有生产调试入口、填充能量或模拟胜利回调。产物只保留4个Build文件和本地provenance，发布白名单不包含临时工程、源码、日志或QA。
+
+`build.mjs` 默认读取 `work-assets-source/wanyan-skill`；也可用 `--wanyan-build` 或 `WANYAN_ACTIVITY_BUILD` 指定经过校验的构建。缺少产物、字节数或SHA不符会直接失败，不回退到缺技能桥的旧包。首次准备需要原版匹配的Unity 6000.6.0f1/WebGL模块和有效编辑器许可；日常 `npm run dev` 使用已有work-assets，无需Unity。线上仓库从已打包的 `asset-source` 物化作品，Vercel构建也无需Unity或原礼物目录。
+
+补充检查：
+
+```sh
+node --test integration/library/wanyan-skill-state.test.mjs integration/library/wanyan-runtime.test.mjs integration/library/prepare-wanyan-activity.test.mjs
+```

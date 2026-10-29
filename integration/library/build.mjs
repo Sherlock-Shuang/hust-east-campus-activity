@@ -3,6 +3,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {publicWanyanData} from './wanyan-public-text.mjs';
+import {loadWanyanRuntime} from './wanyan-runtime.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const LIBRARY='/works/library/',WANYAN='/works/wanyan/';
@@ -25,11 +26,13 @@ function mobileAssets(html,prefix){
   html=/<meta name="viewport"[^>]*>/i.test(html)?html.replace(/<meta name="viewport"[^>]*>/i,viewport):html.replace('</head>',viewport+'</head>');
   return html.replace(viewport,viewport+`<link rel="stylesheet" href="${prefix}touch-controls.css">`);
 }
-export async function buildLibrary({sourceRoot,outputRoot}){
+export async function buildLibrary({sourceRoot,outputRoot,wanyanBuildRoot}){
   if(!sourceRoot)throw new Error('Specify --source or BOOKREALM_SOURCE; it is a build-time path only.');
   sourceRoot=path.resolve(sourceRoot);outputRoot=path.resolve(outputRoot||path.join(here,'../../work-assets'));
   const outputRelative=path.relative(sourceRoot,outputRoot);
   if(!outputRelative||(!outputRelative.startsWith(`..${path.sep}`)&&outputRelative!=='..'&&!path.isAbsolute(outputRelative)))throw new Error('Activity output must be outside the original source project');
+  const unityRuntime=await loadWanyanRuntime(wanyanBuildRoot||path.join(here,'../../work-assets-source/wanyan-skill'));
+  const unityVersion=unityRuntime.provenance.files.find(entry=>entry.file==='Build/wanyan.wasm').sha256.slice(0,12);
   const project=JSON.parse(await readFile(path.join(sourceRoot,'project.json'),'utf8'));
   const app=project.paths.app,isaac=project.paths.isaac,hero=project.paths.hero;
   const entries=[],sourceChecks=[],transforms=[];
@@ -54,7 +57,7 @@ export async function buildLibrary({sourceRoot,outputRoot}){
   const adapter=await readFile(path.join(here,'activity-adapter.js'),'utf8');
   await put('library/activity-adapter.js',adapter);await put('wanyan/activity-adapter.js',adapter);
   for(const file of ['touch-controls.mjs','touch-controls.css'])for(const work of ['library','wanyan'])await put(`${work}/${file}`,await readFile(path.join(here,file),'utf8'));
-  for(const file of ['wanyan-touch.mjs','wanyan-touch-gamepad.mjs'])await put(`wanyan/${file}`,await readFile(path.join(here,file),'utf8'));
+  for(const file of ['wanyan-touch.mjs','wanyan-touch-gamepad.mjs','wanyan-skill-state.mjs'])await put(`wanyan/${file}`,await readFile(path.join(here,file),'utf8'));
   await put('library/isaac-touch.mjs',await readFile(path.join(here,'isaac-touch.mjs'),'utf8'));
   await put('wanyan/pointer-lock-compat.js',await readFile(path.join(here,'wanyan-pointer-lock.js'),'utf8'));
   await copy(`${app}/viewer/index.html`,'library/index.html',s=>mobileAssets(injectAdapter(rebaseLibraryText(s),'library'),LIBRARY).replace('src="/works/library/hub/main.mjs"','src="/works/library/hub/main.mjs?v=mobile-20261028"'));
@@ -115,15 +118,15 @@ export async function buildLibrary({sourceRoot,outputRoot}){
     .replace("else location.assign('/');",`else location.assign('${LIBRARY}');`));
   await tree(`${isaac}/运行验证/node_modules/@ruffle-rs/ruffle`,'library/isaac-source/运行验证/node_modules/@ruffle-rs/ruffle',name=>/\.(?:js|wasm)$/.test(name)||name.startsWith('LICENSE'));
   for(const file of ['剧情扩展/Isaac-High-Damage.swf','SWF运行样本/The Binding of Isaac.swf'])await copy(`${isaac}/${file}`,`library/isaac-source/${file}`);
-  await tree(`${app}/games/wanyan/Build`,'wanyan/Build',name=>name!=='wanyan.data'&&/\.(?:js|wasm|data)$/.test(name));
-  const unityDataSource=`${app}/games/wanyan/Build/wanyan.data`,unityData=await readFile(path.join(sourceRoot,unityDataSource));
-  await put('wanyan/Build/wanyan.data',publicWanyanData(unityData),{source:unityDataSource,sourceHash:sha(unityData)});
-  transforms.push('Activity-only Unity metadata display text: four sanctuary labels renamed from 归心 to 圣所 with equal UTF-8 lengths; original package and gameplay unchanged');
+  for(const [file,bytes]of unityRuntime.files)await put(`wanyan/${file}`,file.endsWith('.data')?publicWanyanData(bytes):bytes);
+  transforms.push('Activity Unity copy adds a read-only native skill-state bridge; original gift project is untouched. Four sanctuary labels are renamed from 归心 to 圣所 with equal UTF-8 lengths in the rebuilt data.');
   await tree(`${app}/games/wanyan/TemplateData`,'wanyan/TemplateData',name=>/\.(?:css|png|ico)$/.test(name));
   await copy(`${app}/games/wanyan/index.html`,'wanyan/index.html',source=>{
     let s=mobileAssets(injectAdapter(source,'wanyan'),WANYAN);
-    s=replaceExactly(s,'dataUrl: buildUrl + "/wanyan.data"','dataUrl: buildUrl + "/wanyan.data?campus-text=sanctum-v1"','Unity public wording cache version');
-    s=replaceExactly(s,'</head>',`<script type="module" src="${WANYAN}wanyan-touch.mjs"></script></head>`,'Unity touch script');
+    s=replaceExactly(s,'dataUrl: buildUrl + "/wanyan.data"',`dataUrl: buildUrl + "/wanyan.data?campus-text=sanctum-v1&skill-bridge=${unityVersion}"`,'Unity public wording cache version');
+    for(const ext of ['framework.js','wasm','loader.js'])s=s.replaceAll(`/wanyan.${ext}"`,`/wanyan.${ext}?skill-bridge=${unityVersion}"`);
+    s=s.replace(`${WANYAN}touch-controls.css"`,`${WANYAN}touch-controls.css?skill-ready=1"`);
+    s=replaceExactly(s,'</head>',`<script type="module" src="${WANYAN}wanyan-touch.mjs?skill-ready=1"></script></head>`,'Unity touch script');
     s=replaceExactly(s,'return Math.min(Math.max(1, nativeRatio || 1), 2, budgetRatio);',"var mobile=matchMedia('(pointer: coarse)').matches||navigator.maxTouchPoints>0||innerWidth<=900;return Math.min(Math.max(1, nativeRatio || 1), mobile?1.1:2, budgetRatio);",'Unity mobile pixel budget');
     s=s.replace("var meta = document.createElement('meta');","var meta = document.querySelector('meta[name=viewport]') || document.createElement('meta');")
       .replace("meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';","meta.content = 'width=device-width, initial-scale=1.0, viewport-fit=cover';")
@@ -146,7 +149,7 @@ export async function buildLibrary({sourceRoot,outputRoot}){
   const games=entries.find(e=>e.file==='library/api/games.json');entries.push({...games,url:LIBRARY+'api/games'});
   transforms.push('Runtime root URLs rebased to /works/library/ and /works/wanyan/', 'Public neutral story preserves original step types, delays, reply counts and completion conditions; original story/avatars excluded', 'Library save and camera preferences use campus-only storage keys', 'Activity bridge adds pause and real readiness signals; no completion or victory is synthesized', 'Isaac runtime helper personal attribution anonymized; its menu and real victory bridge retained', 'Unity activity canvas catches known pointer-lock platform refusals and keeps ordinary mouse input; unrelated Unity errors still fail');
   transforms.push('Campus mobile controls share original movement or keyboard inputs, release on pause/cancel/resize, and never modify game completion', 'Mobile library phone uses full viewport and native text input; mobile rendering caps DPR at 1.1 and suspends the library background while the phone is open');
-  const manifest={schemaVersion:1,generatedAt:new Date().toISOString(),sourceVersion:project.version,prefixes:[LIBRARY,WANYAN],entries,transforms,sourceChecks};
+  const manifest={schemaVersion:1,generatedAt:new Date().toISOString(),sourceVersion:project.version,prefixes:[LIBRARY,WANYAN],entries,transforms,sourceChecks,unityRuntime:unityRuntime.provenance};
   await writeFile(path.join(outputRoot,'library-manifest.json'),JSON.stringify(manifest,null,2)+'\n');
   // Re-read source hashes after copying so concurrent edits cannot silently create a mixed release.
   for(const entry of sourceChecks)if(sha(await readFile(path.join(sourceRoot,entry.source)))!==entry.sha256)throw new Error(`Source changed during build: ${entry.source}`);
@@ -154,6 +157,6 @@ export async function buildLibrary({sourceRoot,outputRoot}){
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const args=process.argv.slice(2),value=name=>{const i=args.indexOf(name);return i<0?undefined:args[i+1];};
-  const result=await buildLibrary({sourceRoot:value('--source')||process.env.BOOKREALM_SOURCE,outputRoot:value('--output')});
+  const result=await buildLibrary({sourceRoot:value('--source')||process.env.BOOKREALM_SOURCE,outputRoot:value('--output'),wanyanBuildRoot:value('--wanyan-build')||process.env.WANYAN_ACTIVITY_BUILD});
   console.log(JSON.stringify(result));
 }
