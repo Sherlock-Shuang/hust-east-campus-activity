@@ -19,6 +19,7 @@ import { alignEastNineColumnFeet } from './east-nine-ground-contact.js';
 import { collectEastNineAccess } from './east-nine-access.js';
 import { createYunyuanDetails } from './yunyuan-details.js';
 import {streetFootprint,polygonsOverlap} from './street-clearance.js';
+import {createCampusAIMurals} from './campus-ai-murals.js';
 import {createEinsteinSquare} from './einstein-square.js';
 import {createOptoBuilding,OPTO_BUILDING_ID} from './opto-building.js';
 import {createYunyuanSouthPrecinct} from './yunyuan-south-precinct.js';
@@ -299,6 +300,8 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
   const optoApproach=createOptoApproach(THREE,model,{frame,geoToLocal,optoBuilding,surfaces});
   layer('road').add(optoApproach.group);detailDisposers.push(optoApproach.dispose);
   const optoRoadIds=new Set(optoApproach.infrastructure.replacedRoadIds);
+  const aiMurals=createCampusAIMurals(THREE,model,records,{frame,geoToLocal});
+  layer('building').add(aiMurals.group);counts.aiMurals=aiMurals.plan.length;
   function local(c) { const p = geoToLocal({ longitude: c[0], latitude: c[1], height: 0, coordinateSystem: 'EPSG:4326' }, frame); return new THREE.Vector3(p.x, 0, p.z); }
   function roadOutline(points,width) {
     const left=[],right=[];
@@ -529,5 +532,5 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     optoEntry:optoBuilding?{...optoBuilding.entry,label:'光电信息大楼 · C118 报告厅'}:null,optoEntries:optoBuilding?.entries||[],optoViewpoints:optoBuilding?.viewpoints,optoApproachPlan:optoApproach.plan,
     gatePlan:campusGates.plan,gateViewpoints:campusGates.viewpoints,
     yunyuanSouthPlan:southPrecinct.plan,yunyuanSouthViewpoints:southPrecinct.viewpoints,
-    einsteinSquarePlan:einsteinSquare.plan, landcoverPlan:forestLayer?.plan, lawnLandmarkPlan:lawnLandmarks.plan, dynamicGroups:forecourt.dynamicGroup?[forecourt.dynamicGroup]:[], tick, update, setVisible, setLayerVisible, setDetailedRoadIds, dispose };
+    einsteinSquarePlan:einsteinSquare.plan, aiMuralPlan:aiMurals.plan, landcoverPlan:forestLayer?.plan, lawnLandmarkPlan:lawnLandmarks.plan, dynamicGroups:forecourt.dynamicGroup?[forecourt.dynamicGroup]:[], tick, update, setVisible, setLayerVisible, setDetailedRoadIds, dispose };
 }
