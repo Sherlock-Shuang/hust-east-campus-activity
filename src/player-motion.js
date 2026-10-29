@@ -4,7 +4,7 @@
  * y is the feet / wheel / helicopter skid contact plane, not the actor centre.
  */
 import {createWebSwingMotion} from './web-swing-motion.js';
-const STEP=1/120,BASE_Y=.14,EPS=1e-7;
+const STEP=1/120,BASE_Y=.14,EPS=1e-7,STEP_UP=.22;
 const MODES=new Set(['walk','scooter','helicopter','roadster','hoverboard','spider','boat']);
 // Roadster dimensions and dynamics below are gameplay/model estimates, not
 // Tesla engineering or flight-envelope data. The visual uses cold-gas mist.
@@ -36,8 +36,12 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   const points=route.points.map((p,i)=>({...p,progress:finite(p.progress)?p.progress:i?NaN:0}));
   for(let i=1;i<points.length;i++)if(!finite(points[i].progress))points[i].progress=points[i-1].progress+Math.hypot(points[i].x-points[i-1].x,points[i].z-points[i-1].z);
   const length=route.length??points.at(-1).progress,buildings=polygonRecords(world.buildings),water=polygonRecords(world.water),bounds=world.bounds;
-  const bridgeSurfaceCells=new Map(),walkSurfaceCells=new Map(),barrierCells=new Map(),surfaceCell=24;
-  const barriers=polygonRecords((world.barriers||[]).filter(b=>b.polygon?.length>=3&&finite(b.height)&&b.height>(b.minHeight??0)).map(b=>({...b,minHeight:b.minHeight??0,rings:[b.polygon]})));
+  const bridgeSurfaceCells=new Map(),bridgeSolidCells=new Map(),walkSurfaceCells=new Map(),barrierCells=new Map(),surfaceCell=24;
+  const bridgeSurfaces=(route.roadSurfaces||[]).filter(s=>s.bridge&&s.polygon?.length>=3&&finite(s.surfaceY));
+  // Elevated decks are slabs, not columns extending to the ground. Keep the
+  // source height and the same thickness as the rendered bridge ribbon.
+  const bridgeSolids=bridgeSurfaces.filter(s=>s.surfaceY>BASE_Y+.35).map(s=>({...s,id:`bridge-deck:${s.sourceId??''}`,label:'桥面净空不足',minHeight:s.surfaceY-(s.deckDepth??.75),height:s.surfaceY,rings:[s.polygon]}));
+  const barriers=polygonRecords([...(world.barriers||[]).filter(b=>b.polygon?.length>=3&&finite(b.height)&&b.height>(b.minHeight??0)).map(b=>({...b,minHeight:b.minHeight??0,rings:[b.polygon]})),...bridgeSolids]);
   const walkSurfaces=(world.walkSurfaces||[]).filter(s=>s.polygon?.length>=3&&finite(s.surfaceY));
   function addIndexed(cells,record,polygon){
     const b=record.bounds??{minX:Math.min(...polygon.map(p=>p.x)),maxX:Math.max(...polygon.map(p=>p.x)),minZ:Math.min(...polygon.map(p=>p.z)),maxZ:Math.max(...polygon.map(p=>p.z))};
@@ -49,6 +53,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     const found=new Set();for(let x=x0;x<=x1;x++)for(let z=z0;z<=z1;z++)for(const record of cells.get(`${x}/${z}`)||[])found.add(record);return found;
   }
   for(const barrier of barriers)addIndexed(barrierCells,barrier,barrier.polygon);
+  for(const solid of bridgeSolids)addIndexed(bridgeSolidCells,solid,solid.polygon);
   for(const surface of walkSurfaces)addIndexed(walkSurfaceCells,surface,surface.polygon);
   function walkHeight(x,z,base){for(const s of walkSurfaceCells.get(`${Math.floor(x/surfaceCell)}/${Math.floor(z/surfaceCell)}`)||[])if(inRing({x,z},s.polygon)&&!(s.holes||[]).some(h=>inRing({x,z},h)))base=Math.max(base,s.surfaceY);return base;}
   // Infrastructure is deliberately separate from buildings: fence rails do
@@ -76,7 +81,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   // index. Keep non-level/custom routes on the full contact query below.
   const levelRoute=points.every(p=>Math.abs((p.y??.16)-.02-BASE_Y)<1e-10);
   let maximumGroundHeight=Math.max(BASE_Y,...points.map(p=>(p.y??.16)-.02),...walkSurfaces.map(s=>s.surfaceY));
-  for(const surface of(route.roadSurfaces||[]).filter(s=>s.bridge&&s.polygon?.length>=3)){
+  for(const surface of bridgeSurfaces){
     if(finite(surface.surfaceY))maximumGroundHeight=Math.max(maximumGroundHeight,surface.surfaceY);
     const b=surface.bounds??{minX:Math.min(...surface.polygon.map(p=>p.x)),maxX:Math.max(...surface.polygon.map(p=>p.x)),minZ:Math.min(...surface.polygon.map(p=>p.z)),maxZ:Math.max(...surface.polygon.map(p=>p.z))};
     for(let x=Math.floor(b.minX/surfaceCell);x<=Math.floor(b.maxX/surfaceCell);x++)for(let z=Math.floor(b.minZ/surfaceCell);z<=Math.floor(b.maxZ/surfaceCell);z++){const key=`${x}/${z}`;if(!bridgeSurfaceCells.has(key))bridgeSurfaceCells.set(key,[]);bridgeSurfaceCells.get(key).push(surface);}
@@ -200,11 +205,11 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       // Also cover the upright torso/head throughout that compensation.
       {x,z,radius:.45,minY:1.0,maxY:1.9},{x,z,radius:.25,minY:1.75,maxY:2.2}];
   }
-  function hoverboardContact(){const cy=Math.cos(state.yaw),sy=Math.sin(state.yaw),feet=[];for(const x of[-HOVERBOARD.footX,HOVERBOARD.footX])for(const z of[-HOVERBOARD.footZ,HOVERBOARD.footZ])feet.push({x,z,h:groundAt(state.x+x*cy+z*sy,state.z-x*sy+z*cy).height});
+  function hoverboardContact(){const cy=Math.cos(state.yaw),sy=Math.sin(state.yaw),feet=[];for(const x of[-HOVERBOARD.footX,HOVERBOARD.footX])for(const z of[-HOVERBOARD.footZ,HOVERBOARD.footZ])feet.push({x,z,h:contactAt(state.x+x*cy+z*sy,state.z-x*sy+z*cy).height});
     const avg=items=>items.reduce((sum,p)=>sum+p.h,0)/items.length;return{y:avg(feet),pitch:Math.atan2(avg(feet.filter(p=>p.z<0))-avg(feet.filter(p=>p.z>0)),2*HOVERBOARD.footZ),lean:Math.atan2(avg(feet.filter(p=>p.x>0))-avg(feet.filter(p=>p.x<0)),2*HOVERBOARD.footX)};
   }
   function hoverboardLandingFloor(){const cp=Math.cos(state.pitch),sp=Math.sin(state.pitch),cl=Math.cos(state.lean),sl=Math.sin(state.lean),cy=Math.cos(state.yaw),sy=Math.sin(state.yaw);let floor=-Infinity;
-    for(const x of[-HOVERBOARD.footX,HOVERBOARD.footX])for(const z of[-HOVERBOARD.footZ,HOVERBOARD.footZ]){const rx=x*cl,ry=x*sl*cp-z*sp,rz=x*sl*sp+z*cp;floor=Math.max(floor,groundAt(state.x+rx*cy+rz*sy,state.z-rx*sy+rz*cy).height-ry);}return floor;
+    for(const x of[-HOVERBOARD.footX,HOVERBOARD.footX])for(const z of[-HOVERBOARD.footZ,HOVERBOARD.footZ]){const rx=x*cl,ry=x*sl*cp-z*sp,rz=x*sl*sp+z*cp;floor=Math.max(floor,contactAt(state.x+rx*cy+rz*sy,state.z-rx*sy+rz*cy).height-ry);}return floor;
   }
   const hoverboardTiltSupport=()=>Math.max(0,-Math.min(...bodySamples(state.x,state.z,state.yaw,'hoverboard').map(p=>p.minY)));
   function sample(s){s=clamp(s,0,length);let i=1;while(i<points.length-1&&points[i].progress<s)i++;const a=points[i-1],b=points[i],t=clamp((s-a.progress)/Math.max(EPS,b.progress-a.progress),0,1);return{x:a.x+(b.x-a.x)*t,y:(a.y??.16)+((b.y??.16)-(a.y??.16))*t-.02,z:a.z+(b.z-a.z)*t,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z)),progress:s};}
@@ -212,22 +217,34 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i],dx=b.x-a.x,dz=b.z-a.z,l2=dx*dx+dz*dz,t=l2?clamp(((p.x-a.x)*dx+(p.z-a.z)*dz)/l2,0,1):0,x=a.x+t*dx,z=a.z+t*dz,d=Math.hypot(p.x-x,p.z-z);if(d<best.distance){const progress=a.progress+t*(b.progress-a.progress),segment=route.segments?.find(s=>progress>=(s.startProgress??s.s0)&&progress<=(s.endProgress??s.s1));best={x,z,distance:d,progress,width:segment?.width??7.2};}}
     return best;
   }
-  function groundAt(x,z,radius=0){const near=locate({x,z}),profile=sample(near.progress),width=near.width??7.2,raised=profile.y>BASE_Y+.03;
+  function bridgeSupport(x,z,radius,referenceY){
+    const candidates=bridgeSurfaceCells.get(`${Math.floor(x/surfaceCell)}/${Math.floor(z/surfaceCell)}`)||[];
+    let support;
+    for(const surface of candidates){
+      if(surface.surfaceY>referenceY+STEP_UP||support&&support.surfaceY>=surface.surfaceY||!inRing({x,z},surface.polygon))continue;
+      if(radius&&![[radius,0],[-radius,0],[0,radius],[0,-radius]].every(([dx,dz])=>candidates.some(v=>Math.abs(v.surfaceY-surface.surfaceY)<.15&&inRing({x:x+dx,z:z+dz},v.polygon))))continue;
+      support=surface;
+    }
+    return support;
+  }
+  // Omitting referenceY is a top-down map query. Movement always supplies the
+  // feet/wheel height so an overhead viaduct cannot become its support plane.
+  function groundAt(x,z,radius=0,referenceY=Infinity){const near=locate({x,z}),profile=sample(near.progress),width=near.width??7.2,raised=profile.y>BASE_Y+.03;
     const segment=route.segments?.find(s=>near.progress>=(s.startProgress??s.s0)-EPS&&near.progress<=(s.endProgress??s.s1)+EPS);
     // A bridge can be flush with its banks. Its source topology, not a made-up
     // positive elevation, establishes that a road spans the water beneath it.
-    const onRouteBridge=(raised||segment?.bridge)&&near.distance+radius<=width/2;
-    const candidates=bridgeSurfaceCells.get(`${Math.floor(x/surfaceCell)}/${Math.floor(z/surfaceCell)}`)||[];
-    const support=candidates.find(s=>inRing({x,z},s.polygon)&&(!radius||[[radius,0],[-radius,0],[0,radius],[0,-radius]].every(([dx,dz])=>candidates.some(v=>Math.abs(v.surfaceY-s.surfaceY)<.15&&inRing({x:x+dx,z:z+dz},v.polygon)))));
+    const onRouteBridge=(raised||segment?.bridge)&&profile.y<=referenceY+STEP_UP&&near.distance+radius<=width/2;
+    const support=bridgeSupport(x,z,radius,referenceY);
     const onBridge=!!(onRouteBridge||support),height=walkHeight(x,z,support?.surfaceY??(onRouteBridge?profile.y:BASE_Y));
     const overWater=water.some(p=>overlapsPolygon({x,z},radius,p));
     return{height,onBridge,raised:height>BASE_Y+.03,progress:near.progress,distance:near.distance,width,overWater,allowed:!overWater||onBridge};
   }
-  groundAt.heightAt=(x,z)=>{
-    if(!levelRoute)return groundAt(x,z).height;
-    const candidates=bridgeSurfaceCells.get(`${Math.floor(x/surfaceCell)}/${Math.floor(z/surfaceCell)}`)||[];
-    return walkHeight(x,z,candidates.find(surface=>inRing({x,z},surface.polygon))?.surfaceY??BASE_Y);
+  groundAt.heightAt=(x,z,referenceY=Infinity)=>{
+    if(!levelRoute)return groundAt(x,z,0,referenceY).height;
+    return walkHeight(x,z,bridgeSupport(x,z,0,referenceY)?.surfaceY??BASE_Y);
   };
+  groundAt.solidsInBounds=(minX,minZ,maxX,maxZ)=>indexedIn(bridgeSolidCells,minX,minZ,maxX,maxZ);
+  const contactAt=(x,z,radius=0,referenceY=state.y)=>groundAt(x,z,radius,referenceY);
   groundAt.maxHeightInBounds=(minX,minZ,maxX,maxZ)=>{
     if(!levelRoute)return maximumGroundHeight;
     let height=BASE_Y;
@@ -247,7 +264,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   }
   function outside(p){return bounds&&(p.x-p.radius<bounds.minX||p.x+p.radius>bounds.maxX||p.z-p.radius<bounds.minZ||p.z+p.radius>bounds.maxZ);}
   function obstacleAt(x,z,yaw,mode,y=state.y,previous=null,grounded=state.grounded,bodyPose=state){
-    const bodies=bodySamples(x,z,yaw,mode,bodyPose),ground=groundAt(x,z,mode==='spider'?.37:mode==='walk'?.26:mode==='scooter'?.42:mode==='roadster'?1.1:mode==='hoverboard'?1.42:0);
+    const bodies=bodySamples(x,z,yaw,mode,bodyPose),ground=contactAt(x,z,mode==='spider'?.37:mode==='walk'?.26:mode==='scooter'?.42:mode==='roadster'?1.1:mode==='hoverboard'?1.42:0,y);
     if(bodies.some(outside))return'校园边界';
     const barrierY=grounded&&mode!=='helicopter'&&mode!=='boat'?Math.max(y,ground.height):y;
     if(barriers.length)for(const p of bodies){const hit=barrierAt({...p,y:barrierY},p.radius,p.minY??0,p.maxY??(mode==='helicopter'?3.4:mode==='roadster'?1.7:2));if(hit)return hit.label||'围栏边界';}
@@ -258,17 +275,21 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       return'';
     }
     if(mode==='helicopter'||mode==='roadster'&&!grounded||mode==='hoverboard'&&!grounded){
-      const contacts=mode==='roadster'||mode==='hoverboard'?bodies.map(p=>groundAt(p.x,p.z)): [ground];
-      if(mode==='hoverboard'?bodies.some(p=>groundAt(p.x,p.z).height>y+p.minY+.04):contacts.some(g=>g.height>y+.04))return'桥面边界';
-      const waterContact=mode==='roadster'||mode==='hoverboard'?bodies.some(p=>!groundAt(p.x,p.z,p.radius).allowed):ground.overWater&&!ground.onBridge;
+      const contacts=mode==='roadster'||mode==='hoverboard'?bodies.map(p=>contactAt(p.x,p.z,0,y)): [ground];
+      if(mode==='hoverboard'?bodies.some(p=>contactAt(p.x,p.z,0,y).height>y+p.minY+.04):contacts.some(g=>g.height>y+.04))return'桥面边界';
+      const waterContact=mode==='roadster'||mode==='hoverboard'?bodies.some(p=>!contactAt(p.x,p.z,p.radius,y).allowed):ground.overWater&&!ground.onBridge;
       if(waterContact&&y<BASE_Y+2.48)return'水面低空边界';return'';
     }
-    if(bodies.some(p=>!groundAt(p.x,p.z,p.radius).allowed))return'水域边界';
-    if(previous){const oldGround=groundAt(previous.x,previous.z),delta=Math.hypot(x-previous.x,z-previous.z);
+    if(bodies.some(p=>!contactAt(p.x,p.z,p.radius,y).allowed))return'水域边界';
+    if(previous){const oldGround=contactAt(previous.x,previous.z,0,previous.y),delta=Math.hypot(x-previous.x,z-previous.z);
       // Contact may vary continuously up a ramp. A sideways crossing of the
       // elevated road edge must not teleport the body onto or off the deck.
       if(Math.abs(ground.height-oldGround.height)>.22+delta*.25)return'桥面边缘';
-      if(oldGround.onBridge&&oldGround.height>BASE_Y+.35&&bodies.some(p=>{const g=groundAt(p.x,p.z,p.radius);return!g.onBridge&&g.raised;}))return'桥面边缘';
+      // Wheels/feet can cross a deck edge before the body centre does. Reject
+      // a discontinuity across the entire footprint before contactPose tilts
+      // the vehicle, while still allowing the existing continuous ramps.
+      if(bodies.some(p=>Math.abs(contactAt(p.x,p.z,p.radius,y).height-oldGround.height)>STEP_UP+(delta+Math.hypot(p.x-previous.x,p.z-previous.z))*.25))return'桥面边缘';
+      if(oldGround.onBridge&&oldGround.height>BASE_Y+.35&&bodies.some(p=>{const g=contactAt(p.x,p.z,p.radius,y);return!g.onBridge&&g.raised;}))return'桥面边缘';
     }
     return'';
   }
@@ -291,13 +312,13 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     }
     return false;
   }
-  function roadsterContact(){const half=ROADSTER.wheelbase/2,f=groundAt(state.x-Math.sin(state.yaw)*half,state.z-Math.cos(state.yaw)*half),r=groundAt(state.x+Math.sin(state.yaw)*half,state.z+Math.cos(state.yaw)*half);return{y:(f.height+r.height)/2,pitch:Math.atan2(f.height-r.height,ROADSTER.wheelbase)};}
-  function contactPose(){const ground=groundAt(state.x,state.z);state.progress=ground.progress;
+  function roadsterContact(){const half=ROADSTER.wheelbase/2,f=contactAt(state.x-Math.sin(state.yaw)*half,state.z-Math.cos(state.yaw)*half),r=contactAt(state.x+Math.sin(state.yaw)*half,state.z+Math.cos(state.yaw)*half);return{y:(f.height+r.height)/2,pitch:Math.atan2(f.height-r.height,ROADSTER.wheelbase)};}
+  function contactPose(){const ground=contactAt(state.x,state.z);state.progress=ground.progress;
     if(state.mode==='boat'){const water=waterAt(state.x,state.z);if(water)state.y=water.height;state.grounded=true;state.verticalSpeed=0;return;}
     if(state.mode==='helicopter'||state.mode==='roadster'&&!state.grounded||state.mode==='hoverboard'&&!state.grounded)return;
     if(state.mode==='hoverboard'){const contact=hoverboardContact();state.y=contact.y;state.pitch=contact.pitch;state.lean=contact.lean;state.grounded=true;return;}
     if(state.mode==='roadster'){const contact=roadsterContact();state.y=contact.y;state.pitch=contact.pitch;state.lean=0;state.grounded=true;return;}
-    const f=groundAt(state.x-Math.sin(state.yaw)*.59,state.z-Math.cos(state.yaw)*.59),r=groundAt(state.x+Math.sin(state.yaw)*.56,state.z+Math.cos(state.yaw)*.56);
+    const f=contactAt(state.x-Math.sin(state.yaw)*.59,state.z-Math.cos(state.yaw)*.59),r=contactAt(state.x+Math.sin(state.yaw)*.56,state.z+Math.cos(state.yaw)*.56);
     state.pitch=state.mode==='scooter'?Math.atan2(f.height-r.height,1.15):0;
     const support=.208*Math.cos(state.lean)+.046;
     state.y=state.mode==='scooter'?(f.height*.56+r.height*.59)/1.15+(support-.255*Math.cos(state.lean))/Math.cos(state.pitch):ground.height;state.grounded=true;
@@ -305,7 +326,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   function roadsterLandingFloor(){let floor=-Infinity;const cy=Math.cos(state.yaw),sy=Math.sin(state.yaw),cp=Math.cos(state.pitch),sp=Math.sin(state.pitch),cl=Math.cos(state.lean),sl=Math.sin(state.lean);
     for(const x of[-ROADSTER.halfTrack,ROADSTER.halfTrack])for(const z of[-ROADSTER.wheelbase/2,ROADSTER.wheelbase/2]){
       const lx=x*cl-ROADSTER.wheelRadius*sl,ly=x*sl+ROADSTER.wheelRadius*cl,ry=ly*cp-z*sp,rz=ly*sp+z*cp;
-      const contact=groundAt(state.x+lx*cy+rz*sy,state.z-lx*sy+rz*cy);
+      const contact=contactAt(state.x+lx*cy+rz*sy,state.z-lx*sy+rz*cy);
       floor=Math.max(floor,contact.height+ROADSTER.wheelRadius-ry);
     }return floor;
   }
@@ -324,21 +345,21 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       const choices=state.mode==='roadster'||state.mode==='hoverboard'?[[1,'scooter'],[0,'scooter'],[2,'scooter'],[1,'walk']]:[[1,state.mode==='walk'||state.mode==='spider'?'walk':'scooter']];
       const supplied=choices.map(([lane,kind])=>getPoseAt(p.progress,lane,kind)).filter(v=>v&&finite(v.x)&&finite(v.z)).map(v=>({...p,x:v.x,z:v.z,yaw:v.yaw??p.yaw}));return[...supplied,p];
     }
-    let reason='';const clear=point=>{const contact={...point,y:groundAt(point.x,point.z).height};return !obstacleAt(contact.x,contact.z,contact.yaw,state.mode,contact.y)&&trafficClear(contact,state.mode);};
+    let reason='';const clear=point=>{const contact={...point,y:contactAt(point.x,point.z,0,point.y).height};return !obstacleAt(contact.x,contact.z,contact.yaw,state.mode,contact.y)&&trafficClear(contact,state.mode);};
     let position=candidates(s).find(clear);
     if(!position&&state.mode==='helicopter'){state.mode='walk';reason='该位置没有旋翼净空，已步行返回路线';position=candidates(s).find(clear);}
     // This is an explicit respawn, so use the nearest empty body footprint on
     // the same mapped route instead of placing the player inside an NPC queue.
     if(!position)for(let delta=.5;delta<=10;delta+=.5){position=[...candidates(s-delta),...candidates(s+delta)].find(clear);if(position)break;}
     if(!position){Object.assign(state,before,{blockedReason:'该路段没有足够净空，未改变位置'});return state;}
-    Object.assign(state,{x:position.x,y:groundAt(position.x,position.z).height,z:position.z,yaw:position.yaw,speed:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,blockedReason:reason,progress:position.progress??s,verticalSpeed:0,elapsed:0,braking:false});verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();return state;
+    Object.assign(state,{x:position.x,y:contactAt(position.x,position.z,0,position.y).height,z:position.z,yaw:position.yaw,speed:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,blockedReason:reason,progress:position.progress??s,verticalSpeed:0,elapsed:0,braking:false});verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();return state;
   }
   // Mounting uses the actual entity pose and never moves to a nearby fallback.
   // Invalid or occupied footprints leave both player and vehicle untouched.
   function canPlaceMode(pose,mode='walk',options={}){
     if(!MODES.has(mode))return{ok:false,reason:'未知移动方式'};
     if(!pose||![pose.x,pose.z,pose.yaw].every(finite))return{ok:false,reason:'无效的位置'};
-    const ground=groundAt(pose.x,pose.z),surface=mode==='boat'?waterAt(pose.x,pose.z):ground;
+    const ground=contactAt(pose.x,pose.z,0,finite(pose.y)?pose.y:state.y),surface=mode==='boat'?waterAt(pose.x,pose.z):ground;
     if(!surface)return{ok:false,reason:'游艇需要停在水面'};
     const point={x:pose.x,z:pose.z,yaw:pose.yaw,y:surface.height};
     const reason=obstacleAt(point.x,point.z,point.yaw,mode,point.y,null,true,{pitch:0,lean:0});
@@ -348,7 +369,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   }
   function placeMode(pose,mode='walk',options={}){
     const check=canPlaceMode(pose,mode,options);if(!check.ok)return check;
-    const point=check.pose,ground=groundAt(point.x,point.z);
+    const point=check.pose,ground=contactAt(point.x,point.z,0,point.y);
     Object.assign(state,{mode,x:point.x,y:point.y,z:point.z,yaw:point.yaw,speed:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,blockedReason:'',progress:ground.progress,verticalSpeed:0,elapsed:0,braking:false});
     verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;
     contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();
@@ -358,7 +379,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   function setMode(mode){if(!MODES.has(mode))return{ok:false,reason:'未知移动方式'};if(mode===state.mode)return{ok:true};
     if(mode==='boat')return{ok:false,reason:'请靠近岸边游艇按 F 登船'};
     if((state.mode==='helicopter'||state.mode==='roadster'||state.mode==='hoverboard'||state.mode==='spider')&&!state.grounded)return{ok:false,reason:'请先在陆地降落，再切换移动方式'};
-    if(state.mode==='spider'&&Math.abs(state.y-groundAt(state.x,state.z).height)>.3)return{ok:false,reason:'请先从屋顶回到地面，再切换移动方式'};
+    if(state.mode==='spider'&&Math.abs(state.y-contactAt(state.x,state.z).height)>.3)return{ok:false,reason:'请先从屋顶回到地面，再切换移动方式'};
     const reason=obstacleAt(state.x,state.z,state.yaw,mode,state.y);
     if(reason)return{ok:false,reason:mode==='helicopter'?'附近空间不足，请先移动到开阔处':reason};
     if((mode==='roadster'||mode==='hoverboard')&&!trafficClear(state,mode))return{ok:false,reason:mode==='roadster'?'汽车周围有人车，请先移动到开阔处':'旋翼周围有人车，请先移动到开阔处'};
@@ -408,7 +429,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
         roadsterSpeed(brake?0:forward*max,input.fast?8.5:6.4,brake?12:7.2,brake?72:38);
         const targetRate=brake?0:turn*.88/(1+Math.abs(state.speed)*.028);
         roadsterYawRate=approach(roadsterYawRate,targetRate,STEP*(turn?2:3.2));nextYaw+=roadsterYawRate*STEP;
-        const ground=groundAt(state.x,state.z),contact=roadsterContact(),clearance=Math.max(0,state.y-contact.y),tiltLimit=clamp(clearance/2,0,1),grade=ground.allowed?contact.pitch:0;
+        const ground=contactAt(state.x,state.z),contact=roadsterContact(),clearance=Math.max(0,state.y-contact.y),tiltLimit=clamp(clearance/2,0,1),grade=ground.allowed?contact.pitch:0;
         state.pitch=approach(state.pitch,grade*(1-tiltLimit)-clamp(state.acceleration*.007,-.045,.055)*tiltLimit,STEP*.18);
         state.lean=approach(state.lean,clamp(-roadsterYawRate*Math.abs(state.speed)*.004,-.055,.055)*tiltLimit,STEP*.20);
         state.steeringAngle=approach(state.steeringAngle,0,STEP*2);
@@ -437,10 +458,10 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       state.lean=clamp(approach(state.lean,leanTarget,STEP*.9),baseLean-.20*limit,baseLean+.20*limit);
     }else{
       state.rotorPower=approach(state.rotorPower,1,STEP*.65);
-      const flight=state.y>groundAt(state.x,state.z).height+.15||vertical>0&&state.rotorPower>.4;
+      const flight=state.y>contactAt(state.x,state.z).height+.15||vertical>0&&state.rotorPower>.4;
       state.speed=approach(state.speed,brake||!flight?0:forward*(forward<0?8:18),STEP*(brake?9:5));nextYaw+=turn*.85*STEP*state.rotorPower;
       verticalSpeed=approach(verticalSpeed,vertical*4.8*Math.min(1,state.rotorPower/.7),STEP*4);
-      const clearance=Math.max(0,state.y-groundAt(state.x,state.z).height),tiltLimit=Math.min(1,clearance/2);
+      const clearance=Math.max(0,state.y-contactAt(state.x,state.z).height),tiltLimit=Math.min(1,clearance/2);
       state.pitch=clamp(approach(state.pitch,clamp(-state.speed*.012,-.22,.1)*tiltLimit,STEP*.5),-.22*tiltLimit,.1*tiltLimit);state.lean=clamp(approach(state.lean,-turn*Math.abs(state.speed)/18*.14*tiltLimit,STEP*.5),-.14*tiltLimit,.14*tiltLimit);
     }
     const nextX=state.x+(worldWalking?state.vx:-Math.sin(nextYaw)*state.speed)*STEP,nextZ=state.z+(worldWalking?state.vz:-Math.cos(nextYaw)*state.speed)*STEP;
@@ -462,7 +483,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     state.yaw=Math.atan2(Math.sin(state.yaw),Math.cos(state.yaw));
     if(state.mode==='helicopter'||state.mode==='roadster'&&(state.flightEnabled||!state.grounded)||state.mode==='hoverboard'){
       const roadster=state.mode==='roadster',hoverboard=state.mode==='hoverboard',height=roadster?1.7:hoverboard?2.4:3.4,maximum=roadster?ROADSTER.ceiling:hoverboard?HOVERBOARD.ceiling:120,effectiveVertical=roadster?roadsterLift(input):hoverboard&&brake?0:vertical;
-      const flightBodies=bodySamples(state.x,state.z,state.yaw,state.mode),ground=groundAt(state.x,state.z),waterFloor=roadster||hoverboard?flightBodies.some(p=>!groundAt(p.x,p.z,p.radius).allowed):ground.overWater&&!ground.onBridge;
+      const flightBodies=bodySamples(state.x,state.z,state.yaw,state.mode),ground=contactAt(state.x,state.z),waterFloor=roadster||hoverboard?flightBodies.some(p=>!contactAt(p.x,p.z,p.radius).allowed):ground.overWater&&!ground.onBridge;
       let floor=ground.height+(waterFloor?2.5:0),ceiling=BASE_Y+maximum;
       // Rotor clearance determines building collisions in flight. A roof is a
       // hover floor, not a landing pad; switching to a ground mode stays blocked.

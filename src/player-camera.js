@@ -78,7 +78,9 @@ function buildingHit(start, end, building) {
 }
 
 function groundHeight(groundAt, point) {
-  const value = groundAt?.heightAt ? groundAt.heightAt(point.x, point.z) : groundAt?.(point.x, point.z);
+  // A road overhead is a ceiling, not the camera's supporting ground. Keep
+  // the height query on this point's level when roads overlap in X/Z.
+  const value = groundAt?.heightAt ? groundAt.heightAt(point.x, point.z, point.y) : groundAt?.(point.x, point.z, 0, point.y);
   return finite(typeof value === 'number' ? value : value?.height ?? value?.y, -Infinity);
 }
 
@@ -86,6 +88,11 @@ function groundHit(start, end, groundAt) {
   if (!groundAt) return 1;
   const maximum=groundAt.maxHeightInBounds?.(Math.min(start.x,end.x),Math.min(start.z,end.z),Math.max(start.x,end.x),Math.max(start.z,end.z));
   if(Number.isFinite(maximum)&&Math.min(start.y,end.y)>=maximum+CLEARANCE)return 1;
+  // Height-relative sampling alone would let a descending ray forget a deck
+  // as soon as it goes below its top. Test the actual slab volume too, so
+  // cameras stay below its underside, above its top or outside its side edge.
+  let hit=1;
+  for(const deck of groundAt.solidsInBounds?.(Math.min(start.x,end.x),Math.min(start.z,end.z),Math.max(start.x,end.x),Math.max(start.z,end.z))||[])hit=Math.min(hit,buildingHit(start,end,deck));
   const length = Math.hypot(end.x - start.x, end.y - start.y, end.z - start.z);
   const steps = Math.max(1, Math.ceil(length / .2));
   for (let i = 1; i <= steps; i++) {
@@ -97,9 +104,9 @@ function groundHit(start, end, groundAt) {
       if (probe.y < groundHeight(groundAt, probe) + CLEARANCE) high = mid;
       else low = mid;
     }
-    return low;
+    return Math.min(hit,low);
   }
-  return 1;
+  return hit;
 }
 
 /**
@@ -107,8 +114,9 @@ function groundHit(start, end, groundAt) {
  * state.y is the player's supporting surface/skid elevation. Positive pitch puts
  * a trailing camera above the player and looks downward in first-person view.
  * Buildings use local metre-space rings, optional baseY, and relative height.
- * groundAt(x,z) may return a number or {height} / {y}; bridge decks should be
- * sampled from the same surface query used for the player's ground contact.
+ * groundAt(x,z,radius,referenceY) may return a number or {height} / {y}.
+ * Layered surfaces also expose heightAt(x,z,referenceY) and solidsInBounds;
+ * use the same support and deck volumes as the player's ground contact.
  */
 export function calculatePlayerCamera(state, { view = 'third', yawOffset = 0, pitch = .25, distance, heading, visualSpeed, comfortable = false, actionFraming, world, groundAt } = {}) {
   const profile = CAMERA[state.mode] || CAMERA.walk;

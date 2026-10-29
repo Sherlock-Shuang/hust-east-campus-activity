@@ -36,7 +36,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     return !world.barrierAt?.(p,R,0,HEIGHT)&&!buildings.some(b=>p.y<b.height-.012&&p.y+HEIGHT>b.minHeight+.012&&overlap(p,b));
   }
   function roofAt(x,z,y){let roof=null;for(const b of buildings)if(b.height+.016<=y+.2&&inside({x,z},b)&&boundaryDistance({x,z},b)>.015&&(!roof||b.height>roof.height))roof=b;return roof;}
-  function supportAt(p){const ground=groundAt(p.x,p.z,R),roof=roofAt(p.x,p.z,p.y);if(roof&&roof.height+.016>ground.height)return{height:roof.height+.016,allowed:true,roof:roof.index};return{height:ground.height,allowed:ground.allowed!==false,roof:null};}
+  function supportAt(p){const ground=groundAt(p.x,p.z,R,p.y),roof=roofAt(p.x,p.z,p.y);if(roof&&roof.height+.016>ground.height)return{height:roof.height+.016,allowed:true,roof:roof.index};return{height:ground.height,allowed:ground.allowed!==false,roof:null};}
   function actorHit(p,old=null){const actors=typeof traffic==='function'?traffic():traffic;if(!Array.isArray(actors))return null;for(const a of actors){if(a.active===false||!finite(a.x)||!finite(a.z)||p.y>=(a.y??BASE)+1.9||p.y+HEIGHT<=(a.y??BASE)||Math.hypot(a.x-p.x,a.z-p.z)>2.4)continue;const kind=a.type??a.kind,rad=kind==='walk'?.27:.43,half=kind==='walk'?0:.48,yaw=a.yaw??0,dx=Math.sin(yaw)*half,dz=Math.cos(yaw)*half,front={x:a.x-dx,z:a.z-dz},rear={x:a.x+dx,z:a.z+dz},d=pointSegment(p,front,rear);const oldVertical=old&&old.y<(a.y??BASE)+1.9&&old.y+HEIGHT>(a.y??BASE);if(d<R+rad+.08&&(!oldVertical||d<pointSegment(old,front,rear)-1e-8))return a;}return null;}
   function clearSweep(from,to){if(world.barrierSweep?.(from,to,R,0,HEIGHT))return false;const dx=to.x-from.x,dz=to.z-from.z;
     for(const b of buildings){if(Math.min(from.y,to.y)>=b.height-.012||Math.max(from.y,to.y)+HEIGHT<=b.minHeight+.012||Math.min(from.x,to.x)-R>b.maxX||Math.max(from.x,to.x)+R<b.minX||Math.min(from.z,to.z)-R>b.maxZ||Math.max(from.z,to.z)+R<b.minZ)continue;
@@ -49,7 +49,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
   function clearEscape(from,to){if(!clearSweep(from,to))return false;const count=Math.ceil(Math.hypot(to.x-from.x,to.z-from.z)/.1);let previous=from;
     // A clear destination does not imply a clear route: the complete body
     // must stay outside thin walls while retreating out of the landing overlap.
-    for(let i=1;i<=count;i++){const t=i/count,p={x:from.x+(to.x-from.x)*t,y:from.y,z:from.z+(to.z-from.z)*t};if(!clearBody(p)||!groundAt(p.x,p.z,R).allowed||actorHit(p,previous))return false;previous=p;}return!actorHit(to);
+    for(let i=1;i<=count;i++){const t=i/count,p={x:from.x+(to.x-from.x)*t,y:from.y,z:from.z+(to.z-from.z)*t};if(!clearBody(p)||!groundAt(p.x,p.z,R,p.y).allowed||actorHit(p,previous))return false;previous=p;}return!actorHit(to);
   }
   function anchorCandidates(exclude=null,zip=false,heading=state.yaw){const origin=hand(state),fx=-Math.sin(heading),fz=-Math.cos(heading),candidates=[];
     for(const b of buildings){const bx=clamp(origin.x,b.minX,b.maxX),bz=clamp(origin.z,b.minZ,b.maxZ);if(Math.hypot(origin.x-bx,origin.z-bz)>72||b.height<origin.y-7)continue;
@@ -173,7 +173,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     state.vx=(next.x-state.x)/dt;state.vz=(next.z-state.z)/dt;state.verticalSpeed=(next.y-state.y)/dt;
     if(!move(next,dt))return true;
     if(Math.hypot(state.x-next.x,state.y-next.y,state.z-next.z)>.04){stopPoint();pointFailure('定点路径净空不足');return false;}
-    pointDistance=nextDistance;state.pointProgress=pointDistance/pointPath.total;state.speed=Math.hypot(state.vx,state.vz);state.progress=groundAt(state.x,state.z).progress??state.progress;
+    pointDistance=nextDistance;state.pointProgress=pointDistance/pointPath.total;state.speed=Math.hypot(state.vx,state.vz);state.progress=groundAt(state.x,state.z,0,state.y).progress??state.progress;
     const left=pointPath.total-pointDistance,brakeDistance=pointSpeed*pointSpeed/80;state.pointTimeToArrival=left<=brakeDistance?Math.sqrt(2*left/40):(left-brakeDistance)/Math.max(pointSpeed,8)+pointSpeed/40;
     state.pointLaunchReady=state.pointTimeToArrival<=.18;state.traversalPhase='point-approach';state.pitch=approach(state.pitch,-.25,dt*2);state.lean=approach(state.lean,0,dt*2);
     if(left<1e-8){state.pointPhase='perch';state.pointProgress=1;state.pointLaunchWindow=.25;state.pointLaunchReady=true;state.pointTimeToArrival=0;pointPerchTime=0;state.grounded=true;state.roofIndex=state.pointTarget.buildingIndex;state.vx=state.vz=state.verticalSpeed=state.speed=0;state.traversalPhase='point-perch';lastSafe={x:state.x,y:state.y,z:state.z,yaw:state.yaw};if(jumpBuffer>0){launchPoint(intent);return false;}}
@@ -212,7 +212,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
   }
   function detach(reason=''){clearSwingRequest();state.anchor=null;state.swingPivot=null;state.ropeLength=0;state.webTension=0;state.webSlack=0;attachedAge=0;ropeRate=0;releaseDelay=.18;state.releaseTime=0;state.candidateAnchor=null;candidateClock=0;if(reason)state.blockedReason=reason;}
   function attach(anchor){if(!anchor||!lineClear(hand(state),anchor))return false;
-    state.anchor={...anchor};const fx=-Math.sin(state.yaw),fz=-Math.cos(state.yaw),dx=state.x-anchor.x,dz=state.z-anchor.z,along=dx*fx+dz*fz,lx=dx-fx*along,lz=dz-fz*along,lateral=Math.hypot(lx,lz)||1,shift=Math.min(5,lateral*.55),lift=clamp(28+groundAt(state.x,state.z).height-anchor.y,0,12);
+    state.anchor={...anchor};const fx=-Math.sin(state.yaw),fz=-Math.cos(state.yaw),dx=state.x-anchor.x,dz=state.z-anchor.z,along=dx*fx+dz*fz,lx=dx-fx*along,lz=dz-fz*along,lateral=Math.hypot(lx,lz)||1,shift=Math.min(5,lateral*.55),lift=clamp(28+groundAt(state.x,state.z,0,state.y).height-anchor.y,0,12);
     // The visible endpoint and occlusion use the real building. A disclosed
     // gameplay pivot shifts low-roof pendulums into the street and raises their
     // clearance, following the separation used in action-game traversal.
@@ -245,7 +245,9 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     for(let i=1;i<=steps;i++){
       const target={x:p.x+dx/steps,y:p.y+dy/steps,z:p.z+dz/steps};
       if(bounds){const bx=clamp(target.x,bounds.minX+R,bounds.maxX-R),bz=clamp(target.z,bounds.minZ+R,bounds.maxZ-R);if(bx!==target.x){state.vx=0;state.blockedReason='校园边界';}if(bz!==target.z){state.vz=0;state.blockedReason='校园边界';}target.x=bx;target.z=bz;}
-      const ground=groundAt(target.x,target.z,R),wasGround=groundAt(p.x,p.z,R);
+      // Use the pre-crossing height when descending so a step cannot skip
+      // the deck it just fell onto; an overhead deck is never ground support.
+      const ground=groundAt(target.x,target.z,R,Math.max(p.y,target.y)),wasGround=groundAt(p.x,p.z,R,p.y);
       if(!ground.allowed&&target.y<=ground.height+.10){if(state.grounded){state.vx=state.vz=0;state.blockedReason='水域边界';target.x=p.x;target.z=p.z;}else{respawn('落水后返回最近落脚处');return false;}}
       if(ground.height>target.y+.25&&wasGround.height<ground.height-.35||state.grounded&&wasGround.onBridge&&wasGround.height>BASE+.35&&ground.height<wasGround.height-.35){target.x=p.x;target.z=p.z;state.vx=state.vz=0;state.blockedReason='桥面边界';}
       const support=supportAt({...target,y:Math.max(p.y,target.y)});
@@ -359,7 +361,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     const next={x:state.x+state.vx*dt,y:state.y+state.verticalSpeed*dt,z:state.z+state.vz*dt};let tension=0;
     if(state.anchor){
       const a=state.swingPivot??state.anchor,h=hand(next),nx=h.x-a.x,ny=h.y-a.y,nz=h.z-a.z,distance=Math.hypot(nx,ny,nz)||1,ux=nx/distance,uy=ny/distance,uz=nz/distance;
-      const terrain=Math.max(groundAt(state.x,state.z).height,groundAt(next.x,next.z).height);
+      const terrain=Math.max(groundAt(state.x,state.z,0,state.y).height,groundAt(next.x,next.z,0,Math.max(state.y,next.y)).height);
       const target=Math.max(6,a.y-terrain-HAND-6),predictedFeet=state.y+Math.min(0,state.verticalSpeed)*.85-.5*G*.85*.85;
       // Shorten before the pendulum reaches road level, with bounded reel
       // acceleration. This assist changes rope length, not player position or
@@ -379,7 +381,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     if(!wasGrounded&&state.grounded){if(state.anchor)detach();stopZip();state.diving=false;landingCooldown=.16;}
     state.webSlack=state.anchor?Math.max(0,state.ropeLength-Math.hypot(state.x-state.swingPivot.x,state.y+HAND-state.swingPivot.y,state.z-state.swingPivot.z)):0;
     const phase=attachedAge<.3?'entry':state.verticalSpeed<-.8?'downswing':state.verticalSpeed>.8?'upswing':'bottom';if(state.anchor&&state.swingPhase==='downswing'&&phase!=='downswing')state.bottomKick=1;state.swingPhase=phase;state.attachAge=state.anchor?attachedAge:0;
-    state.speed=Math.hypot(state.vx,state.vz);state.progress=groundAt(state.x,state.z).progress??state.progress;state.inputBuffered=jumpBuffer>0;
+    state.speed=Math.hypot(state.vx,state.vz);state.progress=groundAt(state.x,state.z,0,state.y).progress??state.progress;state.inputBuffered=jumpBuffer>0;
     state.zipAvailable=!state.grounded&&state.zipCandidateAnchors.length>0;
     state.zipReady=state.zipAvailable&&state.zipCooldown<=0&&!state.zipActive&&!state.diving;
     state.zipUnavailableReason=state.grounded?'请先起跳':state.diving?'松开俯冲后再前冲':state.zipActive?'正在前冲':state.zipCooldown>0?'前冲冷却中':!state.zipAvailable?'前方没有可用建筑挂点或净空':'';

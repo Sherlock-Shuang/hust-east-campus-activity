@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import { calculatePlayerCamera,createTraversalCameraRig,createVehicleCameraRig,constrainPlayerCamera } from '../src/player-camera.js';
+import {createPlayerMotion} from '../src/player-motion.js';
+import {createCommuteRoute} from '../src/commute-route.js';
+import {createLocalFrame,geoToLocal} from '../src/geospatial.js';
 
 const near = (actual, expected, tolerance = 1e-8) => assert.ok(Math.abs(actual - expected) < tolerance, `${actual} ~= ${expected}`);
 const rectangle = (x1, z1, x2, z2) => [{ x: x1, z: z1 }, { x: x2, z: z1 }, { x: x2, z: z2 }, { x: x1, z: z2 }];
@@ -498,4 +502,73 @@ test('walking recenter uses the requested facing once instead of chasing camera-
   near(rig.heading,-Math.PI/2,.001);
   rig.rotate(.3);rig.update(state,1/60,{lookLocked:true});
   near(rig.heading,-Math.PI/2+.3,.001);
+});
+
+// A layered query must keep a bridge's solid slab separate from the surface
+// below a point. This fixture deliberately stops reporting its top as ground
+// below it; volume clipping must still catch complete slab crossings.
+function layeredDeck({top=8,thickness=.75,ring=rectangle(-20,-20,20,20)}={}){
+  const deck={rings:[ring],minHeight:top-thickness,height:top};
+  const bounds={minX:Math.min(...ring.map(p=>p.x)),maxX:Math.max(...ring.map(p=>p.x)),minZ:Math.min(...ring.map(p=>p.z)),maxZ:Math.max(...ring.map(p=>p.z))};
+  const contains=(x,z)=>x>bounds.minX&&x<bounds.maxX&&z>bounds.minZ&&z<bounds.maxZ;
+  const groundAt=(x,z,_radius=0,y=Infinity)=>({height:contains(x,z)&&top<=y+.22?top:.14});
+  groundAt.heightAt=(x,z,y)=>groundAt(x,z,0,y).height;
+  groundAt.maxHeightInBounds=()=>top;
+  groundAt.solidsInBounds=()=>[deck];
+  return groundAt;
+}
+
+test('real Guanggu viaduct keeps first and third person on the ground below the deck',()=>{
+  const source=JSON.parse(readFileSync(new URL('../public/data/east-campus.geojson',import.meta.url),'utf8'));
+  const frame=createLocalFrame({longitude:114.42123985,latitude:30.51575845,coordinateSystem:'EPSG:4326'});
+  const route=createCommuteRoute(source,{frame,geoToLocal}),groundAt=createPlayerMotion({route}).groundAt;
+  const deck=route.roadSurfaces.find(s=>s.sourceId==='way/607689466'&&s.bounds.maxZ>-300&&s.bounds.maxZ<-220);
+  assert.ok(deck&&deck.surfaceY>10,'use the actual layered viaduct, not the level Yudai crossing');
+  const center={x:deck.polygon.reduce((n,p)=>n+p.x,0)/deck.polygon.length,z:deck.polygon.reduce((n,p)=>n+p.z,0)/deck.polygon.length};
+  const rig=createVehicleCameraRig();let previous=null;
+  for(let x=center.x-15;x<=center.x+15;x+=.1){
+    const state=Object.freeze({mode:'walk',x,y:.14,z:center.z,yaw:0,grounded:true,speed:3.2});
+    const first=calculatePlayerCamera(state,{view:'first',groundAt});
+    near(first.position.y,1.72);
+    const chase=rig.update(state,1/60,{groundAt,view:'third',lookLocked:true});
+    assert.ok(chase.position.y<5,'the chase boom must not jump onto the eleven-metre deck');
+    assert.ok(chase.position.z-state.z>5,'the bridge must not collapse the chase boom to vertical');
+    if(previous)assert.ok(Math.abs(chase.position.y-previous.position.y)<.1);
+    previous=chase;
+  }
+  const above={mode:'walk',...center,y:deck.surfaceY,yaw:0,grounded:true};
+  near(calculatePlayerCamera(above,{view:'first',groundAt}).position.y,deck.surfaceY+1.58);
+});
+
+test('camera rays cannot tunnel through the top or underside of an elevated slab',()=>{
+  for(const thickness of [.75,.04]){
+    const groundAt=layeredDeck({thickness});
+    const lower={mode:'walk',x:0,y:.14,z:0,yaw:0};
+    const upward=constrainPlayerCamera(lower,{target:{x:0,y:1.19,z:0},position:{x:0,y:12,z:1}},{groundAt});
+    assert.ok(upward.position.y<8-thickness-.24,'upward view stops below the slab underside');
+    assert.ok(upward.position.y>6,'the camera can use the clear space below the deck');
+    const upper={mode:'walk',x:0,y:10,z:0,yaw:0};
+    const downward=constrainPlayerCamera(upper,{target:{x:0,y:11.05,z:0},position:{x:0,y:2,z:1}},{groundAt});
+    assert.ok(downward.position.y>=8.24,'downward view remains above the deck even when its endpoint is below it');
+    assert.ok(downward.position.y<9,'the collision is with the slab, not an arbitrary overhead limit');
+  }
+});
+
+test('camera volume catches bridge side edges while allowing passage below them',()=>{
+  const groundAt=layeredDeck({ring:rectangle(-2,-20,2,20)});
+  const state={mode:'walk',x:-5,y:6.55,z:0,yaw:0};
+  const clipped=constrainPlayerCamera(state,{target:{x:-5,y:7.6,z:0},position:{x:5,y:7.6,z:0}},{groundAt});
+  assert.ok(clipped.position.x< -2,'a horizontal ray in slab thickness must stop at the near edge');
+  const low={...state,y:.14},clear=constrainPlayerCamera(low,{target:{x:-5,y:1.19,z:0},position:{x:5,y:1.19,z:0}},{groundAt});
+  near(clear.position.x,5);near(clear.position.y,1.19);
+  const viaFallback=(...args)=>groundAt(...args);viaFallback.solidsInBounds=groundAt.solidsInBounds;
+  near(calculatePlayerCamera({...low,x:0},{view:'first',groundAt:viaFallback}).position.y,1.72);
+});
+
+test('camera above the maximum surface keeps the broad-phase fast path',()=>{
+  const groundAt=layeredDeck();let volumeQueries=0;
+  groundAt.solidsInBounds=()=>{volumeQueries++;throw new Error('clear camera must skip bridge volume tests');};
+  const state={mode:'walk',x:0,y:20,z:0,yaw:0,grounded:false},rig=createVehicleCameraRig();rig.reset(state);
+  for(let i=0;i<30;i++)rig.update(state,1/60,{groundAt,lookLocked:true});
+  assert.equal(volumeQueries,0);
 });
