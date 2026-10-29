@@ -14,7 +14,7 @@ class Element {
   addEventListener(type,fn){if(!this.handlers.has(type))this.handlers.set(type,new Set());this.handlers.get(type).add(fn);}
   removeEventListener(type,fn){this.handlers.get(type)?.delete(fn);}
   dispatchEvent(event){return this.emit(event.type,event);}
-  emit(type,values={}){const event={type,target:this,code:'',repeat:false,button:0,buttons:0,pointerId:1,pointerType:'mouse',clientX:0,clientY:0,detail:1,preventDefault(){this.defaultPrevented=true;},stopPropagation(){},...values};for(const fn of this.handlers.get(type)||[])fn(event);return event;}
+  emit(type,values={}){const event={type,target:this,code:'',repeat:false,button:0,buttons:0,pointerId:1,pointerType:'mouse',clientX:0,clientY:0,detail:1,preventDefault(){this.defaultPrevented=true;},stopPropagation(){this.propagationStopped=true;},...values};for(const fn of this.handlers.get(type)||[])fn(event);return event;}
   setAttribute(name,value){this.attrs[name]=String(value);}
   getAttribute(name){return this.attrs[name]??null;}
   append(child){this.children.push(child);child.parent=this;}
@@ -82,7 +82,7 @@ function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePo
   win.matchMedia=query=>query.includes('coarse')?coarseMedia:query.includes('orientation')?landscapeMedia:reducedMedia;
   win.innerWidth=844;win.innerHeight=390;win.screen={orientation:new Element()};win.visualViewport=new Element();
   globalThis.document=doc;globalThis.window=win;
-  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(44,16/9,.3,2000),canvas=new Element('canvas');canvas.clientWidth=1280;canvas.clientHeight=720;
+  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(44,16/9,.3,2000),canvas=new Element('canvas');canvas.clientWidth=1280;canvas.clientHeight=720;canvas.rect={left:0,top:0,width:844,height:390};
   const controls=Object.assign(new THREE.EventDispatcher(),{target:new THREE.Vector3(),enabled:true,enableDamping:true,update(){}});
   const route={length:300,dismountProgress:280,points:[{x:0,y:.16,z:0,progress:0},{x:0,y:.16,z:-300,progress:300}],segments:[{startProgress:0,endProgress:300,width:7.2}]};
   const rectangle=(x1,z1,x2,z2)=>{const shape=new THREE.Shape();shape.moveTo(x1,-z1);shape.lineTo(x2,-z1);shape.lineTo(x2,-z2);shape.lineTo(x1,-z2);shape.closePath();return {category:'building',feature:{properties:{height:18}},shapes:[shape]};};
@@ -703,12 +703,45 @@ test('failed refreshed vehicle placement returns its inventory item instead of l
 });
 
 function touch(element,type,pointerId,values={}){return element.emit(type,{pointerType:'touch',pointerId,...values});}
+function sceneTouchDown(f,pointerId,values={}){
+  const captured=touch(f.doc,'pointerdown',pointerId,{target:f.canvas,...values});
+  if(!captured.propagationStopped)touch(f.canvas,'pointerdown',pointerId,values);
+  return captured;
+}
 function pushJoystick(f,pointerId=10){
   const joystick=f.el('mobile-joystick'),rect=joystick.getBoundingClientRect(),clientX=rect.left+rect.width/2,clientY=rect.top+rect.height/2;
-  touch(joystick,'pointerdown',pointerId,{clientX,clientY});
+  sceneTouchDown(f,pointerId,{clientX,clientY});
   touch(f.win,'pointermove',pointerId,{clientX,clientY:clientY-rect.height*.45});
   return {clientX,clientY};
 }
+
+test('floating left touches move the walker from fresh origins without rotating its camera',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('walk');f.tick(1);
+  for(const [clientX,clientY]of [[280,260],[110,180]]){
+    const start={...f.experience.state},view=horizontalView(f);
+    assert.equal(sceneTouchDown(f,10,{clientX,clientY}).propagationStopped,true);
+    f.tick(.2);assert.equal(f.experience.state.x,start.x);assert.equal(f.experience.state.z,start.z);
+    touch(f.win,'pointermove',10,{clientX,clientY:clientY-65});f.tick(.7);
+    assert.ok(Math.hypot(f.experience.state.x-start.x,f.experience.state.z-start.z)>1);
+    assert.ok(horizontalView(f).dot(view)>.999,'left-drag movement must not also turn the camera');
+    touch(f.win,'pointerup',10);f.tick(1);assert.ok(Math.abs(f.experience.state.speed)<.01);
+  }
+});
+
+test('touch look has 1.5 times mouse sensitivity while ordinary mouse gain stays unchanged',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('walk');f.tick(1);
+  const original=f.experience.captureActivityPose();
+  f.canvas.emit('pointerenter',{clientX:600,clientY:160});f.canvas.emit('pointermove',{clientX:640,clientY:180});
+  const mouse=f.experience.captureActivityPose();
+  assert.ok(Math.abs(mouse.yawOffset-original.yawOffset+.128)<1e-9);assert.ok(Math.abs(mouse.pitch-original.pitch-.05)<1e-9);
+  f.experience.restoreActivityPose(original);
+  assert.equal(sceneTouchDown(f,20,{clientX:600,clientY:160}).propagationStopped,undefined);
+  touch(f.canvas,'pointermove',20,{clientX:640,clientY:180});
+  const finger=f.experience.captureActivityPose();
+  assert.ok(Math.abs((finger.yawOffset-original.yawOffset)/(mouse.yawOffset-original.yawOffset)-1.5)<1e-9);
+  assert.ok(Math.abs((finger.pitch-original.pitch)/(mouse.pitch-original.pitch)-1.5)<1e-9);
+  touch(f.canvas,'pointerup',20);
+});
 
 test('touch sideways walking uses the same camera basis as keys and does not orbit after release',t=>{
   const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('walk');

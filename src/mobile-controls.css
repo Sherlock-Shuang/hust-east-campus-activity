@@ -90,17 +90,23 @@
   gap: 6px;
 }
 #mobile-joystick {
-  position: relative;
+  position: fixed;
+  left: 0;
+  top: 0;
   width: 116px;
   height: 116px;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  visibility: hidden;
   box-sizing: border-box;
   border: 1px solid #eefff149;
   border-radius: 50%;
   background: radial-gradient(circle, #dfffe80c 0 42%, #173d3624 43% 100%);
   box-shadow: inset 0 1px 14px #f6fff709, 0 3px 18px #1c3a2212;
-  pointer-events: auto;
+  pointer-events: none;
   touch-action: none;
 }
+#mobile-joystick.is-pressed { opacity: 1; visibility: visible; }
 #mobile-stick {
   position: absolute;
   left: 50%;
@@ -360,7 +366,7 @@ body.touch-controls {
   .touch-controls.transport-layout #player-hud { top: max(57px, calc(env(safe-area-inset-top) + 45px)); width: 250px; }
   .touch-controls.transport-layout #player-help { line-height: 1.55; }
   #mobile-joystick { width: 108px; height: 108px; }
-  .mobile-movement-label { display: none; }
+  .mobile-movement-label { font-size: 9px; opacity: .5; }
   .touch-controls .live-connection { bottom: max(2px, env(safe-area-inset-bottom)); font-size: 8px; }
   .touch-controls .audience-welcome form { width: min(460px, 100%); padding: 16px 24px; }
   .touch-controls .audience-welcome h2 { font-size: 22px; margin-top: 8px; }

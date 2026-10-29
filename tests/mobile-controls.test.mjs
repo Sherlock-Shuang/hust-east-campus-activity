@@ -6,7 +6,7 @@ class Element {
   constructor(dataset={}){this.dataset=dataset;this.handlers=new Map();this.hidden=false;this.disabled=false;this.style={};this.attrs={};this.captures=new Set();this.children=[];this.textContent='';const values=new Set();this.classList={toggle(k,v){const next=v??!values.has(k);next?values.add(k):values.delete(k);return next;},remove:k=>values.delete(k),contains:k=>values.has(k)};}
   addEventListener(type,fn){if(!this.handlers.has(type))this.handlers.set(type,new Set());this.handlers.get(type).add(fn);}
   removeEventListener(type,fn){this.handlers.get(type)?.delete(fn);}
-  emit(type,overrides={}){const e={type,pointerId:1,pointerType:'touch',clientX:60,clientY:60,detail:1,code:'',repeat:false,preventDefault(){this.defaultPrevented=true;},stopPropagation(){},...overrides};for(const fn of this.handlers.get(type)||[])fn(e);return e;}
+  emit(type,overrides={}){const e={type,target:this,pointerId:1,pointerType:'touch',clientX:60,clientY:60,detail:1,code:'',repeat:false,preventDefault(){this.defaultPrevented=true;},stopPropagation(){this.propagationStopped=true;},...overrides};for(const fn of this.handlers.get(type)||[])fn(e);return e;}
   setAttribute(k,v){this.attrs[k]=String(v);}
   setPointerCapture(id){this.captures.add(id);}
   hasPointerCapture(id){return this.captures.has(id);}
@@ -16,7 +16,8 @@ class Element {
   querySelector(selector){return selector.includes('continue-portrait')?this.children.find(c=>c.dataset.mobileAction==='continue-portrait'):null;}
 }
 function fixture({coarse=true,landscape=true}={}){
-  const ids=new Map(),doc=new Element(),win=new Element();
+  const ids=new Map(),doc=new Element(),win=new Element(),canvas=new Element();
+  canvas.getBoundingClientRect=()=>({left:0,top:0,width:844,height:390});
   for(const id of['mobile-controls','mobile-joystick','mobile-stick','mobile-extra-actions','mobile-orientation-hint','mobile-fullscreen-status','mobile-interact-label','mobile-point-hint','mobile-enable-touch'])ids.set(id,new Element());
   const root=ids.get('mobile-controls'),joy=ids.get('mobile-joystick');
   const holds=Object.fromEntries(['fast','brake','up','down','swing','reel','dive','trick'].map(name=>[name,new Element({mobileHold:name,...(['swing','reel','dive','trick'].includes(name)?{mobileModes:'spider'}:{}),...(['reel','dive','trick'].includes(name)?{mobileExtra:'true'}:{})})]));
@@ -27,9 +28,9 @@ function fixture({coarse=true,landscape=true}={}){
   const mqCoarse=Object.assign(new Element(),{matches:coarse}),mqLandscape=Object.assign(new Element(),{matches:landscape});
   win.matchMedia=q=>q.includes('coarse')?mqCoarse:mqLandscape;win.screen={orientation:new Element()};win.visualViewport=new Element();win.innerWidth=844;win.innerHeight=390;
   const events={axes:[],holds:[],actions:[],resets:0,changes:0};let permitted=true;
-  const controls=createMobileControls({document:doc,window:win,canUse:()=>permitted,onAxes:v=>events.axes.push(v),onHold:(name,value)=>events.holds.push([name,value]),onAction:name=>events.actions.push(name),onReset:()=>events.resets++,onChange:()=>events.changes++});
+  const controls=createMobileControls({document:doc,window:win,movementSurface:canvas,canUse:()=>permitted,onAxes:v=>events.axes.push(v),onHold:(name,value)=>events.holds.push([name,value]),onAction:name=>events.actions.push(name),onReset:()=>events.resets++,onChange:()=>events.changes++});
   controls.update({active:true,mode:'spider',canInteract:true,interactionLabel:'穿上战衣'});
-  return{controls,doc,win,root,joy,holds,actions,events,mqCoarse,mqLandscape,el:id=>ids.get(id),permit:v=>permitted=v};
+  return{controls,doc,win,canvas,root,joy,holds,actions,events,mqCoarse,mqLandscape,el:id=>ids.get(id),permit:v=>permitted=v};
 }
 const down=(el,id,xy={})=>el.emit('pointerdown',{pointerId:id,...xy});
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -49,11 +50,41 @@ test('joystick emits proportional clamped axes, has a dead zone and cannot be ta
   f.win.emit('pointerup',{pointerId:10});assert.deepEqual(f.controls.axes,{forward:0,sideways:0});assert.equal(f.joy.captures.size,0);f.controls.dispose();
 });
 test('joystick, swing and lift contacts remain independent and releasing never synthesizes another web hold',()=>{
-  const f=fixture();down(f.joy,1,{clientY:10});down(f.holds.swing,2);down(f.holds.up,3);
+  const f=fixture();down(f.joy,1,{clientY:100});f.win.emit('pointermove',{pointerId:1,clientY:10});down(f.holds.swing,2);down(f.holds.up,3);
   assert.deepEqual(f.events.holds,[['swing',true],['up',true]]);f.win.emit('pointerup',{pointerId:2});f.holds.swing.emit('click',{detail:1});f.holds.swing.emit('click',{detail:0});
   assert.deepEqual(f.events.holds,[['swing',true],['up',true],['swing',false]]);assert.equal(f.controls.axes.forward,1);
   down(f.holds.swing,4);assert.deepEqual(f.events.holds.at(-1),['swing',true]);f.holds.up.emit('lostpointercapture',{pointerId:3});assert.deepEqual(f.events.holds.at(-1),['up',false]);
   f.controls.dispose();assert.deepEqual(f.events.holds.at(-1),['swing',false]);assert.deepEqual(f.events.axes.at(-1),{forward:0,sideways:0});
+});
+test('a bare left-scene touch creates a neutral floating origin wherever the finger lands',()=>{
+  const f=fixture();
+  for(const [clientX,clientY]of [[35,330],[310,240],[175,130]]){
+    const e=down(f.doc,10,{target:f.canvas,clientX,clientY});
+    assert.equal(e.defaultPrevented,true);assert.equal(e.propagationStopped,true,'canvas look must not receive movement touches');
+    assert.equal(f.joy.style.left,`${clientX}px`);assert.equal(f.joy.style.top,`${clientY}px`);assert.equal(f.joy.classList.contains('is-pressed'),true);
+    assert.deepEqual(f.controls.axes,{forward:0,sideways:0},'landing off the previous center must not start movement');
+    f.win.emit('pointermove',{pointerId:10,clientX:clientX+2,clientY:clientY-2});assert.deepEqual(f.controls.axes,{forward:0,sideways:0});
+    f.win.emit('pointermove',{pointerId:10,clientX:clientX+90,clientY});assert.equal(Math.abs(f.controls.axes.forward),0);assert.equal(f.controls.axes.sideways,1);
+    f.win.emit('pointerup',{pointerId:10});assert.deepEqual(f.controls.axes,{forward:0,sideways:0});
+    assert.equal(f.joy.classList.contains('is-pressed'),false);assert.equal(f.joy.style.left,'');assert.equal(f.joy.style.top,'');
+  }f.controls.dispose();
+});
+test('floating movement ignores UI, right-side camera touches, mouse input and unusable scene states',()=>{
+  const f=fixture();
+  for(const overrides of[
+    {target:f.actions.view},{target:f.holds.swing},{target:new Element()},
+    {target:f.canvas,clientX:600},{target:f.canvas,pointerType:'mouse'},
+    {target:f.canvas,clientX:-5},{target:f.canvas,clientY:420}
+  ]){
+    const e=down(f.doc,10,{clientX:180,clientY:200,...overrides});assert.equal(e.defaultPrevented,undefined);assert.equal(e.propagationStopped,undefined);assert.equal(f.joy.captures.size,0);
+  }
+  f.permit(false);assert.equal(down(f.doc,10,{target:f.canvas,clientX:180,clientY:200}).defaultPrevented,undefined);f.permit(true);
+  down(f.doc,10,{target:f.canvas,clientX:180,clientY:200});
+  const second=down(f.doc,11,{target:f.canvas,clientX:300,clientY:200});assert.equal(second.propagationStopped,true);
+  f.win.emit('pointermove',{pointerId:11,clientX:350,clientY:150});assert.deepEqual(f.controls.axes,{forward:0,sideways:0});
+  f.win.emit('pointerup',{pointerId:11});assert.equal(f.joy.captures.has(10),true);
+  f.controls.update({suspended:true});assert.equal(f.joy.captures.size,0);assert.equal(f.joy.classList.contains('is-pressed'),false);
+  assert.equal(down(f.doc,12,{target:f.canvas,clientX:180,clientY:200}).defaultPrevented,undefined);f.controls.dispose();
 });
 test('cancel, resize, hidden tab and pause clear held contacts, and old fingers cannot resume them',()=>{
   const f=fixture();

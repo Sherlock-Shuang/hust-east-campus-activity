@@ -54,7 +54,7 @@ export async function buildLibrary({sourceRoot,outputRoot}){
   const adapter=await readFile(path.join(here,'activity-adapter.js'),'utf8');
   await put('library/activity-adapter.js',adapter);await put('wanyan/activity-adapter.js',adapter);
   for(const file of ['touch-controls.mjs','touch-controls.css'])for(const work of ['library','wanyan'])await put(`${work}/${file}`,await readFile(path.join(here,file),'utf8'));
-  await put('wanyan/wanyan-touch.mjs',await readFile(path.join(here,'wanyan-touch.mjs'),'utf8'));
+  for(const file of ['wanyan-touch.mjs','wanyan-touch-gamepad.mjs'])await put(`wanyan/${file}`,await readFile(path.join(here,file),'utf8'));
   await put('library/isaac-touch.mjs',await readFile(path.join(here,'isaac-touch.mjs'),'utf8'));
   await put('wanyan/pointer-lock-compat.js',await readFile(path.join(here,'wanyan-pointer-lock.js'),'utf8'));
   await copy(`${app}/viewer/index.html`,'library/index.html',s=>mobileAssets(injectAdapter(rebaseLibraryText(s),'library'),LIBRARY).replace('src="/works/library/hub/main.mjs"','src="/works/library/hub/main.mjs?v=mobile-20261028"'));
@@ -133,7 +133,8 @@ export async function buildLibrary({sourceRoot,outputRoot}){
         createUnityInstance(canvas, config, (progress) => {`,'Unity pointer lock compatibility');
     s=replaceExactly(s,'window.bookrealmAttachRenderQuality(unityInstance);',`window.bookrealmAttachRenderQuality(unityInstance);
           window.campusWorkAdapter?.register({setPaused(value){window.bookrealmControlsSuspended=value;document.documentElement.dataset.controlsSuspended=String(value);},dispose(){window.bookrealmControlsSuspended=true;unityInstance.Quit?.();}});
-          window.campusWorkAdapter?.ready('runtime_ready');`,'Unity readiness');
+          window.campusWorkAdapter?.ready('runtime_ready');
+          window.campusWanyanTouchReady?.();`,'Unity readiness');
     s=replaceExactly(s,"script.onerror = () => unityShowBanner('游戏资源未能载入，请返回图书馆后重试。', 'error');", "script.onerror = () => {window.campusWorkAdapter?.fail('晚言引擎未能载入');unityShowBanner('游戏资源未能载入，请返回图书馆后重试。', 'error');};",'Unity loader failure');
     s=replaceExactly(s,"errorHandler: function(message) { unityShowBanner(String(message), 'error'); return true; },", "errorHandler: function(message) { if(window.campusPointerLock?.handleRuntimeError(message))return true;window.campusWorkAdapter?.fail('晚言运行出现异常，请重试或返回校园');unityShowBanner(String(message), 'error'); return true; },",'Unity runtime errors');
     s=replaceExactly(s,"}).catch((message) => {\n                unityShowBanner(String(message), 'error');", "}).catch((message) => {\n                window.campusWorkAdapter?.fail('晚言游戏资源未能载入');unityShowBanner(String(message), 'error');",'Unity resource failure');

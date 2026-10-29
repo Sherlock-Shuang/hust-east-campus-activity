@@ -21,7 +21,7 @@ node --test integration/library/integration.test.mjs
 | 两款书中游戏可用性 | `/works/library/api/games` |
 | 模型、角色、模块、字体与剧情 | `/works/library/model.glb`、`hero.glb`、`hub/`、`vendor/`、`story/config.json` |
 
-仅复制正式运行引用的 71 个文件，约 360 MB。图书馆模型约 122 MB，人物约 25 MB，Unity WebGL 的 data 约 99 MB、wasm 约 41 MB；按进入作品时加载。没有复制 Unity 工程、Blender 制作文件、照片目录、历史构建、QA 页面或测试夹具。以撒保留原游戏 HTML、Ruffle 运行时、剧情桥与两种已有 SWF 选择；不复制整个以撒工作区。
+仅复制正式运行引用的 72 个文件，约 360 MB。图书馆模型约 122 MB，人物约 25 MB，Unity WebGL 的 data 约 99 MB、wasm 约 41 MB；按进入作品时加载。没有复制 Unity 工程、Blender 制作文件、照片目录、历史构建、QA 页面或测试夹具。以撒保留原游戏 HTML、Ruffle 运行时、剧情桥与两种已有 SWF 选择；不复制整个以撒工作区。
 
 manifest 的 `entries` 给出每条 URL、相对运行包路径、长度、SHA-256 和 MIME。Node handler 按该白名单提供资源，支持 HEAD、ETag 和单段 Range 请求。Worker 部署可读取同一 entries；大文件分块／合并由校园部署工具负责，本目录不假装这些文件能直接满足所有静态托管单文件限额。
 
@@ -73,3 +73,21 @@ manifest 的 `entries` 给出每条 URL、相对运行包路径、长度、SHA-2
 `wanyan-public-text.mjs` 严格解析 UnityWebData 与 IL2CPP v108 字面量表，只将四处完整文案中的“归心”改成“圣所”，包括开场提示、进入按钮和原胜利提示。等长 UTF-8 替换保持容器及元数据偏移，整包仅20个字节变化；未知版本、异常边界或文案变化会拒绝构建。`.wasm`、战斗、胜利回调和存档不变，原礼物包不写入。原包哈希保留在 manifest.sourceChecks；测试把四个名称还原后，要求整包SHA256与原包完全一致。
 
 活动HTML使用 `wanyan.data?campus-text=sanctum-v1` 避免旧缓存继续显示原称呼，资源路由仍为同一个data文件。字体已包含“圣”“所”，不增加字体下载。构建输出不能位于原工程内部。
+
+## 2026-10-29 浮动摇杆与晚言战斗触控
+
+左侧移动区扩大为画面左侧 46%，每次落指的位置就是本次摇杆中心，抬手后恢复；不会因首次按下偏离固定圆心而突然移动。移动输出保留 12% 中心死区，约 3–5 px 手指抖动不会让人物缓慢漂移，视觉圆钮仍跟手。图书馆、晚言和以撒共用该规则，以撒的右侧射击摇杆仍为独立固定摇杆。移动、镜头和按钮分别拥有触点；取消、失焦、旋转、暂停或切阶段会释放全部输入与 capture。
+
+晚言旧镜头适配无效的根因在原 `EmberSoulsCamera`：鼠标镜头必须通过真实 Pointer Lock 检查，手机仅发送合成 `mousemove` 无法满足条件。活动版新增 `wanyan-touch-gamepad.mjs`，把触屏左右移动和战斗按钮接入 Unity 已有的标准手柄路径，右侧空白拖动转为原相机右杆输入，不伪造鼠标锁定，也不改 Unity wasm、framework、战斗或胜利条件。慢速拖动抵消原 `.20` 手柄死区；每帧生成一个稳定输入快照，Unity 和锁敌桥多次读取不会提前吃掉镜头位移。停指下一帧归零，抬手立即归零，短按保留 120 ms 供引擎采样，暂停时立即强制清零。
+
+触控设备使用首个空手柄槽（通常为 0），启动枚举已经发现的虚拟设备不会重复注册。真实标准手柄存在时保留它的身份、原始输入及原生断开事件；触控按需合并为该设备的读取快照，触控静止时返回原浏览器对象，不修改真实设备对象。非标准物理手柄保持原校准与输入路径，活动层不猜测它的轴映射。桌面宽屏不安装虚拟手柄。
+
+右下普攻为 86 px 圆按钮（较窄横屏 82 px）；闪避、重击与技能沿左上弧分布，回血和锁定为次级按钮。按钮之间的空隙可以继续拖动镜头。菜单、开始／确认、强化选择与重新开始继续按原阶段出现。5 Hz 的画布 `data-native-yaw`、`data-native-pitch` 等只读诊断来自 Unity 原生发布状态，供浏览器确认实际镜头和人物变化，不用于控制游戏。
+
+本轮回归命令：
+
+```sh
+node --test integration/library/integration.test.mjs integration/library/touch-controls.test.mjs integration/library/wanyan-touch-gamepad.test.mjs integration/library/wanyan-public-text.test.mjs
+```
+
+测试包含首个空槽、逐帧多次读取、停指与抬手、并行移动／镜头／攻击、重新落指、取消／旋转／暂停、物理手柄合并与热插拔、恢复原浏览器 API，以及原 wasm／SWF 完全一致、Unity data 仅原四处“圣所”称呼转换。实际 Unity 浏览器运行和手机真机体验由校园主流程分别验收，不能用输入模拟测试冒充真机表现。

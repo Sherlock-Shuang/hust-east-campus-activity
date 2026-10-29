@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {WANYAN_PUBLIC_TEXT} from './wanyan-public-text.mjs';
-import {touchVector,directionKeys,createTouchKeys,createTouchControls} from './touch-controls.mjs';
+import {touchVector,movementVector,directionKeys,createTouchKeys,createTouchControls} from './touch-controls.mjs';
 
 test('movement and shooting sticks retain diagonal directions and clamp travel',()=>{
  assert.deepEqual(touchVector(0,0),{x:0,y:0});
@@ -11,6 +11,8 @@ test('movement and shooting sticks retain diagonal directions and clamp travel',
  assert.deepEqual([...directionKeys({x:-.8,y:-.8})],['KeyA','KeyW']);
  assert.deepEqual([...directionKeys({x:.8,y:0},true)],['ArrowRight']);
  assert.equal(directionKeys({x:.1,y:-.1}).size,0);
+ assert.deepEqual(movementVector({x:.06,y:-.05}),{x:0,y:0});
+ assert.deepEqual(movementVector({x:.56,y:0}),{x:.5,y:0});
 });
 test('independent touch owners release only their own held keys, including cancel and pause',()=>{
  const events=[];const target={focus(){},dispatchEvent:e=>events.push([e.type,e.code,e.bookrealmGamepadInput])};
@@ -24,9 +26,9 @@ test('independent touch owners release only their own held keys, including cance
 
 class Node {
  constructor(tag='div'){this.tag=tag;this.children=[];this.dataset={};this.style={};this.handlers=new Map();this.hidden=false;const names=new Set();this.classList={add:n=>names.add(n),remove:n=>names.delete(n),toggle(n,v){if(v)names.add(n);else names.delete(n);},contains:n=>names.has(n)};}
- set innerHTML(value){this.html=value;if(value.includes('work-touch-toolbar')){this.nav=new Node('nav');this.move=new Node();this.move.knob=new Node();this.actions=new Node();}if(value.includes('<i>'))this.knob=new Node();}
+ set innerHTML(value){this.html=value;if(value.includes('work-touch-toolbar')){this.nav=new Node('nav');this.move=new Node();this.move.knob=new Node();this.move.pad=new Node();this.actions=new Node();}if(value.includes('<i>'))this.knob=new Node();}
  append(child){this.children.push(child);child.parent=this;}
- querySelector(selector){if(selector==='nav')return this.nav;if(selector==='.work-touch-move')return this.move;if(selector==='.work-touch-actions')return this.actions;if(selector==='.work-touch-shoot')return this.children.find(c=>c.className?.includes('work-touch-shoot'));if(selector==='i')return this.knob;return null;}
+ querySelector(selector){if(selector==='nav')return this.nav;if(selector==='.work-touch-move')return this.move;if(selector==='.work-touch-actions')return this.actions;if(selector==='.work-touch-shoot')return this.children.find(c=>c.className?.includes('work-touch-shoot'));if(selector==='i')return this.knob;if(selector==='.work-touch-pad')return this.pad;return null;}
  setAttribute(name,value){this[name]=value;}
  addEventListener(type,fn){const list=this.handlers.get(type)||[];list.push(fn);this.handlers.set(type,list);}
  removeEventListener(type,fn){this.handlers.set(type,(this.handlers.get(type)||[]).filter(f=>f!==fn));}
@@ -44,7 +46,7 @@ test('multi-touch move and shoot cancel independently and do not retain movement
  const {win,doc,tick}=fixture();const moves=[],shots=[];let active=true;
  const touch=createTouchControls({kind:'isaac',window:win,document:doc,canPlay:()=>active,onMove:v=>moves.push(v),onShoot:v=>shots.push(v)});
  const move=touch.root.querySelector('.work-touch-move'),shoot=touch.root.querySelector('.work-touch-shoot');
- move.emit('pointerdown',{pointerId:1,clientX:60,clientY:0});shoot.emit('pointerdown',{pointerId:2,clientX:120,clientY:60});
+ move.emit('pointerdown',{pointerId:1,clientX:80,clientY:140});move.emit('pointermove',{pointerId:1,clientX:80,clientY:80});shoot.emit('pointerdown',{pointerId:2,clientX:120,clientY:60});
  assert.equal(moves.at(-1).y,-1);assert.equal(shots.at(-1).x,1);
  touch.root.emit('pointercancel',{pointerId:1});assert.deepEqual(moves.at(-1),{x:0,y:0});assert.equal(shots.at(-1).x,1);
  active=false;tick();assert.deepEqual(shots.at(-1),{x:0,y:0});assert.equal(touch.root.hidden,true);
@@ -72,9 +74,23 @@ test('phase transitions hide inactive movement and release every held input befo
  const touch=createTouchControls({kind:'wanyan',window:win,document:doc,phase:()=>phase,movePhases:['combat'],onMove:v=>moves.push(v),onReset:()=>resets++});
  const move=touch.root.querySelector('.work-touch-move');assert.equal(move.hidden,true);
  move.emit('pointerdown',{pointerId:1,clientX:120,clientY:60});assert.equal(moves.length,0);
- phase='combat';tick();assert.equal(move.hidden,false);move.emit('pointerdown',{pointerId:2,clientX:120,clientY:60});assert.equal(moves.at(-1).x,1);
+ phase='combat';tick();assert.equal(move.hidden,false);move.emit('pointerdown',{pointerId:2,clientX:120,clientY:60});move.emit('pointermove',{pointerId:2,clientX:180,clientY:60});assert.equal(moves.at(-1).x,1);
  phase='paused';tick();assert.equal(move.hidden,true);assert.deepEqual(moves.at(-1),{x:0,y:0});assert.equal(resets,2);
  phase='combat';tick();move.emit('pointermove',{pointerId:2,clientX:0,clientY:60});assert.deepEqual(moves.at(-1),{x:0,y:0});assert.equal(resets,3);touch.destroy();
+});
+test('floating movement follows each new landing point; camera and combat pointers stay independent',()=>{
+ const {win,doc}=fixture(),canvas=new Node('canvas'),moves=[],looks=[],actions=[];let ends=0;
+ const touch=createTouchControls({kind:'wanyan',canvas,window:win,document:doc,onMove:v=>moves.push(v),onLook:(x,y)=>looks.push([x,y]),onLookEnd:()=>ends++,onPress:id=>actions.push(['down',id]),onRelease:id=>actions.push(['up',id]),actions:[{id:'attack',label:'普攻'}]});
+ const move=touch.root.querySelector('.work-touch-move'),button=touch.root.querySelector('.work-touch-actions').children[0];
+ move.emit('pointerdown',{pointerId:1,clientX:210,clientY:185});assert.deepEqual(moves.at(-1),{x:0,y:0});assert.equal(move.pad.style.left,'210px');assert.equal(move.pad.style.top,'185px');
+ move.emit('pointermove',{pointerId:1,clientX:212,clientY:186});assert.deepEqual(moves.at(-1),{x:0,y:0},'small thumb jitter stays neutral while the visual knob follows the finger');
+ move.emit('pointermove',{pointerId:1,clientX:250,clientY:185});assert(moves.at(-1).x>.9);
+ canvas.emit('pointerdown',{pointerId:2,pointerType:'touch',clientX:500,clientY:150});canvas.emit('pointermove',{pointerId:2,clientX:525,clientY:130});
+ button.emit('pointerdown',{pointerId:3});assert.deepEqual(looks,[[25,-20]]);assert.deepEqual(actions,[['down','attack']]);
+ touch.root.emit('pointerup',{pointerId:3});assert(moves.at(-1).x>.9);assert.equal(ends,0);
+ touch.root.emit('pointercancel',{pointerId:1});assert.equal(move.pad.style.left,'');assert.deepEqual(moves.at(-1),{x:0,y:0});
+ move.emit('pointerdown',{pointerId:4,clientX:55,clientY:320});assert.equal(move.pad.style.left,'55px');assert.equal(move.pad.style.top,'320px');assert.deepEqual(moves.at(-1),{x:0,y:0});
+ win.emit('orientationchange');assert.equal(ends,1);canvas.emit('pointermove',{pointerId:2,clientX:550,clientY:120});assert.equal(looks.length,1);assert.deepEqual(moves.at(-1),{x:0,y:0});touch.destroy();
 });
 test('generated copies retain Unity executable/SWF bytes and change only the four sanctuary labels in Unity data',async()=>{
  const base=new URL('../../work-assets/',import.meta.url);

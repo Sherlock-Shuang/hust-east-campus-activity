@@ -1251,30 +1251,30 @@
     "/works/library/touch-controls.css": {
       "chunks": [
         {
-          "url": "/_activity_assets/d8f7884582682bcffa5423c18928d234b1e7b0fb1c39ddc210ccd908c5f56a03.bin",
+          "url": "/_activity_assets/f39648796cd001bf556211e1c014cff3ba415a08ed9ee3d9ce47ae4adeb9be0b.bin",
           "encoding": "gzip",
-          "bytes": 6913,
-          "storedBytes": 1864,
-          "sha256": "55ca03d83134498e4a4ddec3ecea394ee2149a6fae2d221bc8c8ccbfbe87d983"
+          "bytes": 10842,
+          "storedBytes": 2669,
+          "sha256": "3941678789ac7c5e57d4cf446a70fb13e4bf3a0eec8ef44fd48fe848a27729a0"
         }
       ],
       "mime": "text/css; charset=utf-8",
-      "bytes": 6913,
-      "sha256": "55ca03d83134498e4a4ddec3ecea394ee2149a6fae2d221bc8c8ccbfbe87d983"
+      "bytes": 10842,
+      "sha256": "3941678789ac7c5e57d4cf446a70fb13e4bf3a0eec8ef44fd48fe848a27729a0"
     },
     "/works/library/touch-controls.mjs": {
       "chunks": [
         {
-          "url": "/_activity_assets/a615fdba2d7707fb7d71879839a980a1b494f7e1a2f7942c8f0d5a2312e030f3.bin",
+          "url": "/_activity_assets/a33fb4b9cb68201bc25031688bba0f723674ec00822eccf202651908f44f26a5.bin",
           "encoding": "gzip",
-          "bytes": 7789,
-          "storedBytes": 3026,
-          "sha256": "53f513262236ff485b1394788002b8c9c4050eb2635faeadbd18e944ea2da0e0"
+          "bytes": 9012,
+          "storedBytes": 3393,
+          "sha256": "3b48ffef046f77678cafcad24454eb259028e7c9409be4fa4a00b4e39c4ac990"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 7789,
-      "sha256": "53f513262236ff485b1394788002b8c9c4050eb2635faeadbd18e944ea2da0e0"
+      "bytes": 9012,
+      "sha256": "3b48ffef046f77678cafcad24454eb259028e7c9409be4fa4a00b4e39c4ac990"
     },
     "/works/library/vendor/controls/OrbitControls.js": {
       "chunks": [
@@ -1475,16 +1475,16 @@
     "/works/wanyan/": {
       "chunks": [
         {
-          "url": "/_activity_assets/32e4b79b19f431cb64b33bae7ccb1d9e9a45acc7c3db28366d0eddfe7915982c.bin",
+          "url": "/_activity_assets/78f4a39e820e67f654c2a14f5b00fcc1a8b75a8d89ec93e7e018bef159a5d3cf.bin",
           "encoding": "gzip",
-          "bytes": 11475,
-          "storedBytes": 4107,
-          "sha256": "a4ac4ef90ec74aa7a61676e8db06981e72b0c0e3e0aaaaf72f4a3af059718b4e"
+          "bytes": 11520,
+          "storedBytes": 4120,
+          "sha256": "8cdc366b659c4b5c29cbc49578c14164a6467013302ab49be83110e4f7b0d8ef"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 11475,
-      "sha256": "a4ac4ef90ec74aa7a61676e8db06981e72b0c0e3e0aaaaf72f4a3af059718b4e"
+      "bytes": 11520,
+      "sha256": "8cdc366b659c4b5c29cbc49578c14164a6467013302ab49be83110e4f7b0d8ef"
     },
     "/works/wanyan/activity-adapter.js": {
       "chunks": [
@@ -1615,16 +1615,16 @@
     "/works/wanyan/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/32e4b79b19f431cb64b33bae7ccb1d9e9a45acc7c3db28366d0eddfe7915982c.bin",
+          "url": "/_activity_assets/78f4a39e820e67f654c2a14f5b00fcc1a8b75a8d89ec93e7e018bef159a5d3cf.bin",
           "encoding": "gzip",
-          "bytes": 11475,
-          "storedBytes": 4107,
-          "sha256": "a4ac4ef90ec74aa7a61676e8db06981e72b0c0e3e0aaaaf72f4a3af059718b4e"
+          "bytes": 11520,
+          "storedBytes": 4120,
+          "sha256": "8cdc366b659c4b5c29cbc49578c14164a6467013302ab49be83110e4f7b0d8ef"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 11475,
-      "sha256": "a4ac4ef90ec74aa7a61676e8db06981e72b0c0e3e0aaaaf72f4a3af059718b4e"
+      "bytes": 11520,
+      "sha256": "8cdc366b659c4b5c29cbc49578c14164a6467013302ab49be83110e4f7b0d8ef"
     },
     "/works/wanyan/pointer-lock-compat.js": {
       "chunks": [
@@ -1811,44 +1811,58 @@
     "/works/wanyan/touch-controls.css": {
       "chunks": [
         {
-          "url": "/_activity_assets/d8f7884582682bcffa5423c18928d234b1e7b0fb1c39ddc210ccd908c5f56a03.bin",
+          "url": "/_activity_assets/f39648796cd001bf556211e1c014cff3ba415a08ed9ee3d9ce47ae4adeb9be0b.bin",
           "encoding": "gzip",
-          "bytes": 6913,
-          "storedBytes": 1864,
-          "sha256": "55ca03d83134498e4a4ddec3ecea394ee2149a6fae2d221bc8c8ccbfbe87d983"
+          "bytes": 10842,
+          "storedBytes": 2669,
+          "sha256": "3941678789ac7c5e57d4cf446a70fb13e4bf3a0eec8ef44fd48fe848a27729a0"
         }
       ],
       "mime": "text/css; charset=utf-8",
-      "bytes": 6913,
-      "sha256": "55ca03d83134498e4a4ddec3ecea394ee2149a6fae2d221bc8c8ccbfbe87d983"
+      "bytes": 10842,
+      "sha256": "3941678789ac7c5e57d4cf446a70fb13e4bf3a0eec8ef44fd48fe848a27729a0"
     },
     "/works/wanyan/touch-controls.mjs": {
       "chunks": [
         {
-          "url": "/_activity_assets/a615fdba2d7707fb7d71879839a980a1b494f7e1a2f7942c8f0d5a2312e030f3.bin",
+          "url": "/_activity_assets/a33fb4b9cb68201bc25031688bba0f723674ec00822eccf202651908f44f26a5.bin",
           "encoding": "gzip",
-          "bytes": 7789,
-          "storedBytes": 3026,
-          "sha256": "53f513262236ff485b1394788002b8c9c4050eb2635faeadbd18e944ea2da0e0"
+          "bytes": 9012,
+          "storedBytes": 3393,
+          "sha256": "3b48ffef046f77678cafcad24454eb259028e7c9409be4fa4a00b4e39c4ac990"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 7789,
-      "sha256": "53f513262236ff485b1394788002b8c9c4050eb2635faeadbd18e944ea2da0e0"
+      "bytes": 9012,
+      "sha256": "3b48ffef046f77678cafcad24454eb259028e7c9409be4fa4a00b4e39c4ac990"
     },
     "/works/wanyan/wanyan-touch.mjs": {
       "chunks": [
         {
-          "url": "/_activity_assets/d4020dbcb29e6fadc9e26436f6c834c44aa416d752917bf30964676a500c40d3.bin",
+          "url": "/_activity_assets/36d6ecc3f983aea1547f5bfffca6cf91f3388ad796bc4e1fff5ed01744375b60.bin",
           "encoding": "gzip",
-          "bytes": 2225,
-          "storedBytes": 1086,
-          "sha256": "547867b7f624dab36eb3107770128335c1706825d207224cedc9a97808e8b3c2"
+          "bytes": 3198,
+          "storedBytes": 1480,
+          "sha256": "286d9bad6d9978bfe3f1a6a8e9886d73511e6d002f8bad154f80c6b9b3c59561"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 2225,
-      "sha256": "547867b7f624dab36eb3107770128335c1706825d207224cedc9a97808e8b3c2"
+      "bytes": 3198,
+      "sha256": "286d9bad6d9978bfe3f1a6a8e9886d73511e6d002f8bad154f80c6b9b3c59561"
+    },
+    "/works/wanyan/wanyan-touch-gamepad.mjs": {
+      "mime": "text/javascript; charset=utf-8",
+      "chunks": [
+        {
+          "url": "/_activity_assets/faed232dadfb6487356443e48b8da45358e7e1ac07496c276fcc7b16cbc52d1f.bin",
+          "encoding": "gzip",
+          "bytes": 6272,
+          "storedBytes": 2460,
+          "sha256": "39cebd20760045bd8a84bd74cdb8eee757b2db07c56dc8a304350a350403291f"
+        }
+      ],
+      "bytes": 6272,
+      "sha256": "39cebd20760045bd8a84bd74cdb8eee757b2db07c56dc8a304350a350403291f"
     }
   },
   "spa": [

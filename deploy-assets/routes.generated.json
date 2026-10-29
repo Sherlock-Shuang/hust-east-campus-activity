@@ -1000,6 +1000,14 @@
       "continue": true
     },
     {
+      "src": "^/works/wanyan/wanyan-touch-gamepad\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
       "src": "^/api/games/?$",
       "dest": "/works/library/api/games.json",
       "methods": [

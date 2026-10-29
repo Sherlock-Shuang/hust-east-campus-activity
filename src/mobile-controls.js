@@ -1,6 +1,6 @@
 // Touch inputs feed the same movement/actions as the keyboard. Every contact
 // owns its input until that exact pointer releases; no gesture latches a web.
-export function createMobileControls({document,window,canUse=()=>true,onAction=()=>{},onHold=()=>{},onAxes=()=>{},onReset=()=>{},onChange=()=>{}}={}){
+export function createMobileControls({document,window,movementSurface,canUse=()=>true,onAction=()=>{},onHold=()=>{},onAxes=()=>{},onReset=()=>{},onChange=()=>{}}={}){
   const $=id=>document?.getElementById?.(id),root=$('mobile-controls'),joystick=$('mobile-joystick'),stick=$('mobile-stick');
   const extra=$('mobile-extra-actions'),orientationHint=$('mobile-orientation-hint');
   const holds=Array.from(root?.querySelectorAll?.('[data-mobile-hold]')||[]),actions=Array.from(root?.querySelectorAll?.('[data-mobile-action]')||[]);
@@ -31,7 +31,7 @@ export function createMobileControls({document,window,canUse=()=>true,onAction=(
     else if(owners?.delete(owner)&&owners.size===0){holdOwners.delete(action);onHold(action,false);}
   }
   function releasePointer(id){
-    if(joy?.id===id){const old=joy;joy=null;pressed(joystick,false);if(stick)stick.style.transform='translate(0px, 0px)';setAxes({forward:0,sideways:0});releaseCapture(joystick,old.id);}
+    if(joy?.id===id){const old=joy;joy=null;pressed(joystick,false);if(joystick){joystick.style.left='';joystick.style.top='';}if(stick)stick.style.transform='translate(0px, 0px)';setAxes({forward:0,sideways:0});releaseCapture(joystick,old.id);}
     const owned=pointers.get(id);if(!owned)return;
     pointers.delete(id);if(owned.hold)setHold(owned.hold,id,false);pressed(owned.button,false);releaseCapture(owned.button,id);
   }
@@ -86,12 +86,28 @@ export function createMobileControls({document,window,canUse=()=>true,onAction=(
     const magnitude=Math.min(1,d/joy.radius),strength=magnitude<.12?0:(magnitude-.12)/.88;
     setAxes({forward:d?-dy/d*strength:0,sideways:d?dx/d*strength:0});
   }
-  listen(document,'pointerdown',e=>{if(e.pointerType==='touch'||e.pointerType==='pen')enable();},{capture:true,passive:true});
-  listen(joystick,'pointerdown',e=>{
+  function startJoystick(e){
     if(!usable()||joy||pointers.has(e.pointerId))return;prevent(e);
     const rect=joystick.getBoundingClientRect(),radius=Math.max(20,Math.min(rect.width,rect.height)*.36);
-    joy={id:e.pointerId,x:rect.left+rect.width/2,y:rect.top+rect.height/2,radius};pressed(joystick,true);capture(joystick,e.pointerId);moveJoystick(e);
-  },{passive:false});
+    // Use the contact itself, not the old graphic's center. A fresh touch is
+    // always neutral; the dead zone is measured relative to this new origin.
+    joy={id:e.pointerId,x:e.clientX,y:e.clientY,radius};
+    joystick.style.left=`${e.clientX}px`;joystick.style.top=`${e.clientY}px`;
+    if(stick)stick.style.transform='translate(0px, 0px)';
+    setAxes({forward:0,sideways:0});pressed(joystick,true);capture(joystick,e.pointerId);
+  }
+  listen(document,'pointerdown',e=>{
+    if(e.pointerType!=='touch'&&e.pointerType!=='pen')return;
+    enable();
+    // Capture only bare scene touches. Buttons, announcement text, entry
+    // prompts and embedded experiences retain their own input and scrolling.
+    if(!usable()||!joystick||e.target!==movementSurface)return;
+    const rect=movementSurface.getBoundingClientRect();
+    if(e.clientX<rect.left||e.clientX>rect.left+rect.width*.48||e.clientY<rect.top||e.clientY>rect.top+rect.height)return;
+    // Even a second left-side finger must not become a camera gesture.
+    prevent(e);startJoystick(e);
+  },{capture:true,passive:false});
+  listen(joystick,'pointerdown',startJoystick,{passive:false});
   listen(joystick,'pointermove',moveJoystick,{passive:false});
   listen(window,'pointermove',moveJoystick,{passive:false});
   for(const button of holds){

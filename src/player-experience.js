@@ -161,7 +161,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     mobileControls?.update({active,suspended,mode:s.mode,view,pointReady:!!s.candidatePoint,pointPhase:s.pointPhase,canInteract:!!nearby||!!interaction?.mounted,
       interactionLabel:nearby?`${nearby.item.mode==='spider'?'穿上':'使用'}${nearby.item.label}`:s.mode==='spider'?'脱下战衣':s.mode==='boat'?'靠岸下船':'落地 / 停稳下车'});
     if(mobileControls?.enabled){
-      const touchHelp={walk:'左侧摇杆移动 · 右侧空白处拖动视角',scooter:'摇杆骑行 · 按住刹车后下车',roadster:'摇杆驾驶 · 按住喷气飞起，松开下落',helicopter:'摇杆移动 · 按住升降 · 落地后下机',hoverboard:'摇杆移动 · 按住升降 · 落地后退出',boat:'摇杆航行 · 刹车停稳，靠岸下船',spider:'按住「摆荡」挂丝 · 松开后重按换点\n「定点弹射」锁定屋沿，再点「跳跃」弹出'};
+      const touchHelp={walk:'左侧任意空白处拖动移动 · 右侧拖动视角',scooter:'摇杆骑行 · 按住刹车后下车',roadster:'摇杆驾驶 · 按住喷气飞起，松开下落',helicopter:'摇杆移动 · 按住升降 · 落地后下机',hoverboard:'摇杆移动 · 按住升降 · 落地后退出',boat:'摇杆航行 · 刹车停稳，靠岸下船',spider:'按住「摆荡」挂丝 · 松开后重按换点\n「定点弹射」锁定屋沿，再点「跳跃」弹出'};
       updateElement('player-help',{textContent:touchHelp[s.mode]});
       if(spider){const target=$('web-target-label');if(target)target.textContent=target.textContent.replaceAll('按 E / 左键挂丝','按住「摆荡」').replaceAll('空格','「跳跃」').replaceAll('WASD','摇杆').replaceAll('E 接丝','按住「摆荡」').replaceAll('松开 X','松开「俯冲」').replaceAll('松开 T','松开「空中特技」');}
     }
@@ -294,7 +294,8 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     pointer.x=e.clientX;pointer.y=e.clientY;
     if(!Number.isFinite(dx)||!Number.isFinite(dy)||(!dx&&!dy))return;
     if(mouse)mouseLook.looking=true;
-    applyLook(dx,dy);
+    const touchGain=mouse?1:1.5;
+    applyLook(dx*touchGain,dy*touchGain);
   });
   const releasePointer=e=>{if(e.pointerType!=='mouse'&&drag&&drag.id!==e.pointerId)return;drag=null;mouseLook=null;held.delete('mouse-swing');};
   on(canvas,'pointerup',e=>{if(e.pointerType==='mouse')held.delete('mouse-swing');else releasePointer(e);});
@@ -429,7 +430,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(saved.camera?.position?.length===3&&saved.camera.position.every(Number.isFinite)&&saved.camera?.quaternion?.length===4&&saved.camera.quaternion.every(Number.isFinite)){camera.position.fromArray(saved.camera.position);camera.quaternion.fromArray(saved.camera.quaternion);if(Number.isFinite(saved.camera.fov))camera.fov=Math.max(20,Math.min(100,saved.camera.fov));camera.updateProjectionMatrix();}
     updateUI();invalidate();return true;
   }
-  mobileControls=createMobileControls({document,window,canUse:()=>active&&!disposed&&!inputBlocked(),
+  mobileControls=createMobileControls({document,window,movementSurface:canvas,canUse:()=>active&&!disposed&&!inputBlocked(),
     onAxes:axes=>{mobileAxes=axes;},
     onHold:(name,down)=>{if(down){stopSuitView();if(name==='up'&&motion.state.mode==='roadster'&&!armRoadsterJet())return;mobileHeld.add(name);if(['up','down','brake'].includes(name)){liftTarget=null;landing=false;cruise=false;}}else mobileHeld.delete(name);},
     onAction:name=>{
