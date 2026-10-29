@@ -28,7 +28,7 @@ test('refined precincts replace generic solids once, retain original GIS, and su
       assert.equal(campus.records.get(id).group.children.length,0,'old flat bridge geometry is removed');
       assert.ok(!model.bridgeInfrastructure.walkSurfaces.some(s=>s.sourceId===id));
     }
-    for(const place of ['einstein','opto','opto-main','yunyuan-south','xueer']){
+    for(const place of ['einstein','opto','opto-main','opto-east','yunyuan-south','xueer','east-gate','yunyuan-gate']){
       const pose=campusLandmarkArrival(campus,place);
       assert.ok(pose&&Number.isFinite(pose.x+pose.z+pose.yaw),place);
       const route={points:[{x:pose.x+15,z:pose.z+15,y:.16},{x:pose.x+15,z:pose.z-100,y:.16}]};
@@ -36,18 +36,41 @@ test('refined precincts replace generic solids once, retain original GIS, and su
       assert.equal(player.placeWalker(pose).ok,true,`${place} visitor is not spawned in a solid`);
       assert.ok(Math.abs(player.state.y-pose.y)<.03,`${place} arrival height`);
     }
-    assert.equal(campus.optoEntries.length,2,'both visible building doors lead to the existing hall');
+    assert.equal(campus.optoEntries.length,2,'only the corridor left door and east exterior door enter C118');
+    assert.ok(!campus.optoEntries.some(e=>e.id==='opto-c118-main'),'research-centre main staircase is not a C118 shortcut');
     for(const entry of campus.optoEntries){
       const player=createPlayerMotion({world,route:{points:[{x:400,z:400,y:.14},{x:1000,z:400,y:.14}]}});
       assert.equal(player.placeWalker(entry.approach).ok,true);
       let previous={...player.state},crossed=null;
-      for(let step=0;step<2400&&!crossed;step++){
-        player.step(1/120,{moveX:-entry.doorGate.normal.x,moveZ:-entry.doorGate.normal.z});
-        if(step%24===0){crossed=crossedInteriorDoor(campus.optoEntries,previous,player.state);previous={...player.state};}
+      assert.ok(entry.accessPath.length>=2);
+      for(const [i,target]of entry.accessPath.slice(1).entries()){
+        let reached=false;
+        for(let step=0;step<1800&&!crossed;step++){
+          const dx=target.x-player.state.x,dz=target.z-player.state.z,d=Math.hypot(dx,dz);
+          if(d<.16){reached=true;break;}
+          player.step(1/120,{moveX:dx/d,moveZ:dz/d});
+          crossed=crossedInteriorDoor(campus.optoEntries,previous,player.state);previous={...player.state};
+        }
+        assert.ok(reached||crossed,`${entry.id} segment ${i} blocked at ${JSON.stringify({x:player.state.x,y:player.state.y,z:player.state.z})}`);
+        if(crossed){assert.equal(i,entry.accessPath.length-2,'the college exterior door does not itself open the auditorium');break;}
+        player.suspend();previous={...player.state};
       }
-      assert.equal(crossed?.id,entry.id,`${entry.id}: full campus colliders allow the ground approach, stairs and actual door crossing`);
+      assert.equal(crossed?.id,entry.id,`${entry.id}: full campus colliders allow its actual route and door crossing`);
+      assert.equal(crossed.url,entry.url,'each access opens the intended interior viewpoint');
       assert.equal(player.placeWalker(entry.returnPose).ok,true,'same door has a safe return');
       assert.equal(nearbyInterior([entry],player.state),null,'returned walker is clear of the entry gate');
+    }
+    assert.equal(campus.gatePlan.gates.length,2);
+    assert.equal(campus.records.get('way/104350466').group.children.length,0,'generic solid gate is replaced by open posts and lintel');
+    assert.ok(!world.buildings.some(b=>b.id==='way/104350466'));
+    for(const gate of campus.gatePlan.gates)for(const opening of gate.openings){
+      const local=(x,z)=>({x:gate.x+x*Math.cos(gate.yaw)+z*Math.sin(gate.yaw),z:gate.z-x*Math.sin(gate.yaw)+z*Math.cos(gate.yaw),y:.14,yaw:gate.yaw});
+      const player=createPlayerMotion({world,route:{points:[{x:400,z:400,y:.14},{x:1000,z:400,y:.14}]}});
+      const start=local(opening.x,7),end=local(opening.x,-7);
+      assert.equal(player.placeWalker(start).ok,true,`${gate.id}/${opening.id}: clear approach`);
+      for(let i=0;i<700&&Math.hypot(end.x-player.state.x,end.z-player.state.z)>.2;i++)player.step(1/120,{moveX:-Math.sin(gate.yaw),moveZ:-Math.cos(gate.yaw)});
+      assert.ok(Math.hypot(end.x-player.state.x,end.z-player.state.z)<.3,`${gate.id}/${opening.id}: complete ground passage`);
+      assert.ok(player.state.y<.3,'gate cannot snap the walker onto its lintel');
     }
     assert.equal(campus.optoApproachPlan.bridges.length,6);
     for(const id of campus.optoApproachPlan.replacedRoadIds){

@@ -42,11 +42,29 @@ test('bridge rails leave the real C-side pedestrian branch open at its internal 
   const m=walk(p,{x:p.x+(end.x-p.x)*5/l,z:p.z+(end.z-p.z)*5/l},{label:'C-side branch'});near(m.state.y,.14);
 });
 
-test('short connectors join the existing source footway and provisional C landing without modifying GIS or crossing a building',()=>{
+test('college and east connectors use their own side footways and never cross the source building',()=>{
   const c=made.plan.connectors.find(c=>c.id==='opto-c-entry-approach'),seam=made.plan.connectors.find(c=>c.id==='opto-footway-capture-seam');
-  assert.ok(c&&c.length>3&&c.length<8);assert.equal(c.sourceId,'way/1483567207');assert.ok(c.reason.includes('unverified'));walk(c.a,c.b,{label:'C entry paving'});
+  assert.ok(c&&c.length>3&&c.length<8);assert.equal(c.sourceId,'way/1483567207');assert.ok(c.reason.includes('estimated'));walk(c.a,c.b,{label:'C entry paving'});
+  const east=made.plan.connectors.find(c=>c.id==='opto-c-east-approach');
+  assert.ok(east&&east.length>1&&east.length<4);assert.equal(east.sourceId,'way/1483567206');walk(east.a,east.b,{label:'east entry paving'});
   assert.ok(seam&&seam.length>3&&seam.length<5);assert.equal(seam.sourceId,'way/1483567253');walk(seam.a,seam.b,{label:'same-way capture seam'});
   assert.deepEqual(planOptoApproach(model,{frame,geoToLocal,optoBuilding:opto}),made.plan);
+});
+
+test('both complete access paths stay grounded in the full merged GIS world',()=>{
+  for(const entry of opto.entries){
+    const m=motion();assert.equal(m.placeWalker(entry.accessPath[0]).ok,true);
+    for(const target of entry.accessPath.slice(1)){
+      for(let i=0;i<2400;i++){
+        const dx=target.x-m.state.x,dz=target.z-m.state.z,d=Math.hypot(dx,dz);if(d<.08)break;
+        m.step(1/120,{moveX:dx/d*.35,moveZ:dz/d*.35});
+        assert.equal(m.state.blockedReason,'',`${entry.id}: ${m.state.x},${m.state.y},${m.state.z}`);
+        assert.ok(m.state.y<.3,'ground hall must not jump onto a bridge or roof');
+      }
+      assert.ok(Math.hypot(m.state.x-target.x,m.state.z-target.z)<.12);
+    }
+    assert.equal(m.placeWalker(entry.returnPose).ok,true,'return stays on land');
+  }
 });
 
 test('multi-line bridge fragments are all rebuilt instead of dropping one source fragment',()=>{

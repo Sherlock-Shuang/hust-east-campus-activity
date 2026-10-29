@@ -33,7 +33,9 @@ export function createPlayerWorld(model,{movableParking=false}={}) {
   })));
   const architecture=model.architectureInfrastructure||{},sports=model.sportsInfrastructure||{},parking=model.parkingInfrastructure||{},bridges=model.bridgeInfrastructure||{};
   const replacedBuildings=new Set([...(sports.replacedBuildingIds||[]),...(architecture.replacedBuildingIds||[])]);
-  return { replacedRoadIds:[...new Set([...(sports.replacedRoadIds||[]),...(architecture.replacedRoadIds||[])])], buildings:[...polygons(getReconstructionBuildings(model).filter(record=>!replacedBuildings.has(record.id))),...(architecture.buildings||[])], water:polygons(model.water), bounds:{...model.bounds}, barriers:[...(sports.barriers||[]),...(architecture.barriers||[]),...(bridges.barriers||[]),...(parking.barriers||[]).filter(b=>!movableParking||!String(b.id).startsWith('parked-east-nine-'))], walkSurfaces:[...(sports.walkSurfaces||[]),...(architecture.walkSurfaces||[]),...(bridges.walkSurfaces||[])] };
+  const bounds={...model.bounds};
+  for(const key of ['minX','minZ','maxX','maxZ'])if(Number.isFinite(architecture.extraBounds?.[key]))bounds[key]=Math[key.startsWith('min')?'min':'max'](bounds[key],architecture.extraBounds[key]);
+  return { replacedRoadIds:[...new Set([...(sports.replacedRoadIds||[]),...(architecture.replacedRoadIds||[])])], buildings:[...polygons(getReconstructionBuildings(model).filter(record=>!replacedBuildings.has(record.id))),...(architecture.buildings||[])], water:polygons(model.water), bounds, barriers:[...(sports.barriers||[]),...(architecture.barriers||[]),...(bridges.barriers||[]),...(parking.barriers||[]).filter(b=>!movableParking||!String(b.id).startsWith('parked-east-nine-'))], walkSurfaces:[...(sports.walkSurfaces||[]),...(architecture.walkSurfaces||[]),...(bridges.walkSurfaces||[])] };
 }
 
 export function createPlayerExperience({ THREE, scene, camera, controls, canvas, route, simulation,

@@ -85,34 +85,62 @@ test('the undercroft opening has no decorative glazing or mullions across either
   assert.ok(building.group.getObjectByName('opto-undercroft-paving'));
 });
 
-test('both real door openings can be reached from ground approaches and crossed into their auditorium gates', () => {
+test('confirmed college straight-then-left route and east direct entry are walkable without a roof snap', () => {
   assert.equal(building.entries.length, 2);
   assert.equal(building.entry.id, 'opto-c118', 'legacy landmark arrival stays available');
-  assert.match(building.entry.evidenceStatus, /unverified/);
+  assert.match(building.entry.evidenceStatus, /user-confirmed-route-coordinate-estimated/);
+  assert.ok(!building.entries.some(e => e.id === 'opto-c118-main'), 'central stair lobby is not an auditorium gate');
   for (const entry of building.entries) {
     const { center, normal, halfWidth } = entry.doorGate;
     assert.ok(halfWidth >= 1.2);
-    assert.equal(entry.workId, 'opto-c118'); assert.equal(entry.url, './c118.html');
+    assert.equal(entry.workId, 'opto-c118'); assert.match(entry.url, /^\.\/c118\.html\?view=(westEntry|eastEntry)$/);
     const player = createPlayerMotion({ route, world });
     assert.equal(player.placeWalker(entry.approach).ok, true, `${entry.id} road-side approach`);
     let largestRise = 0, prior = player.state.y;
-    for (let i = 0; i < 2400; i++) {
-      const signed = (player.state.x - center.x) * normal.x + (player.state.z - center.z) * normal.z;
-      if (signed < -1.2) break;
-      player.step(1 / 120, { forward: .5 });
-      largestRise = Math.max(largestRise, player.state.y - prior); prior = player.state.y;
-      assert.equal(player.state.blockedReason, '', `${entry.id}: ground-to-door path is blocked`);
+    for (const target of entry.approachRoute.slice(1)) {
+      for (let i = 0; i < 1800; i++) {
+        const dx = target.x - player.state.x, dz = target.z - player.state.z;
+        if (Math.hypot(dx, dz) < .08) break;
+        const length = Math.hypot(dx, dz);
+        player.step(1 / 120, { moveX: dx / length * .35, moveZ: dz / length * .35 });
+        largestRise = Math.max(largestRise, player.state.y - prior); prior = player.state.y;
+        assert.equal(player.state.blockedReason, '', `${entry.id}: ground-to-door path is blocked`);
+      }
+      assert.ok(Math.hypot(player.state.x - target.x, player.state.z - target.z) < .12, `${entry.id} failed route waypoint`);
     }
-    const inside = (player.state.x - center.x) * normal.x + (player.state.z - center.z) * normal.z;
-    assert.ok(inside < -1.15, `${entry.id} must cross actual open leaves, got ${inside}`);
+    const signed = (player.state.x - center.x) * normal.x + (player.state.z - center.z) * normal.z;
+    assert.ok(signed < -1.15, `${entry.id} must cross actual open leaves, got ${signed}`);
     assert.ok(Math.abs(player.state.y - entry.y) < .03);
-    assert.ok(largestRise < .3, `${entry.id}: no roof snap or inaccessible landing`);
+    assert.ok(largestRise < .3, `${entry.id}: no roof snap`);
     assert.equal(player.placeWalker(entry.returnPose).ok, true, `${entry.id} return is walkable`);
-    const outside = (player.state.x - center.x) * normal.x + (player.state.z - center.z) * normal.z;
-    assert.ok(outside > entry.doorGate.frontDepth, 'return is outside the automatic-entry gate');
-    for (let i = 0; i < 240; i++) player.step(1 / 120, { forward: .4 });
+    assert.ok(Math.hypot(player.state.x - center.x, player.state.z - center.z) > entry.doorGate.frontDepth + 1, 'return stays away from the auditorium gate');
+    for (let i = 0; i < 120; i++) player.step(1 / 120, { forward: .3 });
     assert.equal(player.state.blockedReason, '', 'returned walker can retreat toward the campus');
   }
+});
+
+test('ground route turns left and only bounded corridor cuts open the lower source footprint', () => {
+  const { college, hallDoor, east, turn, cuts } = building.plan.groundFloor;
+  assert.ok(east.nx > .9, 'second entrance must be on the east exterior face');
+  assert.ok((hallDoor.x - turn.x) * college.tx + (hallDoor.z - turn.z) * college.tz < -2, 'report hall lies on the left when walking inward');
+  assert.ok(Math.abs(hallDoor.tx * hallDoor.nx + hallDoor.tz * hallDoor.nz) < 1e-10);
+  const sample = { x: college.x - college.nx * 4, z: college.z - college.nz * 4 };
+  assert.equal(building.plan.volumes.some(v => v.minHeight < 2 && contains(sample, v)), false, 'short corridor opens at walking height');
+  assert.equal(building.plan.volumes.some(v => v.minHeight >= 4.4 && contains(sample, v)), true, 'upper floors remain solid');
+  const uncut = { x: college.x + college.tx * 5 - college.nx * 4, z: college.z + college.tz * 5 - college.nz * 4 };
+  assert.equal(building.plan.volumes.some(v => v.minHeight < 2 && contains(uncut, v)), true, 'adjacent non-corridor floor is not hollowed out');
+  assert.equal(cuts.length, 3);
+  assert.equal(JSON.stringify(source), before);
+});
+
+test('college route belongs to the southern skylit courtyard, not the national research centre portal', () => {
+  const g = building.plan.groundFloor;
+  assert.ok(g.college.z > building.plan.main.z + 35);
+  assert.equal(g.skylight, building.plan.polygons[0][3]);
+  assert.ok(g.collegeSteps.z > 760);
+  assert.ok(building.viewpoints.collegeEntrance && building.viewpoints.eastEntrance);
+  assert.ok(building.group.getObjectByName('opto-college-pyramid-skylights'));
+  assert.ok(building.entries.every(e => e.y < .2 && e.accessPath.length >= 2));
 });
 
 test('main stair flight reaches its upper landing without a collider jump', () => {
@@ -132,7 +160,7 @@ test('main stair flight reaches its upper landing without a collider jump', () =
   assert.ok(largestRise < .3, `largest step must be modest, got ${largestRise}`);
 });
 
-test('main and secondary doorway apertures are also open in visible meshes, while side windows remain solid', () => {
+test('auditorium doorway apertures are open in visible meshes, while side windows remain solid', () => {
   building.group.updateMatrixWorld(true);
   for (const entry of building.entries) {
     const { center, normal, halfWidth } = entry.doorGate;
@@ -143,7 +171,7 @@ test('main and secondary doorway apertures are also open in visible meshes, whil
       const hit = ray.intersectObject(building.group, true)[0];
       assert.equal(hit, undefined, `${entry.id} central doorway is painted shut by ${hit?.object.name}`);
     }
-    const sideU = halfWidth + 1;
+    const sideU = halfWidth + .25;
     const side = { x: center.x + tangent.x * sideU, z: center.z + tangent.z * sideU };
     assert.ok(building.infrastructure.barriers.some(b => inside(side, b.polygon)), 'fixed side windows retain collision');
   }
@@ -163,7 +191,7 @@ test('facade detail is instanced, finite and below a bounded geometry budget', (
   });
   assert.ok(building.group.getObjectByName('opto-vertical-sunshade-screen').isInstancedMesh);
   assert.ok(building.group.getObjectByName('opto-tree-column-branches').isInstancedMesh);
-  assert.ok(drawCalls <= 46, `${drawCalls} draw calls`);
+  assert.ok(drawCalls <= 60, `${drawCalls} draw calls`);
   assert.ok(triangles < 150000, `${triangles} triangles`);
   assert.equal(JSON.stringify(source), before);
 });

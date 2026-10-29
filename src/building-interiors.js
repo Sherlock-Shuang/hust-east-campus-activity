@@ -1,7 +1,7 @@
 // Building exploration is independent of hosted works and never emits a game
 // opening/completion event. It is still subject to the host's shared pause.
 const onFoot=state=>state&&['walk','spider'].includes(state.mode)&&['x','y','z'].every(k=>Number.isFinite(state[k]))&&state.grounded!==false;
-const portal=entry=>({...entry,kind:'building-interior',workId:'opto-c118',url:'./c118.html'});
+const portal=entry=>({...entry,kind:'building-interior',workId:'opto-c118',url:/^\.\/c118\.html(?:\?view=(?:westEntry|eastEntry))?$/.test(entry.url||'')?entry.url:'./c118.html'});
 function gatePosition(gate,state){
   if(!gate||!['x','z'].every(k=>Number.isFinite(gate.center?.[k])&&Number.isFinite(gate.normal?.[k])))return null;
   const length=Math.hypot(gate.normal.x,gate.normal.z);

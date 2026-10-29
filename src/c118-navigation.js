@@ -19,5 +19,11 @@ export function indoorMovement(heading,forward,sideways){
 }
 
 export function crossedC118Door(plan,state){
-  return Math.abs(state.x)>plan.config.width/2+.25&&plan.doors.some(door=>Math.abs(state.z-door.z)<door.width/2-.1);
+  if(!Number.isFinite(state?.x)||!Number.isFinite(state?.z)||!Number.isFinite(state?.y))return false;
+  return plan.doors.some(door=>{
+    const side=door.side??Math.sign(door.x),floorY=door.y??plan.config.floorY;
+    return side*state.x>plan.config.width/2+.25&&
+      Math.abs(state.z-door.z)<door.width/2-.1&&
+      Math.abs(state.y-floorY)<.23;
+  });
 }

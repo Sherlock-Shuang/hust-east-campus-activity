@@ -61,6 +61,7 @@ try{
     motion.step(dt,{...indoorMovement(heading,forward,sideways),fast:pressed('ShiftLeft','ShiftRight')});
     if(crossedC118Door(interior.plan,motion.state)){exit();return;}
     eyeY=THREE.MathUtils.damp(eyeY,motion.state.y+1.65,16,dt);camera.position.set(motion.state.x,eyeY,motion.state.z);camera.rotation.set(pitch,heading,0);
+    interior.update?.(camera);
     renderer.render(scene,camera);
     if(!ready){ready=true;status.hidden=true;window.campusActivity?.ready('runtime_ready');canvas.focus({preventScroll:true});}
     if(++frame%20===0){canvas.dataset.position=JSON.stringify({x:motion.state.x,y:motion.state.y,z:motion.state.z});canvas.dataset.drawCalls=String(renderer.info.render.calls);canvas.dataset.triangles=String(renderer.info.render.triangles);}

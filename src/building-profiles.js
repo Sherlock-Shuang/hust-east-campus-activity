@@ -184,6 +184,13 @@ export function getRoadProfile(feature) {
   const explicitElevation=metres(tags.min_height);
   let elevation=bridge?(explicitElevation??Math.max(1,layer)*5.5):tunnel?-Math.max(1,Math.abs(layer))*4.5:layer*4.5;
   let elevationEvidence=bridge&&explicitElevation!==null?'source-min-height':bridge||tunnel||layer?'estimated-layer':'assumed-level-ground';
+  // A passage beneath a building/entrance beam is not a subterranean tunnel.
+  // Keep the shared surface datum unless the road actually carries a height or
+  // an explicit non-ground level/layer. The east gate is tagged this way.
+  if(!bridge&&tags.tunnel==='building_passage'){
+    if(explicitElevation!==null){elevation=explicitElevation;elevationEvidence='source-min-height';}
+    else if(layer===0&&(!tags.level||Number(tags.level)===0)){elevation=0;elevationEvidence='assumed-level-ground';}
+  }
   if(campusBridge&&explicitElevation===null){elevation=campusBridge.elevation;elevationEvidence=campusBridge.elevationEvidence;}
   const color=['footway','path','pedestrian','steps'].includes(kind)?'#b8b7aa':kind==='cycleway'?'#839d95':['unpaved','dirt','compacted'].includes(tags.surface)?'#aaa18a':'#727b7d';
   const description=evidence==='estimated-photo-lakeside-road'?'校方东九湖畔实拍显示双向道路及外侧骑行空间；展示宽度 10 m 为照片尺度估计，非测量。':evidence==='estimated-photo-cross-section'?campusBridge.description:evidence==='source-width'?`源 width 标签 ${width.toFixed(2)} m。`

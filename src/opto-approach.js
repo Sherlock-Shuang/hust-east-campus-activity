@@ -20,7 +20,7 @@ export function planOptoApproach(model,{frame,geoToLocal,optoBuilding}={}){
     source:'Unmodified public OSM road centerlines and the current photo-informed optoelectronics entry plan',
     photograph:'https://hbkx.org.cn/attached/image/20240716/1721113702065049616.png',
     observed:'Completed aerial shows surface arrival lanes meeting the surrounding roads and a bridge across the watercourse; no five-metre road steps at the banks.',
-    uncertainty:'Bridge vertical profile, widths, slab/rail dimensions and the short C-entry connector are display estimates, not a bridge survey. C118 secondary door position remains explicitly provisional in opto-building.',
+    uncertainty:'Bridge vertical profile, widths, slab/rail dimensions and the college/east doorway connectors are display estimates, not a bridge survey. The two access routes are user-confirmed; exact door coordinates remain estimated in opto-building.',
   }};
   if(!model?.roads||!frame||typeof geoToLocal!=='function')return plan;
   const local=c=>geoToLocal({longitude:c[0],latitude:c[1],height:0,coordinateSystem:'EPSG:4326'},frame);
@@ -71,11 +71,20 @@ export function planOptoApproach(model,{frame,geoToLocal,optoBuilding}={}){
   // capture-seam display repair, not a newly surveyed path.
   const seam=roads.find(r=>r.id==='way/1483567253');
   if(seam?.lines.length>1){let best;for(let i=0;i<seam.lines.length;i++)for(let j=i+1;j<seam.lines.length;j++)for(const a of [seam.lines[i][0],seam.lines[i].at(-1)])for(const b of [seam.lines[j][0],seam.lines[j].at(-1)]){const d=distance(a,b);if(d>.05&&d<5&&(!best||d<best.d))best={a,b,d};}if(best)connector('opto-footway-capture-seam',best.a,best.b,seam.profile.width,seam.id,'Short same-way capture seam; endpoints and path direction retained');}
-  const c=optoBuilding?.plan?.cEntry,footway=roads.find(r=>r.id==='way/1483567207');
-  if(c&&footway){
-    const end={x:c.x+c.nx*1.5,z:c.z+c.nz*1.5};let best;
+  const ground=optoBuilding?.plan?.groundFloor;
+  const areaOf=polygons=>polygons.reduce((sum,p)=>sum+p.reduce((s,r,i)=>s+(i?-1:1)*Math.abs(r.reduce((a,q,k)=>{const n=r[(k+1)%r.length];return a+q[0]*n[1]-n[0]*q[1];},0)/2),0),0);
+  // Separate source paths on each SIDE of the real building. Reusing the west
+  // footway for the east entrance would draw an impossible path through rooms.
+  for(const [key,id,roadId]of [['college','opto-c-entry-approach','way/1483567207'],['east','opto-c-east-approach','way/1483567206']]){
+    const door=ground?.[key],footway=roads.find(r=>r.id===roadId);if(!door||!footway)continue;
+    const end={x:door.x+door.nx*1.5,z:door.z+door.nz*1.5};let best;
     for(const line of footway.lines)for(let i=1;i<line.length;i++){const q=nearest(end,line[i-1],line[i]);if(!best||q.distance<best.distance)best=q;}
-    if(best&&best.distance<12)connector('opto-c-entry-approach',best,end,3,footway.id,'Short paving connection to the existing provisional C-zone entry; exact real doorway alignment remains unverified');
+    if(best&&best.distance<12){
+      const path=[clipRing(linePolygon(best,end,3))],source=optoBuilding.plan.sourceFootprint;
+      const overlap=source?.length?areaOf(polygonClipping.intersection(source,path)):0;
+      if(overlap>.08){plan.diagnostics.push({id,reason:'Rejected: doorway approach crosses the source building footprint',overlap});continue;}
+      connector(id,best,end,3,footway.id,`User-confirmed ${key} access topology; exact door coordinates and this bounded paving connector remain estimated`);
+    }
   }
   for(const s of optoBuilding?.infrastructure?.walkSurfaces||[])if(s.polygon?.length)plan.forestExclusions.push([clipRing(s.polygon),...(s.holes||[]).map(clipRing)]);
   plan.accepted=!!plan.bridges.length;

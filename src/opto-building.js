@@ -20,16 +20,19 @@ export const OPTO_BUILDING_EVIDENCE = Object.freeze({
     'https://hbkx.org.cn/attached/image/2024/08/19/3db0335373e2466a91d3cd33a687c388.png',
   ],
   observed: '连续W形院落、错落翼楼、南翼中段退低而端部升高；竖向金属遮阳屏、蓝绿玻璃带、灰石基座窄窗与宽架空口；主入口格网雨棚、分叉斜撑柱与侧墙台阶。',
-  uncertainty: 'OSM轮廓非测绘成果；窗格、分区高度、南翼中段退台、设备位置、架空洞口和入口坐标均为照片比例估计。C区次入口方位尚无可配准平面图。',
+  uncertainty: 'OSM轮廓非测绘成果；窗格、分区高度、南翼中段退台、设备位置、架空洞口和入口坐标均为照片比例估计。C118两条进入路线由用户现场描述确认；入口坐标、走廊尺寸及C区边界仍为源轮廓上的展示估计，并非测绘平面。',
   c118Evidence: 'https://wnlo.hust.edu.cn/info/1374/4231.htm',
 });
 
-// Main portal is aligned to the source courtyard's back edge. The C118 access
-// point remains explicitly provisional until a ground-floor plan is available.
+// The user confirmed the access topology: ground door to the left of the main
+// steps, straight corridor then an auditorium door on the left; a second door
+// enters directly from the east. Coordinates remain source-edge estimates.
 export const OPTO_ACCESS = Object.freeze({
   main: Object.freeze({ longitude: 114.42860685, latitude: 30.5093796 }),
   c118: Object.freeze({ longitude: 114.428111, latitude: 30.508983 }),
-  c118Status: 'display-estimate-unverified-secondary-entrance',
+  east: Object.freeze({ longitude: 114.42887397, latitude: 30.50894790 }),
+  collegeSteps: Object.freeze({ longitude: 114.42818118, latitude: 30.50878107 }),
+  c118Status: 'user-confirmed-route-coordinate-estimated',
 });
 
 const points = path => {
@@ -73,9 +76,24 @@ export function planOptoBuilding(record, { frame, geoToLocal } = {}) {
     }
     return closest;
   };
-  const cEntry = { ...nearestEdge(projected(OPTO_ACCESS.c118, frame, geoToLocal)), width: 7.2, height: 4.4, depth: 8.6, status: OPTO_ACCESS.c118Status };
+  const cEntry = { ...nearestEdge(projected(OPTO_ACCESS.c118, frame, geoToLocal)), width: 4.8, height: 4.4, depth: 9.8, status: OPTO_ACCESS.c118Status };
   cEntry.yaw = -Math.atan2(cEntry.tz, cEntry.tx);
-  const entranceCut = streetFootprint(cEntry.x - cEntry.nx * 4.2, cEntry.z - cEntry.nz * 4.2, cEntry.width, 9, cEntry.yaw);
+  const eastEntry = { ...nearestEdge(projected(OPTO_ACCESS.east, frame, geoToLocal)), width: 4.8, height: 4.4, depth: 5.6, status: OPTO_ACCESS.c118Status };
+  eastEntry.yaw = -Math.atan2(eastEntry.tz, eastEntry.tx);
+  // Looking inward, -tangent is the player's left. Only the side door, not
+  // the exterior college door, activates the auditorium runtime.
+  const turn = { x: cEntry.x - cEntry.nx * 7.2, z: cEntry.z - cEntry.nz * 7.2 };
+  const hallDoor = { x: turn.x - cEntry.tx * 2.4, z: turn.z - cEntry.tz * 2.4,
+    nx: cEntry.tx, nz: cEntry.tz, tx: -cEntry.nx, tz: -cEntry.nz, width: 3.2, height: 3.4, status: cEntry.status };
+  hallDoor.yaw = -Math.atan2(hallDoor.tz, hallDoor.tx);
+  const corridorCut = streetFootprint(cEntry.x - cEntry.nx * 4.7, cEntry.z - cEntry.nz * 4.7, cEntry.width, 10.2, cEntry.yaw);
+  const hallCut = streetFootprint(hallDoor.x - hallDoor.nx * 1.7, hallDoor.z - hallDoor.nz * 1.7, 3.6, 4.4, hallDoor.yaw);
+  const eastCut = streetFootprint(eastEntry.x - eastEntry.nx * 2.6, eastEntry.z - eastEntry.nz * 2.6, eastEntry.width, 6, eastEntry.yaw);
+  const collegeSteps = { ...nearestEdge(projected(OPTO_ACCESS.collegeSteps, frame, geoToLocal)) };
+  collegeSteps.yaw = -Math.atan2(collegeSteps.tz, collegeSteps.tx);
+  const groundFloor = { college: cEntry, collegeSteps, skylight: polygons[0][3], east: eastEntry, hallDoor, turn, cuts: [corridorCut, hallCut, eastCut],
+    floorY: .12, ceilingY: 4.4, evidenceStatus: cEntry.status,
+    routeEvidence: '用户现场说明：学院标识与台阶前左侧地面门，直走后左手报告厅；另有东侧直入门。' };
   // This opening belongs to the long west face, not to the oblique C door.
   // The measured source edge defines its yaw; photo proportions define its size.
   const parking = { ...nearestEdge(projected({ longitude: 114.4277934, latitude: 30.509777 }, frame, geoToLocal)), width: 25.8, depth: 28, height: 10.4 };
@@ -84,7 +102,7 @@ export function planOptoBuilding(record, { frame, geoToLocal } = {}) {
   const main = { ...nearestEdge(projected(OPTO_ACCESS.main, frame, geoToLocal)), width: 16, depth: 9.2, height: 10.4 };
   main.yaw = -Math.atan2(main.tz, main.tx);
   const mainCut = streetFootprint(main.x - main.nx * 4, main.z - main.nz * 4, main.width, main.depth, main.yaw);
-  const cuts = [[closed(entranceCut)], [closed(parkingCut)], [closed(mainCut)]];
+  const cuts = [...groundFloor.cuts.map(r => [closed(r)]), [closed(parkingCut)], [closed(mainCut)]];
   const geoMask = coordinates => [closed(coordinates.map(([longitude, latitude]) => projected({ longitude, latitude }, frame, geoToLocal)))];
   // Roof changes are aligned with the oblique wing cross sections. These are
   // photo-proportion zones, NOT claimed surveyed A–H structural boundaries.
@@ -115,8 +133,9 @@ export function planOptoBuilding(record, { frame, geoToLocal } = {}) {
     }
     zone.region.forEach((p, i) => volumes.push({ id: `${OPTO_BUILDING_ID}:${zone.id}:upper:${i}`, sourceId: OPTO_BUILDING_ID, rings: fromClip(p), minHeight: hasTallVoid ? parking.height : 8.2, height: zone.top }));
   }
-  polygonClipping.intersection(footprint, [closed(entranceCut)]).forEach((p, i) => volumes.push({ id: `${OPTO_BUILDING_ID}:entry-lintel:${i}`, sourceId: OPTO_BUILDING_ID, rings: fromClip(p), minHeight: cEntry.height, height: 8.2 }));
-  return { polygons, bounds, volumes, zones, heightAt, cEntry, parking, parkingCut, mainCut, main, sourceFootprint: footprint };
+  const lowCuts = polygonClipping.union(...groundFloor.cuts.map(r => [closed(r)]));
+  polygonClipping.intersection(footprint, lowCuts).forEach((p, i) => volumes.push({ id: `${OPTO_BUILDING_ID}:entry-lintel:${i}`, sourceId: OPTO_BUILDING_ID, rings: fromClip(p), minHeight: groundFloor.ceilingY, height: 8.2 }));
+  return { polygons, bounds, volumes, zones, heightAt, cEntry, groundFloor, parking, parkingCut, mainCut, main, sourceFootprint: footprint };
 }
 
 export function createOptoBuilding(THREE, record, options = {}) {
@@ -167,26 +186,41 @@ export function createOptoBuilding(THREE, record, options = {}) {
     base.rotation.x = -Math.PI / 2; base.position.y = .07;
     infrastructure.walkSurfaces.push({ id: `opto-undercroft-floor-${i}`, sourceId: OPTO_BUILDING_ID, polygon: rings[0], holes: rings.slice(1), surfaceY: .07 });
   }
-  const doorLocal = (name, mat, u, y, v, sx, sy, sz) => box(name, mat, e.x + e.tx * u + e.nx * v, y, e.z + e.tz * u + e.nz * v, sx, sy, sz, e.yaw);
-  floor('opto-c-secondary-landing', streetFootprint(e.x + e.nx * 1.5, e.z + e.nz * 1.5, 11.4, 3, e.yaw), .12, paving);
-  floor('opto-c-secondary-vestibule-floor', streetFootprint(e.x - e.nx * 4.3, e.z - e.nz * 4.3, 7.2, 8.6, e.yaw), .12, paving);
-  doorLocal('opto-c-entrance-canopy', white, 0, 4.7, .7, 9.2, .34, 3.4);
-  for (const s of [-1, 1]) doorLocal('opto-c-entrance-jambs', white, s * 3.72, 2.2, -.06, .28, 4.4, .7);
-  // Open double doors: keep glazed side panels, but leave 3.2 m of real clear
-  // passage. The old full-width glass/back collider made this a dead-end niche.
-  for (const side of [-1, 1]) {
-    doorLocal('opto-c-entrance-glass', glass, side * 2.57, 2.05, -4.6, 1.75, 4.05, .1);
-    doorLocal('opto-c-door-mullions', frameMat, side * 1.64, 1.66, -4.53, .09, 3.1, .14);
-    doorLocal('opto-open-door-leaves', openDoorGlass, side * 1.68, 1.64, -3.86, .075, 3, 1.48);
-    doorLocal('opto-door-handles', white, side * 1.60, 1.35, -3.28, .08, .55, .045);
-    const panel = streetFootprint(e.x + e.tx * side * 2.57 - e.nx * 4.6, e.z + e.tz * side * 2.57 - e.nz * 4.6, 1.75, .14, e.yaw);
-    infrastructure.barriers.push({ id: `opto-c-door-side-${side}`, sourceId: OPTO_BUILDING_ID, polygon: panel, minHeight: .12, height: 4.08, label: '次入口侧窗' });
+  const ground = plan.groundFloor;
+  const entranceLocal = (source, name, mat, u, y, v, sx, sy, sz) => box(name, mat,
+    source.x + source.tx * u + source.nx * v, y, source.z + source.tz * u + source.nz * v, sx, sy, sz, source.yaw);
+  // These are bounded cuts in the real footprint, never an open entire floor.
+  for (const [i, rings] of polygonClipping.union(...ground.cuts.map(r => [closed(r)])).map(fromClip).entries()) {
+    floor(`opto-c-ground-floor-${i}`, rings[0], ground.floorY, paving);
   }
-  doorLocal('opto-c-entrance-glass', glass, 0, 3.72, -4.6, 3.3, .72, .1);
-  doorLocal('opto-c-door-mullions', frameMat, 0, 3.32, -4.53, 3.38, .1, .14);
-  doorLocal('opto-door-wayfinding-band', wayfinding, 0, 4.07, -4.48, 3.8, .34, .09);
-  // This short lobby is a playable transition, not a claimed surveyed C118
-  // corridor. Its inner marker hands off to the existing auditorium runtime.
+  for (const [key, source] of [['college', e], ['east', ground.east]]) {
+    floor(`opto-c-${key}-landing`, streetFootprint(source.x + source.nx * 1.5, source.z + source.nz * 1.5, 6.2, 3, source.yaw), .12, paving);
+    entranceLocal(source, 'opto-c-entrance-canopy', white, 0, 4.7, .7, 6, .34, 2.8);
+    entranceLocal(source, 'opto-door-wayfinding-band', wayfinding, 0, 4.07, .20, 4.7, .40, .12);
+  }
+  function openGroundDoor(source, key, halfWidth, totalWidth, height, mat = glass) {
+    const panelWidth = (totalWidth - 2 * halfWidth) / 2;
+    for (const side of [-1, 1]) {
+      const sideU = side * (halfWidth + panelWidth / 2);
+      entranceLocal(source, 'opto-c-entrance-glass', mat, sideU, .12 + height / 2, 0, panelWidth, height, .10);
+      entranceLocal(source, 'opto-c-door-mullions', frameMat, side * halfWidth, .12 + height / 2, .03, .09, height, .14);
+      entranceLocal(source, 'opto-open-door-leaves', openDoorGlass, side * (halfWidth + .08), .12 + height / 2, .69, .075, height - .12, 1.3);
+      entranceLocal(source, 'opto-door-handles', white, side * (halfWidth - .02), 1.35, 1.12, .08, .55, .045);
+      infrastructure.barriers.push({ id: `opto-c-${key}-side-${side}`, sourceId: OPTO_BUILDING_ID,
+        polygon: streetFootprint(source.x + source.tx * sideU, source.z + source.tz * sideU, panelWidth, .14, source.yaw), minHeight: .12, height: height + .12, label: '报告厅入口固定侧窗' });
+    }
+    entranceLocal(source, 'opto-c-door-mullions', frameMat, 0, height + .18, 0, totalWidth, .12, .14);
+    entranceLocal(source, 'opto-c-entrance-glass', mat, 0, (height + .24 + 4.4) / 2, 0, totalWidth, 4.4 - height - .24, .10);
+  }
+  openGroundDoor(e, 'college', 1.6, 4.8, 3.2);
+  openGroundDoor(ground.hallDoor, 'left-hall', 1.3, 3.6, 3.1, dark);
+  openGroundDoor(ground.east, 'east', 1.6, 4.8, 3.2);
+  // A short straight hall has a left-hand opening. Its closed far wall is
+  // intentional: no unverified all-floor circulation is implied.
+  entranceLocal(e, 'opto-ground-corridor-ceiling', white, 0, 4.35, -4.8, 4.76, .08, 9.6);
+  entranceLocal(e, 'opto-ground-corridor-skirt', dark, 2.36, .27, -4.8, .06, .3, 9.5);
+  entranceLocal(e, 'opto-ground-corridor-skirt', dark, -2.36, .27, -2.5, .06, .3, 4.8);
+  entranceLocal(e, 'opto-door-wayfinding-band', wayfinding, 0, 2.8, -9.73, 3.2, .50, .08);
   for (const [polyIndex, polygon] of plan.polygons.entries()) for (const [ringIndex, ring] of polygon.entries()) {
     const sign = Math.sign(area(ring)) * (ringIndex ? -1 : 1);
     for (let i = 0; i < ring.length; i++) {
@@ -197,7 +231,7 @@ export function createOptoBuilding(THREE, record, options = {}) {
       const n = Math.max(1, Math.ceil(len / 3.4)), step = len / n;
       for (let j = 0; j < n; j++) {
         const u = (j + .5) * step, top = topAt(u), x = a.x + tx * u, z = a.z + tz * u;
-        const nearDoor = Math.abs((x - e.x) * e.tx + (z - e.z) * e.tz) < 4.4 && Math.abs((x - e.x) * e.nx + (z - e.z) * e.nz) < 1;
+        const nearDoor = [0, -step / 2, step / 2].some(du => ground.cuts.some(cut => insideRing({ x: x + tx * du, z: z + tz * du }, cut)));
         const parking = plan.parking;
         const nearParking = [0, -step / 2, step / 2].some(du => insideRing({ x: x + tx * du, z: z + tz * du }, plan.parkingCut));
         const mainPortalFace = Math.hypot(x - plan.main.x, z - plan.main.z) < 21;
@@ -308,7 +342,7 @@ export function createOptoBuilding(THREE, record, options = {}) {
   }
   for (const y of [7.7, 10.2]) mainBox('opto-window-head-sill', frameMat, 0, y, -4.2 * out, 15.7, .08, .12);
   mainBox('opto-window-head-sill', frameMat, 0, 6.16, -4.2 * out, 5, .12, .14);
-  mainBox('opto-door-wayfinding-band', wayfinding, 0, 6.44, -4.1 * out, 6.8, .48, .12);
+  // The raised central entrance is an ordinary building lobby, not C118.
   for (const side of [-1, 1]) {
     const u = side * 6.45;
     beam('opto-main-stair-cheek-walls', entrancePoint(u, 3.7 * out, 3.1), entrancePoint(u, 10.2 * out, .75), .76, stone);
@@ -332,6 +366,47 @@ export function createOptoBuilding(THREE, record, options = {}) {
     box('opto-courtyard-curbs', stone, (a.x + b.x) / 2, .14, (a.z + b.z) / 2, Math.hypot(dx, dz), .16, .18, -Math.atan2(dz, dx));
   }
   for (const side of [-1, 1]) for (let v = 23; v < 63; v += 7) mainBox('opto-courtyard-lane-markings', white, side * 12.8, .085, v * out, .12, .012, 3.8);
+  // The college atrium is the SOUTH courtyard, distinct from the national
+  // research centre portal. Public ground photos and an orthophoto repost show
+  // a grid of low glass pyramids; source-hole proportions locate the roof.
+  // This is a thin canopy layer, not invented solid rooms inside the courtyard.
+  const cs = ground.collegeSteps;
+  for (let j = 0; j < 12; j++) {
+    const offset = 3.8 + j * .28, height = .12 + (12 - j) * .15;
+    entranceLocal(cs, 'opto-college-stair-treads', paving, 0, height / 2, offset, 12, height, .3);
+    infrastructure.walkSurfaces.push({ id: `opto-college-step-${j}`, sourceId: OPTO_BUILDING_ID,
+      polygon: streetFootprint(cs.x + cs.nx * offset, cs.z + cs.nz * offset, 12, .3, cs.yaw), surfaceY: height });
+  }
+  entranceLocal(cs, 'opto-college-stair-treads', paving, 0, .96, 1.9, 12, 1.92, 3.9);
+  infrastructure.walkSurfaces.push({ id: 'opto-college-upper-landing', sourceId: OPTO_BUILDING_ID, polygon: streetFootprint(cs.x + cs.nx * 1.9, cs.z + cs.nz * 1.9, 12, 3.9, cs.yaw), surfaceY: 1.92 });
+  entranceLocal(cs, 'opto-college-canopy-frame', white, 0, 8.6, 2.3, 21, .45, 6);
+  entranceLocal(cs, 'opto-college-name-band', wayfinding, 0, 8.9, 1.2, 20, 1.2, .18);
+  for (const side of [-1, 1]) {
+    const foot = { x: cs.x + cs.tx * side * 8.8 + cs.nx * 4, z: cs.z + cs.tz * side * 8.8 + cs.nz * 4, y: .12 };
+    const top = { x: cs.x + cs.tx * side * 8.8 + cs.nx * 1.8, z: cs.z + cs.tz * side * 8.8 + cs.nz * 1.8, y: 8.5 };
+    beam('opto-college-canopy-braces', foot, top, .26, white);
+  }
+  const skylight = ground.skylight;
+  if (skylight?.length === 4) {
+    const leftTop = skylight[3], leftBottom = skylight[2], rightTop = skylight[0], rightBottom = skylight[1];
+    const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+    const point = (u, v) => lerp(lerp(leftTop, leftBottom, v), lerp(rightTop, rightBottom, v), u);
+    const positions = [];
+    for (let col = 0; col < 5; col++) for (let row = 0; row < (col === 4 ? 10 : 9); row++) {
+      const count = col === 4 ? 10 : 9;
+      const u0 = (col + .06) / 5, u1 = (col + .94) / 5, v0 = (row + .06) / count, v1 = (row + .94) / count;
+      const corners = [point(u0, v0), point(u1, v0), point(u1, v1), point(u0, v1)], mid = point((col + .5) / 5, (row + .5) / count);
+      const apex = { ...mid, y: 6.0 };
+      for (let i = 0; i < 4; i++) {
+        const a = { ...corners[i], y: 4.85 }, b = { ...corners[(i + 1) % 4], y: 4.85 };
+        positions.push(a.x, a.y, a.z, b.x, b.y, b.z, apex.x, apex.y, apex.z);
+        beam('opto-college-pyramid-frames', a, apex, .065, white);
+      }
+    }
+    const geo = geometry(new THREE.BufferGeometry()); geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); geo.computeVertexNormals();
+    const glazing = mesh('opto-college-pyramid-skylights', geo, openDoorGlass); glazing.castShadow = false;
+    glazing.userData.provenance = 'Public college atrium photographs and author-reported 46 pyramids; per-column placement and roof elevation are schematic, not a survey';
+  }
   // Only text generated from public building identity is rendered; no copied
   // institutional logo/font/image. The added C118 labels are activity guides,
   // explicitly distinct from surveyed room-direction signage.
@@ -345,42 +420,54 @@ export function createOptoBuilding(THREE, record, options = {}) {
       const sign = mesh('opto-main-name-sign', geometry(new THREE.PlaneGeometry(28, 2.9)), signMat), p = entrancePoint(0, 16.55 * out, 13.55);
       sign.position.set(p.x, p.y, p.z); sign.rotation.y = Math.atan2(nx * out, nz * out);
       group.userData.labelContent = '武汉光电国家研究中心';
-      for (const [key, source, offset, y, width, height] of [['main', plan.main, 4.02, 6.44, 6.4, .43], ['secondary', e, 4.39, 4.07, 3.65, .29]]) {
+      const signSpecs = [
+        ['college', ground.collegeSteps, -1.3, 8.9, 18, 1.0, '光学与电子信息学院'],
+        ['college-route', e, -.29, 4.07, 4.5, .32, '进入后直走 · 左手 C118'],
+        ['left-guide', e, 9.67, 2.8, 3.0, .36, '← C118 报告厅'],
+        ['left-hall', ground.hallDoor, -.16, 3.65, 3.2, .32, 'C118 报告厅'],
+        ['east', ground.east, -.29, 4.07, 4.5, .32, 'C118 报告厅 · 东侧入口'],
+      ];
+      for (const [key, source, offset, y, width, height, text] of signSpecs) {
         const board = document.createElement('canvas'); board.width = 1280; board.height = 150;
         const paint = board.getContext('2d'); if (!paint) continue;
         paint.font = '600 94px sans-serif'; paint.textAlign = 'center'; paint.textBaseline = 'middle'; paint.fillStyle = '#effff4';
-        paint.fillText('报告厅导览 · C118', 640, 77);
+        paint.fillText(text, 640, 77);
         const map = new THREE.CanvasTexture(board); map.colorSpace = THREE.SRGBColorSpace;
         const mat = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, side: THREE.DoubleSide }); mats.add(mat);
         const label = mesh(`opto-${key}-interior-guide`, geometry(new THREE.PlaneGeometry(width, height)), mat);
         label.position.set(source.x - source.nx * offset, y, source.z - source.nz * offset); label.rotation.y = Math.atan2(source.nx, source.nz);
-        label.userData.signPurpose = 'activity-wayfinding-not-surveyed-building-signage';
+        label.userData.signPurpose = 'user-confirmed-route-game-wayfinding-not-surveyed-signage';
       }
     }
   }
   for (const { name, mat, items } of batches.values()) {
     const o = new THREE.InstancedMesh(boxGeo, mat, items.length); o.name = name; items.forEach((m, i) => o.setMatrixAt(i, m)); o.instanceMatrix.needsUpdate = true; o.computeBoundingBox(); o.computeBoundingSphere(); o.castShadow = true; o.receiveShadow = true; o.renderOrder = 204; o.userData = { ...group.userData, component: name, instanceCount: items.length }; group.add(o);
   }
-  const entry = { id: 'opto-c118', name: 'C118报告厅', label: '光电信息大楼 · C118 报告厅', x: e.x + e.nx * 2.9, y: .12, z: e.z + e.nz * 2.9, yaw: Math.atan2(e.nx, e.nz), radius: 8, evidenceStatus: e.status, coordinate: { ...OPTO_ACCESS.c118 } };
-  const makeInteriorEntry = (source, id, offset, floorY, halfWidth, entranceName) => {
-    const center = { x: source.x - source.nx * offset, z: source.z - source.nz * offset };
-    const normal = { x: source.nx, z: source.nz };
-    return { id, name: 'C118报告厅', label: `${entranceName} · 报告厅导览 C118`, workId: 'opto-c118', url: './c118.html',
-      x: center.x - normal.x * .65, y: floorY, z: center.z - normal.z * .65, yaw: Math.atan2(normal.x, normal.z), radius: 2,
-      evidenceStatus: source === e ? e.status : 'photo-aligned-main-entrance-interior-route-estimated',
-      doorGate: { center, normal, halfWidth, frontDepth: 2.4, backDepth: 2.4 },
-      returnPose: { x: center.x + normal.x * 3, y: floorY, z: center.z + normal.z * 3, yaw: Math.atan2(-normal.x, -normal.z), pitch: 0 },
-      // The secondary footpath hugs this wall; a generic 12 m setback would
-      // place its tour start in the watercourse beyond the path.
-      approach: { x: source.x + normal.x * (source === e ? 3 : 12), y: .14, z: source.z + normal.z * (source === e ? 3 : 12), yaw: Math.atan2(normal.x, normal.z) },
+  const outsidePose = source => ({ x: source.x + source.nx * 3, y: .12, z: source.z + source.nz * 3, yaw: Math.atan2(-source.nx, -source.nz), pitch: 0 });
+  const entry = { id: 'opto-c118', name: 'C118报告厅', label: '学院门 · 直走后左转至 C118',
+    ...outsidePose(e), yaw: Math.atan2(e.nx, e.nz), radius: 8, evidenceStatus: e.status, coordinate: { ...OPTO_ACCESS.c118 } };
+  const makeInteriorEntry = (source, id, halfWidth, entranceName, exterior) => {
+    const center = { x: source.x, z: source.z }, normal = { x: source.nx, z: source.nz };
+    return { id, name: 'C118报告厅', label: entranceName, workId: 'opto-c118', url: `./c118.html?view=${source === ground.hallDoor ? 'westEntry' : 'eastEntry'}`,
+      x: center.x - normal.x * .65, y: .12, z: center.z - normal.z * .65, yaw: Math.atan2(normal.x, normal.z), radius: 2,
+      evidenceStatus: source.status, doorGate: { center, normal, halfWidth, frontDepth: 1.3, backDepth: 1.7 },
+      returnPose: outsidePose(exterior),
+      approach: { ...outsidePose(exterior), yaw: Math.atan2(exterior.nx, exterior.nz) },
     };
   };
-  const entries = [makeInteriorEntry(plan.main, 'opto-c118-main', 4.35, 2.82, 2.4, '主入口'), makeInteriorEntry(e, 'opto-c118', 4.6, .12, 1.6, '次入口')];
-  const viewpoints = { exterior: { x: m.x + nx * out * 92, z: m.z + nz * out * 92, y: 2, yaw: Math.atan2(nx * out, nz * out), pitch: -.16 }, c118: { x: e.x + e.nx * 15, z: e.z + e.nz * 15, y: 1.7, yaw: Math.atan2(e.nx, e.nz), pitch: -.08 } };
+  const entries = [makeInteriorEntry(ground.hallDoor, 'opto-c118-left-hall', 1.3, '左手门 · C118 报告厅', e), makeInteriorEntry(ground.east, 'opto-c118-east', 1.6, '东侧门 · C118 报告厅', ground.east)];
+  entries[0].returnPose = { x: ground.hallDoor.x + ground.hallDoor.nx * 2.6, y: .12, z: ground.hallDoor.z + ground.hallDoor.nz * 2.6, yaw: Math.atan2(-ground.hallDoor.nx, -ground.hallDoor.nz), pitch: 0 };
+  entries[0].approachRoute = [entries[0].approach, { ...ground.turn, y: .12 }, { x: ground.hallDoor.x - ground.hallDoor.nx * 1.3, z: ground.hallDoor.z - ground.hallDoor.nz * 1.3, y: .12 }];
+  entries[0].accessPath = [entries[0].approach, { x: e.x - e.nx * 1.2, y: .12, z: e.z - e.nz * 1.2 }, ...entries[0].approachRoute.slice(1)];
+  entries[1].approachRoute = [entries[1].approach, { x: ground.east.x - ground.east.nx * 1.3, z: ground.east.z - ground.east.nz * 1.3, y: .12 }];
+  entries[1].accessPath = entries[1].approachRoute;
+  const viewpoints = { exterior: { x: m.x + nx * out * 92, z: m.z + nz * out * 92, y: 2, yaw: Math.atan2(nx * out, nz * out), pitch: -.16 },
+    c118: { ...entry, y: 1.7, pitch: -.08 }, collegeEntrance: { ...entry, y: 1.7, pitch: -.08 },
+    east: { ...entries[1].approach, y: 1.7, pitch: -.08 }, eastEntrance: { ...entries[1].approach, y: 1.7, pitch: -.08 } };
   // Hide entire instanced detail batches before both color and shadow passes.
   // The source solids, roof silhouette and broad glazing remain visible. Use
   // distance to the nearest point of the 278 m-long building, not its centre.
-  const fineNames = new Set(['opto-window-head-sill', 'opto-window-mullions', 'opto-vertical-sunshade-screen', 'opto-roof-vent-plants', 'opto-roof-vent-grilles', 'opto-roof-maintenance-strips', 'opto-main-stair-handrails']);
+  const fineNames = new Set(['opto-window-head-sill', 'opto-window-mullions', 'opto-vertical-sunshade-screen', 'opto-roof-vent-plants', 'opto-roof-vent-grilles', 'opto-roof-maintenance-strips', 'opto-main-stair-handrails', 'opto-college-pyramid-frames']);
   const fineMeshes = group.children.filter(o => fineNames.has(o.name));
   const cameraPoint = new THREE.Vector3(), lodBounds = plan.bounds;
   let fineVisible = true;

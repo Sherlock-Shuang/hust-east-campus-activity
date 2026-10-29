@@ -45,11 +45,20 @@ test('C118 movement uses camera heading and original fixed step collision solver
   const plan=planOptoC118Interior(),nav=createC118Navigation({plan,spawn:plan.spawn,colliders:plan.colliders,walkSurfaces:plan.walkSurfaces});
   const x=nav.state.x;
   for(let i=0;i<120;i++)nav.step(1/60,indoorMovement(-Math.PI/2,1,0));
-  assert.ok(nav.state.x>x+4);assert.ok(Math.abs(nav.state.y-.14)<.01);
+  assert.ok(nav.state.x>x+4);assert.ok(Math.abs(nav.state.y-plan.spawn.y)<.01);
   nav.suspend();assert.equal(nav.state.speed,0);assert.equal(nav.state.vx,0);
 });
 test('walking through either side door returns instead of entering the unmodelled exterior void',()=>{
   const plan=planOptoC118Interior();assert.equal(crossedC118Door(plan,plan.spawn),false);
-  for(const sign of [-1,1])assert.equal(crossedC118Door(plan,{x:sign*11.5,z:plan.doors[0].z}),true);
+  for(const door of plan.doors){
+    const side=door.side??Math.sign(door.x),state={x:side*(plan.config.width/2+.4),z:door.z,y:door.y};
+    assert.equal(crossedC118Door(plan,state),true,door.id);
+    assert.equal(crossedC118Door(plan,{...state,y:door.y+1}),false,'flying above a doorway is not an exit');
+  }
   assert.equal(crossedC118Door(plan,{x:11.5,z:0}),false);
+});
+
+test('local door viewpoints are preserved, arbitrary interior URLs are not accepted',()=>{
+  for(const view of ['westEntry','eastEntry'])assert.equal(nearbyInterior([{...door,url:`./c118.html?view=${view}`}],walker(0,1)).url,`./c118.html?view=${view}`);
+  assert.equal(nearbyInterior([{...door,url:'https://example.com/'}],walker(0,1)).url,'./c118.html');
 });

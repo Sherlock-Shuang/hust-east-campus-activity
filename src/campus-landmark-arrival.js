@@ -1,10 +1,13 @@
 // Explicit shared tour links only. The normal URL still starts at 韵苑食堂.
 export function campusLandmarkArrival(campus,place){
   if(place==='opto'&&campus?.optoEntry)return {...campus.optoEntry,pitch:-.15};
-  if(place==='opto-main'&&campus?.optoEntries?.length){
-    const main=campus.optoEntries.find(entry=>entry.id==='opto-c118-main');
-    if(main?.approach)return {...main.approach,pitch:-.08};
+  if(place==='opto-main'&&campus?.optoEntry)return {...campus.optoEntry,pitch:-.08};
+  if(place==='opto-east'&&campus?.optoEntries?.length){
+    const east=campus.optoEntries.find(entry=>entry.url==='./c118.html?view=eastEntry');
+    if(east?.approach)return {...east.approach,pitch:-.08};
   }
+  const gate=campus?.gateViewpoints?.[place];
+  if(gate&&['east-gate','yunyuan-gate'].includes(place))return {...gate.arrival};
   if(place==='opto-exterior'&&campus?.optoViewpoints?.exterior)return {...campus.optoViewpoints.exterior,y:.14};
   if(place==='yunyuan-south'&&campus?.yunyuanSouthViewpoints?.southCanteen)return {...campus.yunyuanSouthViewpoints.southCanteen,pitch:-.12};
   if(place==='xueer'&&campus?.yunyuanSouthViewpoints?.southCanteenNorth)return {...campus.yunyuanSouthViewpoints.southCanteenNorth,pitch:-.12};
