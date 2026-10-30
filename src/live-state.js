@@ -1,8 +1,9 @@
 // Shared schema for the activity console, campus clients and server adapters.
 import {synchronizeActivityPortals} from './activity-catalog.js';
 import {normalizeC118Flood} from './c118-flood-state.js';
+import {createDefaultC118Screen,normalizeC118Screen} from './c118-screen-state.js';
 export function createDefaultLiveState() {
-  return {schemaVersion:1,revision:0,paused:false,skyQrVisible:false,c118Flood:null,pauseMessage:'请稍候，活动即将继续',phase:{id:'explore',label:'自由探索',guidance:'自由探索校园；作品开放与集合安排以主持人通知为准。'},announcement:null,markers:[],portals:[]};
+  return {schemaVersion:1,revision:0,paused:false,skyQrVisible:false,c118Flood:null,c118Screen:createDefaultC118Screen(),pauseMessage:'请稍候，活动即将继续',phase:{id:'explore',label:'自由探索',guidance:'自由探索校园；作品开放与集合安排以主持人通知为准。'},announcement:null,markers:[],portals:[]};
 }
 export function isEventActive(item, now = Date.now()) {
   return !!item && item.enabled !== false && (item.startAt == null || now >= item.startAt) && (item.endAt == null || now < item.endAt);
@@ -41,6 +42,7 @@ export function validateLiveState(input) {
   if(!Number.isInteger(revision))fail('版本必须是整数');
   const output={schemaVersion:1,revision,paused:bool(value.paused,'暂停状态'),skyQrVisible:bool(value.skyQrVisible,'天空二维码显示状态',false),pauseMessage:text(value.pauseMessage,'暂停提示',240,'请稍候，活动即将继续'),announcement:null,markers:[],portals:[]};
   output.c118Flood=normalizeC118Flood(value.c118Flood);
+  output.c118Screen=normalizeC118Screen(value.c118Screen);
   const phase=value.phase??createDefaultLiveState().phase;object(phase,'活动阶段');
   output.phase={id:id(phase.id),label:text(phase.label,'阶段名称',40,undefined,true),guidance:text(phase.guidance,'阶段引导',400,'')};
   if(value.announcement!=null){

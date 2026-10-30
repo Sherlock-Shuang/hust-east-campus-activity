@@ -6,6 +6,7 @@ import {createC118ActivitySync} from '../src/c118-activity-sync.js';
 
 const source=await readFile(new URL('../public/experiences/activity-bridge.js',import.meta.url),'utf8');
 const flood={id:'shared-flood',startAt:103000,pausedAt:null,pausedMs:0};
+const screen={mediaId:'club-promo',revision:7};
 const origin='https://campus.example';
 
 function fixture({work='opto-c118',search='?campusAttempt=visit-1',parentOrigin,ownOrigin=origin,standalone=false}={}){
@@ -28,8 +29,8 @@ test('C118 bridge carries the shared flood and server clock into its embedded sy
   const f=fixture();let mono=500;const seen=[];
   const sync=createC118ActivitySync({embedded:true,bridge:f.bridge,onState:state=>seen.push(structuredClone(state)),monotonic:()=>mono,
     liveClientFactory(){assert.fail('the room must use its existing campus connection');}});
-  f.message({type:'campus:activity',paused:false,c118Flood:flood,serverTime:100000});
-  assert.deepEqual(seen.at(-1).c118Flood,flood);assert.equal(sync.now(),100000);
+  f.message({type:'campus:activity',paused:false,c118Flood:flood,c118Screen:screen,serverTime:100000});
+  assert.deepEqual(seen.at(-1).c118Flood,flood);assert.deepEqual(seen.at(-1).c118Screen,screen);assert.equal(sync.now(),100000);
   mono+=3500;assert.equal(sync.now(),103500,'the local wall clock does not replace the host server clock');
   assert.deepEqual(f.posts,[{data:{type:'campus:ready',attemptId:'visit-1',workId:'opto-c118',level:'page_opened'},targetOrigin:origin}]);
   f.message({type:'campus:activity',paused:false,c118Flood:null,serverTime:104000});
@@ -39,8 +40,9 @@ test('C118 bridge carries the shared flood and server clock into its embedded sy
 test('every other work receives ordinary activity state with no C118 flood',()=>{
   for(const work of ['library','tasay','demo','opto-other','']){
     const f=fixture({work});
-    f.message({type:'campus:activity',paused:true,c118Flood:flood,serverTime:100000,announcement:{title:'集合'}});
+    f.message({type:'campus:activity',paused:true,c118Flood:flood,c118Screen:screen,serverTime:100000,announcement:{title:'集合'}});
     assert.equal(f.bridge.state.c118Flood,null,`flood must not reach ${work||'unidentified works'}`);
+    assert.equal(f.bridge.state.c118Screen,null,`screen commands must not reach ${work||'unidentified works'}`);
     assert.equal(f.bridge.state.paused,true);assert.equal(f.bridge.state.serverTime,100000);
     assert.equal(f.bridge.state.announcement.title,'集合');
   }
@@ -48,12 +50,12 @@ test('every other work receives ordinary activity state with no C118 flood',()=>
 
 test('bridge accepts messages only from the current same-origin parent and matching attempt',()=>{
   const f=fixture(),seen=[];f.bridge.subscribe(state=>seen.push(state));
-  const valid={type:'campus:activity',paused:false,c118Flood:flood,serverTime:100000};
+  const valid={type:'campus:activity',paused:false,c118Flood:flood,c118Screen:screen,serverTime:100000};
   for(const overrides of [{origin:'https://other.example'},{source:{}},{data:{...valid,attemptId:'old-visit'}},
     {data:{...valid,attemptId:undefined}},{data:{...valid,attemptId:'visit-1',paused:'false'}},
     {data:{...valid,attemptId:'visit-1',type:'other-event'}}])f.message(valid,overrides);
-  assert.equal(seen.length,1);assert.equal(f.bridge.state.c118Flood,null);
-  f.message(valid);assert.equal(seen.length,2);assert.deepEqual(structuredClone(f.bridge.state.c118Flood),flood);
+  assert.equal(seen.length,1);assert.equal(f.bridge.state.c118Flood,null);assert.equal(f.bridge.state.c118Screen,null);
+  f.message(valid);assert.equal(seen.length,2);assert.deepEqual(structuredClone(f.bridge.state.c118Flood),flood);assert.deepEqual(structuredClone(f.bridge.state.c118Screen),screen);
   f.message({type:'campus:dispose'},{origin:'https://other.example'});assert.equal(f.bridge.state.disposed,false);
   const alone=fixture({standalone:true});alone.message(valid,{source:alone.window});assert.equal(alone.bridge.state.c118Flood,null);
 });

@@ -7,12 +7,17 @@ import {createC118ActivitySync} from './c118-activity-sync.js';
 import {normalizeC118Flood,getC118FloodElapsed} from './c118-flood-state.js';
 import {createC118FloodEffect} from './c118-flood-effect.js';
 import {createC118FloodSensory} from './c118-flood-sensory.js';
+import {normalizeC118Screen} from './c118-screen-state.js';
+import {createC118Seating} from './c118-seating.js';
+import {createC118Audience} from './c118-audience.js';
 import './c118-viewer.css';
 
 const canvas=document.querySelector('#hall-canvas'),status=document.querySelector('#hall-status'),stick=document.querySelector('#hall-stick');
 let renderer,interior,motion,screenPlayer,raf,screenInView=false,disposed=false,paused=false,returning=false,previous=0,heading=0,pitch=0,joy=null,look=null,mouse=null,axes={forward:0,sideways:0};
 let activitySync,floodEffect,floodSensory,floodEvent=null,floodRunning=false;
 let resetFloodView=()=>{};
+let screenControl=null,audience,seating,seatedSeat=null,seatView=null,beforeSeatPose=null,seatTransition=null;
+let enterSeat=()=>{},riseFromSeat=()=>{},faceStage=()=>{};
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
 const floodStatus=document.querySelector('#hall-flood-status');
 const keys=new Set(),listeners=[];
@@ -23,7 +28,7 @@ function resetInput(){keys.clear();joy=look=mouse=null;axes={forward:0,sideways:
 function rotate(dx,dy,scale=.0025){heading-=Math.max(-250,Math.min(250,dx))*scale;pitch=Math.max(-1.35,Math.min(1.3,pitch-dy*scale));}
 function exit(){if(paused||returning)return;returning=true;screenPlayer?.update({active:false,visible:false});floodSensory?.update({active:false});resetInput();lock.release();if(window.parent!==window&&window.campusActivity)window.campusActivity.exit();else location.href='./';}
 on(document.querySelector('#hall-return'),'click',event=>{event.preventDefault();exit();});
-on(window,'keydown',event=>{if(!usable()||event.target.closest?.('a,button,input'))return;if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight'].includes(event.code)){event.preventDefault();keys.add(event.code);}if(event.code==='KeyL'&&!event.repeat){event.preventDefault();lock.toggle();}});
+on(window,'keydown',event=>{if(!usable()||event.target.closest?.('a,button,input'))return;if(event.code==='KeyE'&&!event.repeat){event.preventDefault();if(seatedSeat)riseFromSeat();else enterSeat(true);return;}if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight'].includes(event.code)){event.preventDefault();if(!seatedSeat)keys.add(event.code);}if(event.code==='KeyL'&&!event.repeat){event.preventDefault();lock.toggle();}});
 on(window,'keyup',event=>keys.delete(event.code));
 on(window,'blur',resetInput);on(document,'visibilitychange',()=>{resetInput();screenPlayer?.update({active:usable()&&!floodRunning,visible:screenInView});if(document.hidden)floodSensory?.update({active:false});});
 for(const type of ['pointerdown','keydown'])on(window,type,()=>floodSensory?.unlock(),{capture:true});
@@ -45,14 +50,20 @@ on(canvas,'pointerleave',()=>{mouse=null;});
 for(const type of ['pointerup','pointercancel','lostpointercapture'])on(canvas,type,event=>{if(joy?.id===event.pointerId){joy=null;axes={forward:0,sideways:0};stick.hidden=true;}if(look?.id===event.pointerId)look=null;});
 activitySync=createC118ActivitySync({embedded:window.parent!==window,bridge:window.campusActivity,onState:state=>{
   paused=state.paused;document.querySelector('#hall-pause').hidden=!paused;
+  try{screenControl=normalizeC118Screen(state.c118Screen);}catch{/* Keep the last valid programme during malformed updates. */}
   const hadFlood=Boolean(floodEvent);
   try{floodEvent=normalizeC118Flood(state.c118Flood);}catch{floodEvent=null;}
   if(!floodEvent){floodRunning=false;floodEffect?.update({active:false,elapsed:0});floodSensory?.update({active:false});floodStatus.hidden=true;if(hadFlood)resetFloodView();}
+  else if(Number.isFinite(state.serverTime))floodRunning=getC118FloodElapsed(floodEvent,state.serverTime)>=0;
+  // Apply pause/flood gates before a host selection can start a media request.
+  // The initial bridge callback may run before activitySync is assigned.
+  if(!usable()||floodRunning)screenPlayer?.update({active:false,visible:screenInView});
+  if(screenControl)screenPlayer?.selectMedia(screenControl);
   screenPlayer?.update({active:usable()&&!floodRunning,visible:screenInView});
   if(paused){resetInput();lock.release();floodSensory?.update({active:false});}
   if(state.disposed)dispose();
 }});
-function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(raf);resetInput();lock.dispose();listeners.forEach(fn=>fn());activitySync?.dispose();floodSensory?.dispose();floodEffect?.dispose();screenPlayer?.dispose();interior?.dispose();renderer?.dispose();}
+function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(raf);resetInput();lock.dispose();listeners.forEach(fn=>fn());activitySync?.dispose();floodSensory?.dispose();floodEffect?.dispose();screenPlayer?.dispose();audience?.dispose();interior?.dispose();renderer?.dispose();}
 on(window,'pagehide',dispose);
 try{
   renderer=new THREE.WebGLRenderer({canvas,antialias:devicePixelRatio<=1.5,powerPreference:'low-power'});
@@ -60,22 +71,52 @@ try{
   const scene=new THREE.Scene();scene.background=new THREE.Color('#26272c');
   const camera=new THREE.PerspectiveCamera(65,1,.07,90);camera.rotation.order='YXZ';
   interior=createOptoC118Interior(THREE);scene.add(interior.group);motion=createC118Navigation(interior);
+  seating=createC118Seating(interior.plan);audience=createC118Audience(THREE,{plan:interior.plan});scene.add(audience.group);
   floodEffect=createC118FloodEffect(THREE,{plan:interior.plan});scene.add(floodEffect.group);
   floodSensory=createC118FloodSensory({document,window});
   const underwaterFog=new THREE.FogExp2('#174b59',.06);
-  const timeLabel=seconds=>`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
+  const timeLabel=seconds=>{const whole=Math.max(0,Math.floor(seconds));return `${Math.floor(whole/60)}:${String(whole%60).padStart(2,'0')}`;};
   screenPlayer=createC118VideoScreen(THREE,{screen:interior.videoScreen,onState:s=>{
+    document.querySelector('#screen-title').textContent=s.title||'Vibe Coding 成果展示';
     document.querySelector('#screen-time').textContent=`${timeLabel(s.time)} / ${timeLabel(s.duration)}`;
     document.querySelector('#screen-play').textContent=s.failed?'重试播放':s.blocked?'播放':s.userPaused?'继续播放':'暂停';
     const sound=document.querySelector('#screen-sound');sound.textContent=s.muted?'开启声音':'关闭声音';sound.setAttribute('aria-pressed',String(!s.muted));
-    document.querySelector('#screen-status').textContent=s.failed?'视频暂时无法播放，可重试':!s.active?'播放已暂停':s.userPaused?'已暂停':!s.visible?'面向大屏时继续播放':s.blocked?'点击播放开始观看':s.loading?'视频缓冲中，可继续走动':s.muted?'静音播放 · 可开启背景音乐':'正在播放';
+    document.querySelector('#screen-status').textContent=s.failed?'视频暂时无法播放，可重试':!s.active?'播放已暂停':s.userPaused?'已暂停':!s.visible?'面向大屏时继续播放':s.blocked?'点击播放开始观看':s.loading?'视频缓冲中，可继续走动':s.muted?'静音播放 · 可开启声音':'正在播放';
     canvas.dataset.videoState=s.failed?'error':s.playing?'playing':s.loading?'loading':'paused';
+    canvas.dataset.mediaId=s.mediaId||'vibe-coding';
   }});
+  if(screenControl)screenPlayer.selectMedia(screenControl);
   for(const [id,action] of [['screen-play','togglePlayback'],['screen-sound','toggleSound'],['screen-restart','restart']])on(document.querySelector(`#${id}`),'click',event=>{screenPlayer[action]();if(event.detail>0)canvas.focus({preventScroll:true});});
   const screenFrustum=new THREE.Frustum(),projectionView=new THREE.Matrix4();
   const requestedView=new URLSearchParams(location.search).get('view'),start=interior.viewpoints[requestedView]||interior.spawn;
   if(start!==interior.spawn)motion.placeWalker(start);
   heading=start.yaw??0;pitch=start.pitch??0;
+  const seatStatus=document.querySelector('#seat-status'),seatEnter=document.querySelector('#seat-enter'),seatRise=document.querySelector('#seat-rise'),seatFace=document.querySelector('#seat-face');
+  function updateSeatControls(){
+    seatEnter.hidden=Boolean(seatedSeat);seatRise.hidden=seatFace.hidden=!seatedSeat;
+    seatStatus.textContent=seatedSeat?`${seatedSeat.label} · 已入座`:'入座，欣赏舞台与大屏';
+    document.querySelector('#hall-input-hint').textContent=seatedSeat?'鼠标或右侧滑动环视 · E 起身 · 回看舞台':'WASD 移动 · E 就近入座 · 鼠标环视 · L 锁定';
+    canvas.dataset.seated=String(Boolean(seatedSeat));canvas.dataset.seatId=seatedSeat?.id||'';
+    audience.setHiddenSeat(seatedSeat?.id||null);
+  }
+  function startSeatTransition(){seatTransition={at:performance.now(),position:camera.position.clone(),yaw:camera.rotation.y,pitch:camera.rotation.x,fov:camera.fov};}
+  enterSeat=(nearby=false)=>{
+    if(!usable()||seatedSeat)return;
+    const seat=(nearby&&seating.nearest(motion.state))||seating.recommendedSeat;if(!seat)return;
+    beforeSeatPose={...motion.state,yaw:heading,pitch};startSeatTransition();
+    seatedSeat=seat;seatView=seating.viewFor(seat.id);heading=seatView.yaw;pitch=seatView.pitch;
+    resetInput();updateSeatControls();canvas.focus({preventScroll:true});
+  };
+  riseFromSeat=()=>{
+    if(!usable()||!seatedSeat)return;
+    const close=beforeSeatPose&&Math.hypot(beforeSeatPose.x-seatedSeat.x,beforeSeatPose.z-seatedSeat.z)<3;
+    const pose=seating.exitPoseFor(seatedSeat.id,close?beforeSeatPose:undefined),result=pose&&motion.placeWalker(pose);
+    if(!result?.ok){seatStatus.textContent='这侧暂时无法起身，请回看舞台后重试';return;}
+    startSeatTransition();seatedSeat=seatView=null;heading=pose.yaw??heading;pitch=pose.pitch??0;
+    eyeY=motion.state.y+1.65;resetInput();updateSeatControls();canvas.focus({preventScroll:true});
+  };
+  faceStage=()=>{if(!usable()||!seatedSeat)return;startSeatTransition();heading=seatView.yaw;pitch=seatView.pitch;canvas.focus({preventScroll:true});};
+  on(seatEnter,'click',()=>enterSeat(false));on(seatRise,'click',riseFromSeat);on(seatFace,'click',faceStage);updateSeatControls();
   const fill=new THREE.DirectionalLight('#ffedd5',.7);fill.position.set(-5,10,-8);scene.add(fill);
   // Visible ceiling strips belong to the model; broad fill avoids hundreds of
   // dynamic point lights and their draw cost on event participants' phones.
@@ -86,7 +127,7 @@ try{
     canvas.dataset.floodEvent='';canvas.dataset.floodElapsed='';canvas.dataset.waterHeight='-10.00';
     // A host reset must also clear the frozen water frame during a global pause.
     if(paused&&!document.hidden&&!disposed){
-      camera.position.set(motion.state.x,motion.state.y+1.65,motion.state.z);camera.rotation.set(pitch,heading,0);
+      camera.position.set(seatView?.x??motion.state.x,seatView?.y??motion.state.y+1.65,seatView?.z??motion.state.z);camera.rotation.set(pitch,heading,0);
       renderer.render(scene,camera);
     }
   };
@@ -98,9 +139,19 @@ try{
     let forward=axes.forward+Number(pressed('KeyW','ArrowUp'))-Number(pressed('KeyS','ArrowDown')),sideways=axes.sideways+Number(pressed('KeyD','ArrowRight'))-Number(pressed('KeyA','ArrowLeft'));
     const pad=Array.from(navigator.getGamepads?.()||[]).find(p=>p?.connected);
     if(pad){const dead=v=>Math.abs(v)>.16?v:0;sideways+=dead(pad.axes[0]||0);forward-=dead(pad.axes[1]||0);heading-=dead(pad.axes[2]||0)*dt*1.8;pitch=Math.max(-1.35,Math.min(1.3,pitch-dead(pad.axes[3]||0)*dt*1.5));}
-    motion.step(dt,{...indoorMovement(heading,forward,sideways),fast:pressed('ShiftLeft','ShiftRight')});
+    if(!seatedSeat)motion.step(dt,{...indoorMovement(heading,forward,sideways),fast:pressed('ShiftLeft','ShiftRight')});
     if(crossedC118Door(interior.plan,motion.state)){exit();return;}
-    eyeY=THREE.MathUtils.damp(eyeY,motion.state.y+1.65,16,dt);camera.position.set(motion.state.x,eyeY,motion.state.z);camera.rotation.set(pitch,heading,0);
+    eyeY=THREE.MathUtils.damp(eyeY,motion.state.y+1.65,16,dt);
+    camera.position.set(seatView?.x??motion.state.x,seatView?.y??eyeY,seatView?.z??motion.state.z);camera.rotation.set(pitch,heading,0);
+    let desiredFov=seatedSeat?Math.min(90,seatView.fov+Math.max(0,1.5-camera.aspect)*30):65;
+    if(seatTransition){
+      const raw=Math.min(1,Math.max(0,(now-seatTransition.at)/550)),a=raw*raw*(3-2*raw),target=camera.position.clone();
+      camera.position.copy(seatTransition.position).lerp(target,a);
+      const angle=Math.atan2(Math.sin(heading-seatTransition.yaw),Math.cos(heading-seatTransition.yaw));
+      camera.rotation.set(THREE.MathUtils.lerp(seatTransition.pitch,pitch,a),seatTransition.yaw+angle*a,0);
+      desiredFov=THREE.MathUtils.lerp(seatTransition.fov,desiredFov,a);if(raw>=1)seatTransition=null;
+    }
+    if(Math.abs(camera.fov-desiredFov)>.01){camera.fov=desiredFov;camera.updateProjectionMatrix();}
     const floodElapsed=getC118FloodElapsed(floodEvent,activitySync.now());
     floodRunning=floodElapsed!==null&&floodElapsed>=0;
     floodEffect.update({active:floodRunning,elapsed:floodElapsed??0,reducedMotion:reducedMotion.matches});

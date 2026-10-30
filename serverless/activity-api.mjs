@@ -2,6 +2,7 @@
 // Only persistence transport, trusted edge-IP header and bounded SSE lifecycle differ.
 import {createDefaultLiveState,validateLiveState} from '../src/live-state.js';
 import {reconcileC118Flood} from '../src/c118-flood-state.js';
+import {reconcileC118Screen} from '../src/c118-screen-state.js';
 import {ACTIVITY_WORKS,activityPortals} from '../src/activity-catalog.js';
 import {createAudienceRecord,touchAudience,applyAudienceEvent,summarizeAudience,audienceDetail,aggregateAudiences,normalizeNickname,validId,PRESENCE_TTL} from '../server/audience-store.mjs';
 
@@ -183,6 +184,8 @@ export async function handleActivityAPI(request,env){
       // All timeline stamps originate here, and the SQL CAS below guards this read.
       if(!Object.hasOwn(input.state,'c118Flood'))next.c118Flood=previous.c118Flood;
       next.c118Flood=reconcileC118Flood(previous,next,Date.now());
+      if(!Object.hasOwn(input.state,'c118Screen'))next.c118Screen=previous.c118Screen;
+      try{next.c118Screen=reconcileC118Screen(previous,next);}catch(e){throw error(400,e.message);}
       next.revision=input.expectedRevision+1;
       const saved=await env.DB.prepare('UPDATE activity_state SET revision=?,payload=? WHERE key=? AND revision=?').bind(next.revision,JSON.stringify(next),'current',input.expectedRevision).run();
       if(!changes(saved))return json({error:'状态已被其他管理员修改，请载入最新状态',...await snapshot(env)},409);

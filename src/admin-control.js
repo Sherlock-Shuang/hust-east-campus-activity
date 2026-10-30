@@ -5,6 +5,7 @@ import { ACTIVITY_PHASES, ACTIVITY_WORKS, activityPortals, getTasayPortal, isTas
 import { readAdminCoordinates, bindAdminCoordinateInputs } from './admin-coordinates.js';
 import { activitySelectionSignature, selectActivitiesNow } from './activity-launch.js';
 import { getC118FloodElapsed } from './c118-flood-state.js';
+import { normalizeC118Screen } from './c118-screen-state.js';
 
 const $ = id => document.getElementById(id);
 let csrfToken = '', snapshot = null, busy = false, loggedIn = false, serverOffset = 0;
@@ -12,7 +13,8 @@ let presets = [], mapReady = false, mapView = null, defaultMapView = null, pollI
 let pauseMessageDirty = false, pauseMessageBase = '';
 let phaseDirty=false, phaseBase='', audienceData=null, audiencePending=false, selectedAudienceId=null, selectedAudience=null, detailLimit=100, searchTimer, detailRequest=0;
 let launchDirty=false, launchBase='', launchSelection=new Set();
-let skyQrReady = false;
+let skyQrReady = false,screenSelectionDirty=false;
+const screenTitles={'vibe-coding':'Vibe Coding 成果展示','club-promo':'AI 俱乐部宣传片'};
 const defaultPauseMessage = '请稍候，活动即将继续';
 let selection = { x: 58.2, z: 17.6, label: '东九 B/C 前场' };
 const NS = 'http://www.w3.org/2000/svg';
@@ -53,7 +55,17 @@ function connection(online) {
 function setBusy(value) {
   busy = value;
   document.querySelectorAll('#dashboard button, #dashboard input, #dashboard textarea, #dashboard select').forEach(el => { el.disabled = value; });
-  renderSkyQr();renderC118Flood();renderActivityChoices();syncLinkedPortalControls();
+  renderSkyQr();renderC118Flood();renderC118Screen();renderActivityChoices();syncLinkedPortalControls();
+}
+function renderC118Screen(){
+  const ready=loggedIn&&skyQrReady&&Boolean(snapshot),current=normalizeC118Screen(snapshot?.state.c118Screen);
+  const selector=$('c118-screen-media');
+  if(!screenSelectionDirty)selector.value=current.mediaId;
+  $('c118-screen-status').textContent=ready?`当前：${screenTitles[current.mediaId]}`:'等待同步';
+  $('c118-screen-note').textContent=ready&&snapshot.state.paused?'全场暂停中，恢复后播放所选影片。':ready&&snapshot.state.c118Flood?'海啸演出期间视频暂停，恢复报告厅后播放所选影片。':'厅内玩家会统一切换到所选影片；音量由每位观众控制。';
+  selector.disabled=busy||!ready;
+  $('play-c118-screen').disabled=busy||!ready;
+  $('restart-c118-screen').disabled=busy||!ready;
 }
 function renderC118Flood(){
   const ready=loggedIn&&skyQrReady&&Boolean(snapshot),event=ready?snapshot.state.c118Flood:null;
@@ -92,15 +104,15 @@ async function request(path, options = {}) {
   return data;
 }
 function showLogin(message = '') {
-  loggedIn = false; csrfToken = ''; $('dashboard').hidden = true; $('login-screen').hidden = false;
-  skyQrReady = false; renderSkyQr();renderC118Flood();
+  loggedIn = false; csrfToken = ''; screenSelectionDirty=false; $('dashboard').hidden = true; $('login-screen').hidden = false;
+  skyQrReady = false; renderSkyQr();renderC118Flood();renderC118Screen();
   launchDirty=false;launchBase='';launchSelection.clear();delete $('activity-choices').dataset.signature;
   audienceData=null;selectedAudienceId=null;selectedAudience=null;detailRequest++;$('audience-list').replaceChildren();$('audience-detail').replaceChildren();delete $('audience-list').dataset.signature;delete $('audience-detail').dataset.signature;
   $('login-error').textContent = message;
 }
 function showDashboard() {
   loggedIn = true; $('login-screen').hidden = true; $('dashboard').hidden = false;
-  skyQrReady = false; renderSkyQr();renderC118Flood();
+  skyQrReady = false; renderSkyQr();renderC118Flood();renderC118Screen();
   $('admin-password').value = '';
 }
 function applySnapshot(data) {
@@ -139,7 +151,7 @@ async function mutate(change, message) {
 function renderState() {
   if (!snapshot) return;
   const state = snapshot.state;
-  renderSkyQr();renderC118Flood();
+  renderSkyQr();renderC118Flood();renderC118Screen();
   syncPhase();
   document.querySelector('.session-bar').dataset.paused = String(state.paused);
   $('session-title').textContent = state.paused ? '全场已暂停' : `当前阶段 · ${state.phase?.label||'自由探索'}`;
@@ -594,6 +606,14 @@ $('toggle-pause').addEventListener('click', () => {
 });
 $('show-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = true; }, '二维码已在校园天空显示。'));
 $('hide-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = false; }, '天空二维码已收起。'));
+$('c118-screen-media').addEventListener('change',()=>{screenSelectionDirty=true;});
+$('play-c118-screen').addEventListener('click',()=>{
+  const mediaId=$('c118-screen-media').value;
+  mutate(state=>{const current=normalizeC118Screen(state.c118Screen);state.c118Screen={mediaId,revision:current.revision+1};},`已切换到${screenTitles[mediaId]}，报告厅内观众将从头播放。`).then(ok=>{if(ok){screenSelectionDirty=false;renderC118Screen();}});
+});
+$('restart-c118-screen').addEventListener('click',()=>{
+  mutate(state=>{const current=normalizeC118Screen(state.c118Screen);state.c118Screen={...current,revision:current.revision+1};},'已通知报告厅内观众重新播放当前影片。');
+});
 $('trigger-c118-flood').addEventListener('click',()=>mutate(state=>{
   if(state.c118Flood)throw new Error('C118演出已开启，请先恢复报告厅再触发。');
   state.c118Flood={id:id('flood'),startAt:Math.floor(now()),pausedAt:null,pausedMs:0};

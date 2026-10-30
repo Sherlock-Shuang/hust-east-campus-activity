@@ -2,12 +2,17 @@
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>光电信息大楼 · C118 报告厅</title></head>
 <body><canvas id="hall-canvas" tabindex="0" aria-label="C118 报告厅，可步行探索"></canvas>
 <header><div><span>光电信息大楼</span><h1>C118 报告厅</h1></div><a id="hall-return" href="./">返回校园</a></header>
-<aside aria-label="室内操作提示">WASD 移动 · 鼠标环视 · L 锁定<br>手机：左侧任意位置移动，右侧滑动环视</aside>
+<aside id="hall-input-hint" aria-label="室内操作提示">WASD 移动 · E 入座 · 鼠标环视 · L 锁定<br>手机：左侧任意位置移动，右侧滑动环视</aside>
 <div id="hall-status" role="status">正在准备报告厅…</div><div id="hall-stick" hidden><i></i></div>
 <section id="hall-screen-controls" aria-label="C118 大屏播放控制">
-<div><strong>Vibe Coding 成果展示</strong><span id="screen-time">0:00 / 1:52</span></div>
+<div><strong id="screen-title">Vibe Coding 成果展示</strong><span id="screen-time">0:00 / 1:52</span></div>
+<p id="screen-program-note">主持人统一选片</p>
 <p id="screen-status" role="status">面向大屏时自动播放</p>
 <nav aria-label="视频控制"><button id="screen-play" type="button">暂停</button><button id="screen-sound" type="button" aria-pressed="false">开启声音</button><button id="screen-restart" type="button">从头播放</button></nav>
+</section>
+<section id="hall-seating-controls" aria-label="报告厅入座">
+<p id="seat-status" role="status">入座，欣赏舞台与大屏</p>
+<div><button id="seat-enter" type="button">入座看大屏</button><button id="seat-face" type="button" hidden>回看舞台</button><button id="seat-rise" type="button" hidden>起身</button></div>
 </section>
 <div id="hall-pause" hidden>活动暂时暂停，请留意主持人公告</div>
 <div id="hall-flood-status" hidden><strong></strong><small>点击画面开启音效 · WASD 继续行走</small></div>

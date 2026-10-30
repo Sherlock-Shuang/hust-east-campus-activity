@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm,readFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {createLiveServer} from '../server/index.mjs';
+
+test('local host selects and repeats a programme without legacy edits resetting the current clip',{timeout:15000},async t=>{
+  const root=await mkdtemp(path.join(tmpdir(),'c118-screen-http-'));
+  const app=await createLiveServer({rootDir:root,password:'c118-screen-test-password'}),address=await app.listen(0),origin=`http://127.0.0.1:${address.port}`;
+  t.after(async()=>{await app.close();await rm(root,{recursive:true,force:true});});
+  const request=(url,init={})=>fetch(origin+url,{...init,headers:{Origin:origin,'Content-Type':'application/json',...init.headers}});
+  const login=await request('/api/admin/login',{method:'POST',body:JSON.stringify({password:'c118-screen-test-password'})});
+  const headers={Cookie:login.headers.get('set-cookie').split(';')[0],'X-CSRF-Token':(await login.json()).csrfToken};
+  const read=async()=>(await (await request('/api/live/state')).json()).state;
+  const put=(state,auth=headers)=>request('/api/admin/state',{method:'PUT',headers:auth,body:JSON.stringify({state,expectedRevision:state.revision})});
+  const save=async state=>{const r=await put(state);assert.equal(r.status,200,await r.clone().text());return (await r.json()).state;};
+  const initial=await read(),wanted={...initial,c118Screen:{mediaId:'club-promo',revision:1}};
+  assert.equal((await put(wanted,{})).status,401);
+  assert.equal((await put(wanted,{Cookie:headers.Cookie})).status,403);
+  assert.equal((await put({...wanted,c118Screen:{mediaId:'arbitrary-url',revision:1}})).status,400);
+  const selected=await save(wanted);assert.deepEqual(selected.c118Screen,wanted.c118Screen);
+  const {c118Screen,...legacy}=selected;
+  const ordinary=await save({...legacy,pauseMessage:'legacy edit'});assert.deepEqual(ordinary.c118Screen,c118Screen);
+  const repeated=await save({...ordinary,c118Screen:{...c118Screen,revision:2}});assert.equal(repeated.c118Screen.revision,2);
+  assert.equal((await put({...initial,c118Screen:{mediaId:'vibe-coding',revision:1}})).status,409);
+  assert.equal((await put({...repeated,c118Screen:{mediaId:'vibe-coding',revision:2}})).status,400);
+  const final=await read();assert.deepEqual(final,repeated);
+  assert.deepEqual(JSON.parse(await readFile(path.join(root,'server-data/live-state.json'),'utf8')),final);
+});

@@ -47,7 +47,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     }
   }
   function bridge(){
-    if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage({type:'campus:activity',attemptId:opened?.attemptId,paused:!!client.state.paused||!!skyQr?.isOpen,announcement:isEventActive(client.state.announcement,client.now())?client.state.announcement:null,c118Flood:opened?.kind==='building-interior'&&opened.id==='opto-c118'?client.state.c118Flood??null:null,serverTime:client.now()},frameOrigin);
+    if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage({type:'campus:activity',attemptId:opened?.attemptId,paused:!!client.state.paused||!!skyQr?.isOpen,announcement:isEventActive(client.state.announcement,client.now())?client.state.announcement:null,c118Flood:opened?.kind==='building-interior'&&opened.id==='opto-c118'?client.state.c118Flood??null:null,c118Screen:opened?.kind==='building-interior'&&opened.id==='opto-c118'?client.state.c118Screen??null:null,serverTime:client.now()},frameOrigin);
   }
   function loading(message,status='loading'){
     const el=$('.live-portal-loading');el.hidden=!message;el.dataset.status=status;el.textContent=message;
@@ -180,7 +180,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     if(opened&&!frame&&opened.kind!=='building-interior'){const current=portals.find(p=>p.id===opened.id);if(!current||current.url!==opened.url)closePortal('活动入口已关闭，请留意主持人通知');}
     skyQr?.refresh({visible:state.skyQrVisible===true,portalOpen:!!opened,blocked:!audienceUI?.registered});
     portalView.inert=state.paused||!!skyQr?.isOpen;
-    const nextUI=JSON.stringify([state.paused,state.pauseMessage,activeAnnouncement,state.phase,state.skyQrVisible,state.c118Flood]);
+    const nextUI=JSON.stringify([state.paused,state.pauseMessage,activeAnnouncement,state.phase,state.skyQrVisible,state.c118Flood,state.c118Screen]);
     if(nextUI!==uiSignature||force){
       uiSignature=nextUI;pause.hidden=!state.paused;pause.querySelector('p').textContent=state.pauseMessage||'请稍候，活动即将继续';
       announcementNotice.update(activeAnnouncement);
