@@ -45,12 +45,29 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
   if(!model?.records||!records?.get||!frame||typeof geoToLocal!=='function')return [];
   const source=new Map(model.records.map(r=>[r.id,r])),plan=[];
   const local=([longitude,latitude])=>geoToLocal({longitude,latitude,height:0,coordinateSystem:'EPSG:4326'},frame);
-  function add(index,record,face,{width,height,y,out=.035,surface,distance=5,floor=.14,ink,expectedSupportNames=[]}){
+  function roadApproach(id,face){
+    const road=model.roads.find(r=>r.id===id),geometry=road?.feature.geometry;
+    if(!geometry)return null;
+    const lines=geometry.type==='LineString'?[geometry.coordinates]:geometry.type==='MultiLineString'?geometry.coordinates:[];
+    let nearest;
+    for(const line of lines){const points=line.map(local);for(let i=1;i<points.length;i++){
+      const a=points[i-1],b=points[i],dx=b.x-a.x,dz=b.z-a.z,lengthSq=dx*dx+dz*dz;
+      const t=lengthSq?Math.max(0,Math.min(1,((face.x-a.x)*dx+(face.z-a.z)*dz)/lengthSq)):0;
+      const x=a.x+dx*t,z=a.z+dz*t,distance=Math.hypot(x-face.x,z-face.z);
+      if((x-face.x)*face.nx+(z-face.z)*face.nz<=distance*.4)continue;
+      if(!nearest||distance<nearest.distance)nearest={x,z,y:.14,distance,sourceId:id};
+    }}
+    return nearest;
+  }
+  function add(index,record,face,{width,height,y,out=.035,surface,distance=5,floor=.14,ink,expectedSupportNames=[],approach,approachRoadId,approachLabel}){
     if(!face)return;
     const x=face.x+face.nx*out,z=face.z+face.nz*out,yaw=Math.atan2(face.nx,face.nz);
+    const routePoint=approach||(approachRoadId&&roadApproach(approachRoadId,face));
+    const routePose=routePoint&&{...routePoint,y:routePoint.y??floor,yaw:Math.atan2(routePoint.x-x,routePoint.z-z),pitch:Math.atan2((routePoint.y??floor)+1.65-y,Math.hypot(routePoint.x-x,routePoint.z-z))};
     plan.push({id:`poem-${index}`,poetryId:IDS[index],index,featureId:record.id,
       building:record.feature?.properties?.name||(record.id==='way/1484333086'?'韵苑体育馆 · 基座':record.id),surface,x,y,z,nx:face.nx,nz:face.nz,yaw,width,height,
-      ...(ink?{ink}:{}),expectedSupportNames,expectedSupportFeatureId:[5,9].includes(index)?null:record.id,
+      ...(ink?{ink}:{}),expectedSupportNames,expectedSupportFeatureId:index===5?null:record.id,
+      ...(routePose?{approach:routePose,approachLabel}:{}),
       inspection:{x:x+face.nx*distance,y:floor,z:z+face.nz*distance,yaw,pitch:Math.atan2(floor+1.65-y,distance)}});
   }
   function sourceWall(index,id,seed,options){
@@ -64,12 +81,20 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
 
   const canteen=source.get('way/103814566'),builtCanteen=records.get(canteen?.id);
   if(canteen&&builtCanteen?.displayMode==='yunyuan-local-photo-informed'){
-    const boundary=planCanteenBoundary(canteen),base=builtCanteen.baseHeight+.08,h=builtCanteen.height;
-    const low=Math.max(base+h*.275+.975+.12,base+h*.5+.12),high=base+h*.775-.975-.12;
-    if(high-low>=1.1)for(let i=0;i<2;i++)add(i,canteen,pathPoint(boundary.rear[i],.12),{
-      // Leave the projecting floor band below both lettering and line art.
-      width:3.1,height:Math.min(1.3,high-low),y:(low+high)/2,out:.04,distance:5,surface:'canteen-rear-blank-wall',
-      expectedSupportNames:['canteen-secondary-wall'],
+    const boundary=planCanteenBoundary(canteen);
+    const entrance=pathPoint(boundary.adjacent,2.4/boundary.adjacent.length);
+    // The actual normal spawn/forecourt faces this modest blank patch above
+    // the equipment housing and below the original arrival inscription.
+    add(0,canteen,pathPoint(boundary.adjacent,5.5/boundary.adjacent.length),{
+      width:1.8,height:.92,y:3.22,out:.17,distance:5,surface:'canteen-main-entry-side-wall',
+      expectedSupportNames:['canteen-entry-adjacent-solid-panel'],
+      approach:{x:entrance.x+entrance.nx*10,z:entrance.z+entrance.nz*10,y:.14},approachLabel:'韵苑食堂入口前场 · 正常出生位置',
+    });
+    // The eastern secondary entrance is beside the existing public road,
+    // unlike the former rear wall. Keep the display frame and signage clear.
+    add(1,canteen,pathPoint(boundary.secondary,.5),{
+      width:3,height:1.8,y:2.2,out:.27,distance:5,surface:'canteen-east-secondary-entry-wall',
+      expectedSupportNames:['canteen-secondary-entry-tower'],approachRoadId:'way/97057001',approachLabel:'韵苑食堂东侧道路 · 次入口前',
     });
   }
 
@@ -87,9 +112,11 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
   sourceWall(3,'way/1023544717',[114.422122550059,30.51621457780646],{
     width:3.2,height:1.8,y:1.8,out:.06,distance:5,surface:'east-nine-a-blank-end-wall-low',expectedSupportNames:[''],
   });
-  // A small phrase below the D-wing windows, facing the existing lakeside path.
+  // Raise the lakeside phrase above the first-row windows, and move it six
+  // metres toward the path junction. It no longer sits at shoe height.
   sourceWall(8,'way/1023544717',[114.42165914853514,30.5150771016799],{
-    width:2,height:.3,y:.55,out:.06,distance:4,surface:'east-nine-d-low-blank-wall',expectedSupportNames:[''],
+    width:2.4,height:.5,y:3.8,out:.06,along:6,distance:6,surface:'east-nine-d-path-facing-wall-band',expectedSupportNames:[''],
+    approachRoadId:'way/97080595',approachLabel:'东九 D 区湖边弯道 · 步道交汇处',
   });
 
   const square=planEinsteinSquare(model,{frame,geoToLocal}),squareRecord=source.get(square.sourceId);
@@ -106,19 +133,21 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
   const opto=source.get(OPTO_BUILDING_ID),optoPlan=opto&&planOptoBuilding(opto,{frame,geoToLocal});
   if(optoPlan){
     for(const [index,e,width,height,y,distance]of[
-      [6,optoPlan.groundFloor.college,3,2.6,1.8,4],
+      [6,optoPlan.groundFloor.college,2.6,2.6,1.8,4],
       [7,optoPlan.rear,2,2.8,1.9,4.2],
-    ])add(index,opto,{x:e.x-e.nx*3+e.tx*e.width/2,z:e.z-e.nz*3+e.tz*e.width/2,nx:-e.tx,nz:-e.tz},{
+    ])add(index,opto,{x:e.x-e.nx*1.6+e.tx*e.width/2,z:e.z-e.nz*1.6+e.tz*e.width/2,nx:-e.tx,nz:-e.tz},{
       width,height,y,out:.025,distance,floor:.14,surface:index===6?'opto-left-entry-corridor-right-wall':'opto-north-foyer-right-wall',
+      approach:{x:e.x-e.nx*.35-e.tx*e.width*.15,z:e.z-e.nz*.35-e.tz*e.width*.15,y:.14},
+      approachLabel:index===6?'学院左侧楼门 · 进入门槛即见':'光电楼后门 · 进入门槛即见',
       ink:'#e4e2d3',expectedSupportNames:[index===6?'relation/13705821:central-high:ground:0':'relation/13705821:north-wing:ground:0'],
     });
   }
 
-  // The low projecting plinth is a real blank solid, below both the windows
-  // and the AI line on the first-storey band. Its front is .145m off the wall.
+  // Keep STAY on the road-facing blank plaster band, closer to the entrance
+  // and above the projecting floor strip. Leave the original AI line clear.
   sourceWall(9,'way/98867881',[114.4278446600322,30.513006891543753],{
-    width:1.4,height:.35,y:.375,out:.17,along:-15,distance:4,surface:'east-eleven-low-plinth',
-    expectedSupportNames:['plinths'],
+    width:1.8,height:.48,y:4.775,out:.04,along:-8,distance:8,surface:'east-eleven-entry-wall-band',
+    expectedSupportNames:[''],approachRoadId:'way/103495015',approachLabel:'东十一教学楼入口前道路',
   });
   return plan.sort((a,b)=>a.index-b.index);
 }

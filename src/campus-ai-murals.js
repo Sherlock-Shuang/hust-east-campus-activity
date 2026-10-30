@@ -179,7 +179,7 @@ export function planCampusAIMurals(model,records,{frame,geoToLocal}) {
     const poem=CAMPUS_POETRY.find(p=>p.id===placement.poetryId);
     if(!poem)continue;
     plan.push({...placement,...poem,id:`poem-${poem.id}`,poetryId:poem.id,
-      color:placement.ink||'#56635c',opacity:.82,fadeStart:12,maxDistance:40,
+      color:placement.ink||'#56635c',opacity:.82,fadeStart:18,maxDistance:55,
       priority:'discovery',background:null,style:'poetry'});
   }
   return plan;

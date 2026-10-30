@@ -6,7 +6,9 @@ import {mergeCampusExtension} from '../src/campus-data-merge.js';
 import {createLocalFrame,geoToLocal} from '../src/geospatial.js';
 import {createGeoScene} from '../src/geo-scene.js';
 import {createCampus3D} from '../src/campus-3d.js';
-import {getCampusPlayerSpawn} from '../src/player-experience.js';
+import {getCampusPlayerSpawn,createPlayerWorld} from '../src/player-experience.js';
+import {createPlayerMotion} from '../src/player-motion.js';
+import {campusLandmarkArrival} from '../src/campus-landmark-arrival.js';
 import {planCampusAIMurals,createCampusAIMurals} from '../src/campus-ai-murals.js';
 import {CAMPUS_POETRY} from '../src/campus-poetry-art.js';
 
@@ -118,7 +120,7 @@ test('all ten authored poems are attached to the real campus plan exactly once w
     assert.ok(item.inspection&&Number.isFinite(item.inspection.x+item.inspection.y+item.inspection.z));
     assert.ok(item.expectedSupportNames?.length,'placement records its actual blank supporting surface');
     assert.ok(!item.background);assert.ok(item.opacity>=.6&&item.opacity<=.85);
-    assert.ok(item.fadeStart>=8&&item.maxDistance<=45&&item.maxDistance>item.fadeStart);
+    assert.ok(item.fadeStart>=16&&item.maxDistance<=55&&item.maxDistance>item.fadeStart,'ordinary approach distances remain readable, with a finite distant fade');
     assert.ok(Math.hypot(item.nx,item.nz)>.999&&Math.hypot(item.nx,item.nz)<1.001);
   }
 });
@@ -138,6 +140,60 @@ test('every poem footprint stays on its intended solid surface and can be seen f
       const obstruction=new THREE.Raycaster(eye,delta.normalize(),0,distance-.005).intersectObject(campus.group,true)[0];
       assert.equal(obstruction,undefined,`${item.poetryId} inspection blocked by ${obstruction?.object.name}`);
     }
+  }
+});
+
+test('relocated poems are visible from safe ordinary route approaches, not only their close inspection points',()=>{
+  const relocated=plan.filter(p=>p.poetryId&&p.approach);
+  assert.ok(relocated.length>=6,'at least the two rear canteen, two deep corridor and two ankle-height placements need ordinary-route access');
+  const world=createPlayerWorld(model);
+  const player=createPlayerMotion({world,route:{points:[{x:400,z:400,y:.14},{x:1000,z:400,y:.14}]}});
+  for(const item of relocated){
+    const pose=item.approach;
+    assert.ok(item.approachLabel?.trim(),'name the actual entrance or walking route used for the sightline');
+    assert.ok(Number.isFinite(pose.x+pose.y+pose.z+pose.yaw+pose.pitch));
+    assert.deepEqual(campusLandmarkArrival(campus,`${item.id}-approach`),pose,'shared review link uses this ordinary route viewpoint');
+    assert.equal(player.placeWalker(pose).ok,true,`${item.poetryId}: normal walker must fit at the route approach`);
+    assert.ok(Math.abs(player.state.y-pose.y)<.04,`${item.poetryId}: approach belongs to ground level, not an airborne camera`);
+    if(pose.sourceId){
+      const road=model.roads.find(record=>record.id===pose.sourceId),geometry=road?.feature.geometry;
+      assert.ok(geometry,`${item.poetryId}: claimed approach road exists in the real map`);
+      const lines=geometry.type==='LineString'?[geometry.coordinates]:geometry.type==='MultiLineString'?geometry.coordinates:[];
+      let nearest=Infinity;
+      for(const line of lines){
+        const points=line.map(c=>geoToLocal({longitude:c[0],latitude:c[1],coordinateSystem:'EPSG:4326'},frame));
+        for(let i=1;i<points.length;i++){
+          const a=points[i-1],b=points[i],dx=b.x-a.x,dz=b.z-a.z,lengthSq=dx*dx+dz*dz;
+          const t=lengthSq?Math.max(0,Math.min(1,((pose.x-a.x)*dx+(pose.z-a.z)*dz)/lengthSq)):0;
+          nearest=Math.min(nearest,Math.hypot(pose.x-a.x-dx*t,pose.z-a.z-dz*t));
+        }
+      }
+      assert.ok(nearest<.02,`${item.poetryId}: sightline starts on its declared road, not an invented convenient point`);
+    }
+    if(item.poetryId==='life-ai')assert.ok(Math.hypot(pose.x-spawn.x,pose.z-spawn.z)<.02,'the front canteen poem is visible from the existing spawn');
+    const eye=new THREE.Vector3(pose.x,pose.y+1.65,pose.z),horizontal=Math.hypot(pose.x-item.x,pose.z-item.z);
+    assert.ok(horizontal>=1.2&&horizontal<=18,`${item.poetryId}: ordinary approach distance ${horizontal}`);
+    assert.ok(((pose.x-item.x)*item.nx+(pose.z-item.z)*item.nz)/horizontal>.25,`${item.poetryId}: not visible only at a grazing angle`);
+    assert.ok(Math.abs(Math.atan2(item.y-eye.y,horizontal))<Math.PI/4,`${item.poetryId}: does not require looking straight up or down`);
+    for(const u of [-.49,-.25,0,.25,.49])for(const v of [-.49,0,.49]){
+      const target=pointOnSign(item,item.width*u,item.height*v),delta=target.clone().sub(eye),distance=delta.length();
+      const hit=new THREE.Raycaster(eye,delta.normalize(),0,distance-.005).intersectObject(campus.group,true)[0];
+      assert.equal(hit,undefined,`${item.poetryId}: ordinary route view (${u},${v}) blocked by ${hit?.object.name}`);
+    }
+  }
+  assert.equal(campusLandmarkArrival(campus,null),null,'the normal URL keeps the existing canteen spawn');
+  assert.equal(campusLandmarkArrival(campus,'poem-unknown-approach'),null,'unknown review links cannot invent a camera pose');
+});
+
+test('poetry placements keep clear of other inscriptions on the same facade',()=>{
+  for(let i=0;i<plan.length;i++)for(let j=i+1;j<plan.length;j++){
+    const a=plan[i],b=plan[j];
+    if(!a.poetryId&&!b.poetryId)continue;
+    if(a.nx*b.nx+a.nz*b.nz<.999)continue;
+    const dx=b.x-a.x,dz=b.z-a.z;
+    if(Math.abs(dx*a.nx+dz*a.nz)>.5)continue;
+    const along=Math.abs(dx*a.nz-dz*a.nx),vertical=Math.abs(b.y-a.y);
+    assert.ok(along>=(a.width+b.width)/2+.12||vertical>=(a.height+b.height)/2+.12,`${a.id} and ${b.id} overlap or crowd the same wall`);
   }
 });
 
