@@ -31,6 +31,7 @@ import {createFrameMetrics} from './frame-metrics.js';
 import {createGraphicsRecovery} from './graphics-recovery.js';
 import {mountRuntimeDiagnostics} from './runtime-diagnostics.js';
 import {createRenderCadence} from './render-cadence.js';
+import {createVisibilityFrameClock} from './visibility-frame-clock.js';
 import {createGpuFrameTimer} from './gpu-frame-timer.js';
 // Rendering no longer depends on the removed sidebar controls.
 const layerSettings = { symbolic: true, building: true, road: true, water: true };
@@ -167,7 +168,7 @@ const graphicsRecovery=createGraphicsRecovery({canvas,
   onLost(){recoveryPose=commute?.player?.captureActivityPose?.();graphicsSuspended=true;suspendCampus();frameMetrics.reset();},
   onRestored(){
     scene.environment=daylight.rebuildEnvironment();
-    appliedBudget=null;applyPerformanceBudget();renderer.resetState();resize();lastShadowAt=-Infinity;previous=performance.now();lastFrameRendered=false;
+    appliedBudget=null;applyPerformanceBudget();renderer.resetState();resize();lastShadowAt=-Infinity;frameClock.reset();lastFrameRendered=false;
     graphicsSuspended=false;suspendCampus();frameMetrics.reset();gpuTimer.restore();renderer.info.autoReset=false;renderCadence.reset();lastRenderedAt=NaN;
   },
   onStatus(status){canvas.dataset.graphicsState=status;canvas.dataset.graphicsLosses=String(graphicsRecovery.lossCount);recoveryPanel.hidden=status==='ready';recoveryButton.hidden=status!=='reload-available';recoveryText.textContent=status==='reload-available'?'画面恢复暂未完成，可重新载入并保留活动身份与当前位置。':'正在恢复校园画面…';},
@@ -1044,16 +1045,14 @@ function updateShadowCamera(){
     sun.shadow.camera.updateProjectionMatrix();
   }
 }
-let previous = performance.now();
+const frameClock=createVisibilityFrameClock({document});
 let frameWindow=0,frameSamples=0,renderedSamples=0,renderWork=0,tickWork=0,sceneWork=0,drawWork=0;
-let drawCalls=0,triangles=0,lastFrameCpu=0,lastFrameRendered=false,wasHidden=false,lastLabelAt=-Infinity;
+let drawCalls=0,triangles=0,lastFrameCpu=0,lastFrameRendered=false,lastLabelAt=-Infinity;
 function render(now) {
   requestAnimationFrame(render);
-  const frameStart=performance.now(),elapsed=Math.max(0,now-previous),frozen=liveFrozen||graphicsSuspended||datasetLoading;
-  const dt = wasHidden?0:Math.min(elapsed/1000,0.1);
-  previous = now;
-  if(document.hidden){renderCadence.reset();lastRenderedAt=NaN;renderCpuAccumulator=0;wasHidden=true;lastFrameRendered=false;frameWindow=frameSamples=renderedSamples=renderWork=tickWork=sceneWork=drawWork=0;return;}
-  if(wasHidden){needsRender=true;lastShadowAt=-Infinity;}wasHidden=false;
+  const frameStart=performance.now(),timing=frameClock.sample(now),{elapsed,dt}=timing,frozen=liveFrozen||graphicsSuspended||datasetLoading;
+  if(timing.hidden){renderCadence.reset();lastRenderedAt=NaN;renderCpuAccumulator=0;lastFrameRendered=false;frameWindow=frameSamples=renderedSamples=renderWork=tickWork=sceneWork=drawWork=0;return;}
+  if(timing.resumed){needsRender=true;lastShadowAt=-Infinity;renderCadence.reset();lastRenderedAt=NaN;renderCpuAccumulator=0;}
   if(graphicsSuspended){renderCadence.reset();lastRenderedAt=NaN;renderCpuAccumulator=0;lastFrameRendered=false;return;}
   if(!$('load-screen').hidden){lastRenderedAt=NaN;lastFrameRendered=false;return;}
   applyPerformanceBudget();lastFrameRendered=false;

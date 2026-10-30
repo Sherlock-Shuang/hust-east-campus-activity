@@ -5,6 +5,7 @@ import {reconcileC118Flood} from '../src/c118-flood-state.js';
 import {reconcileC118Screen} from '../src/c118-screen-state.js';
 import {ACTIVITY_WORKS,activityPortals} from '../src/activity-catalog.js';
 import {createPublicStateCache} from './public-state-cache.mjs';
+import {createSharedActivityStream} from './shared-activity-stream.mjs';
 import {createAudienceRecord,touchAudience,applyAudienceEvent,summarizeAudience,audienceDetail,aggregateAudiences,normalizeNickname,validId,PRESENCE_TTL} from '../server/audience-store.mjs';
 
 const ADMIN_COOKIE='campus_admin',AUDIENCE_COOKIE='campus_audience';
@@ -37,6 +38,7 @@ const changes=result=>Number(result?.meta?.changes||0);
 // deployments or closed test databases.
 const publicStateCaches=new WeakMap();
 const presenceCaches=new WeakMap();
+const streamSchedulers=new WeakMap();
 // Display-only aggregation for snapshot fan-out. Admission and /live/state
 // still read fresh counts; no authorization decision uses this cache.
 async function streamCounts(env){
@@ -153,12 +155,32 @@ async function login(request,env,input){
   return json({authenticated:true,csrfToken:await adminCsrf(token)},200,{'Set-Cookie':setCookie(ADMIN_COOKIE,token,'/api/admin',8*3600,request)});
 }
 export const STREAM_LIFETIME_MS=240000;
+function streamScheduler(env,clock){
+  let scheduler=streamSchedulers.get(env.DB);
+  if(!scheduler){
+    scheduler=createSharedActivityStream({clock,
+      readState:()=>publicStateCache(env).read(()=>stateRow(env)),
+      readCounts:()=>streamCounts(env),
+      async renewLeases(ids,now){
+        // Bound parameters below SQLite/libSQL limits even near admission cap.
+        // UPDATE cannot resurrect a row deleted by cancellation while in flight.
+        for(let start=0;start<ids.length;start+=200){
+          const batch=ids.slice(start,start+200);
+          await env.DB.prepare(`UPDATE activity_connections SET expires_at=? WHERE id IN (${batch.map(()=>'?').join(',')})`).bind(now+45000,...batch).run();
+        }
+      },
+      onIdle(){if(streamSchedulers.get(env.DB)===scheduler)streamSchedulers.delete(env.DB);},
+    });
+    streamSchedulers.set(env.DB,scheduler);
+  }
+  return scheduler;
+}
 async function liveStream(request,env){
   const streamClock=env.STREAM_CLOCK||{now:Date.now,setTimeout,clearTimeout};
   const now=Date.now(),existing=await env.DB.prepare('SELECT COUNT(*) AS count FROM activity_connections WHERE expires_at>?').bind(now).first();if(Number(existing?.count||0)>=2500)throw error(503,'连接繁忙，请稍后重试');
   const id=crypto.randomUUID();await env.DB.prepare('INSERT INTO activity_connections (id,expires_at) VALUES (?,?)').bind(id,now+45000).run();
-  let closed=false,timer,expiryTimer,controller,lastRevision=-1,lastHeartbeat=0,phase='initial';
-  const cleanup=async()=>{if(closed)return;closed=true;streamClock.clearTimeout(timer);streamClock.clearTimeout(expiryTimer);request.signal.removeEventListener('abort',abort);await env.DB.prepare('DELETE FROM activity_connections WHERE id=?').bind(id).run().catch(()=>{});};
+  let closed=false,expiryTimer,controller,unsubscribe;
+  const cleanup=async()=>{if(closed)return;closed=true;unsubscribe?.();streamClock.clearTimeout(expiryTimer);request.signal.removeEventListener('abort',abort);await env.DB.prepare('DELETE FROM activity_connections WHERE id=?').bind(id).run().catch(()=>{});};
   const send=(name,payload)=>{
     // Bound a stalled reader's queue. Reconnection always sends the latest
     // complete snapshot, so keeping an unlimited old-command backlog is worse.
@@ -166,27 +188,13 @@ async function liveStream(request,env){
     controller.enqueue(encoder.encode(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`));
   };
   const abort=()=>{void cleanup();try{controller?.close();}catch{}};
-  const pump=async()=>{
-    if(closed)return;
-    try{
-      phase='state-read';
-      const row=await publicStateCache(env).read(()=>stateRow(env));if(closed)return;
-      phase='snapshot';
-      if(row.revision!==lastRevision){send('snapshot',{state:JSON.parse(row.payload),serverTime:Date.now(),...await streamCounts(env)});lastRevision=row.revision;}
-      const time=streamClock.now();
-      if(time-lastHeartbeat>=15000){
-        phase='lease';
-        await env.DB.prepare('UPDATE activity_connections SET expires_at=? WHERE id=?').bind(time+45000,id).run();
-        if(closed)return;send('clock',{serverTime:time});lastHeartbeat=time;
-      }
-    }catch(cause){if(!closed){
+  const failure=(cause,phase)=>{if(!closed){
       // Allow tests/operations to correlate a failed stream without exposing
       // SQL, URLs, cookies, participant identities or arbitrary error text.
       try{env.ACTIVITY_DIAGNOSTICS?.({type:'stream-failure',streamId:id,phase,code:/^[A-Z0-9_]{1,50}$/i.test(cause?.code||'')?cause.code:'STREAM_ERROR'});}catch{}
-      try{controller.error(new Error('活动连接暂时中断'));}catch{}await cleanup();}}
-    if(!closed)timer=streamClock.setTimeout(pump,1500);
+      try{controller.error(new Error('活动连接暂时中断'));}catch{}void cleanup();}
   };
-  const stream=new ReadableStream({start(c){controller=c;request.signal.addEventListener('abort',abort,{once:true});if(request.signal.aborted)abort();else{expiryTimer=streamClock.setTimeout(abort,STREAM_LIFETIME_MS);void pump();}},cancel:cleanup});
+  const stream=new ReadableStream({start(c){controller=c;request.signal.addEventListener('abort',abort,{once:true});if(request.signal.aborted)abort();else{expiryTimer=streamClock.setTimeout(abort,STREAM_LIFETIME_MS);unsubscribe=streamScheduler(env,streamClock).subscribe({id,send,error:failure,leaseAt:now});}},cancel:cleanup});
   return new Response(stream,{headers:{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no','X-Content-Type-Options':'nosniff'}});
 }
 

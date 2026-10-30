@@ -30,3 +30,16 @@ test('model errors do not expose secrets; aborted calls do not send chat',async(
  const p=createSheLoveProxy({proxy:createTasayProxy({env:{TASAY_LLM_API_KEY:'secret'},fetchImpl:async()=>new Response('secret upstream diagnostics',{status:500})})});const r=await p(request(),{audienceId:'id'});assert.equal(r.status,502);assert.ok(!(await r.text()).includes('secret'));
  const f=fixture(),abort=new AbortController();abort.abort();const req=new Request(request(),{signal:abort.signal});assert.equal((await f.handler(req,{audienceId:'id'})).status,499);assert.equal(f.calls.length,0);
 });
+test('shared model queue overload retains safe retry guidance through the analysis adapter',async()=>{
+ const handler=createSheLoveProxy({proxy:async()=>Response.json({error:{message:'当前等候人数较多，请稍后重试'}},{status:429,headers:{'Retry-After':'10'}})});
+ const response=await handler(request(),{audienceId:'id'});assert.equal(response.status,429);assert.equal(response.headers.get('retry-after'),'10');assert.match((await response.json()).error.message,/等候/);
+});
+test('both works share the same execution slots instead of starting a second upstream pool',async t=>{
+ let calls=0,resolve;const gate=new Promise(r=>{resolve=r;});
+ const proxy=createTasayProxy({env:{TASAY_LLM_API_KEY:'test-key'},maxConcurrent:1,fetchImpl:async()=>{calls++;if(calls===1)await gate;return Response.json({choices:[{message:{content:JSON.stringify(result)}}]});}});t.after(()=>proxy.dispose());
+ const direct=new Request(origin+'/api/works/tasay/default/chat/completions',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:'hello'}]})});
+ const first=proxy(direct,{audienceId:'tasay-viewer'}).then(r=>r.text());
+ for(let i=0;i<100&&calls===0;i++)await new Promise(r=>setImmediate(r));assert.equal(calls,1);
+ const pending=createSheLoveProxy({proxy})(request(),{audienceId:'she-love-viewer'});await new Promise(r=>setImmediate(r));assert.equal(calls,1);
+ resolve();await first;const response=await pending;assert.equal(response.status,200);assert.deepEqual((await response.json()).analysis,result);assert.equal(calls,2);
+});

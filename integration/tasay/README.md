@@ -66,7 +66,13 @@ const handle = createTasayProxy({env});
 const response = await handle(request, {audienceId: verifiedAudience.id});
 ```
 
-宿主必须先验证观众 cookie，绝不能从观众 JSON 任取 `audienceId`。代理自身检查同源 Origin、消息大小、请求次数、并发数、输出 token 上限；不接受客户端自选模型地址或真实模型名。默认每位观众每分钟 6 次、每进程生命周期 40 次，总并发 8。多实例部署应传入共享的 `rateLimit(audienceId)`。
+宿主必须先验证观众 cookie，绝不能从观众 JSON 任取 `audienceId`。代理自身检查同源 Origin、消息大小、请求次数、并发数、输出 token 上限；不接受客户端自选模型地址或真实模型名。默认每位观众每分钟 6 次、每进程生命周期 40 次，每个代理实例最多执行 8 个请求。多实例部署应传入共享的 `rateLimit(audienceId)`；线上数据库继续限制全场每天 500 次，本轮未提高用量预算。
+
+2026-10-30 并发优化：同一代理实例为两个 AI 作品共用最多 16 个 FIFO 等候位，每位观众最多占 1 个等候位，最长等候 12 秒；超过容量或时间返回 429 和 `Retry-After: 10`。先验证完整请求再排队，取得执行位置后才向共享配额请求预留；无效正文、排队取消和排队超时不消耗共享预算。局部频率与并发预留在异步数据库检查前完成，修复突发请求穿透原 8 并发检查的问题。响应读完、取消、断开和总超时均释放执行位置，不依赖浏览器继续读取返回流。她不一样的分析适配层保留安全的重试时间，但不自动重发可能已计费的请求。
+
+队列是每实例的短时缓冲，不是持久化任务队列，也不能使 200 条长模型请求同时执行。请求已开始原子数据库配额预留后再取消，预留仍可能已经持久化；不承诺这种竞态自动退款。正式前端已有单个进行中请求和取消控制，本轮未改叙事或重新打包游戏 UI。
+
+验证：`node --test tests/model-request-queue.test.mjs tests/tasay-proxy-pressure.test.mjs tests/she-love-proxy.test.mjs`。完全使用本地模拟上游，不调用真实付费模型；200 个同刻请求下 8 个执行、16 个等候，额外 176 个明确限流，等待位只在轮到执行时消耗配额。
 
 服务端环境变量为 `TASAY_LLM_API_KEY`、`TASAY_LLM_BASE_URL`、`TASAY_LLM_MODEL`，以及可选 `TASAY_FAST_LLM_*`。Node 可用 `loadTasayServerEnv({envFile})` 在私有服务端读取原 `.env` 的配置。生产使用托管平台的 runtime secrets；不要把它们放入 Vite 变量、源码或日志。
 
