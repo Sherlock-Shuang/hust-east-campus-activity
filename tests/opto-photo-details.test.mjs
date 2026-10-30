@@ -42,7 +42,7 @@ test('photo doors are opaque white at C118 and transparent framed glass at C1, l
     const e = b.plan.cEntry;
     const glassHit = new THREE.Raycaster(at(e, 0, 1.7, .69), new THREE.Vector3(e.tx, 0, e.tz), 0, 1.8).intersectObject(b.group, true)[0];
     assert.ok(glassHit?.object.material.transparent, 'exterior entrance remains a glass leaf');
-    assert.equal(b.entries.length, 3, 'photo details never add an unverified room or entry');
+    assert.equal(b.entries.length, 5, 'C1/C2 circulation complements the three auditorium doors');
   } finally { f.dispose(); }
 });
 

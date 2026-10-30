@@ -8,7 +8,7 @@ import {mountAudienceUI} from './audience-ui.js';
 import {ACTIVITY_WORKS} from './activity-catalog.js';
 import {mountMobileViewport} from './mobile-viewport.js';
 import {createSkyQrExperience} from './sky-qr.js';
-import {nearbyInterior,crossedInteriorDoor,interiorReturnSnapshot} from './building-interiors.js';
+import {nearbyInterior,crossedInteriorDoor,interiorReturnSnapshot,interiorExitEntry} from './building-interiors.js';
 import {createActivityBridgeMessage} from './activity-bridge-state.js';
 import {createCampusTsunami,mountCampusTsunamiNotice} from './campus-tsunami.js';
 import {campusEffectBudget} from './campus-effect-budget.js';
@@ -87,9 +87,9 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   const position=()=>{const s=getPlayer()?.state;return s?{x:s.x,y:s.y,z:s.z}:null;};
   function rememberPose(){returnPose=getPlayer()?.captureActivityPose?.();if(returnPose)try{sessionStorage.setItem('campus-return-pose',JSON.stringify({audienceId:audienceUI.client.identity.id,pose:returnPose}));}catch{}}
   function attemptEvent(type,details={},options={}){if(!opened?.openingStarted)return Promise.resolve();return record(type,{pointId:opened.id,workId:opened.workId||opened.id,attemptId:opened.attemptId,...details},options);}
-  function closePortal(reason,{restoreInterior=true}={}){
+  function closePortal(reason,{restoreInterior=true,returnEntryId}={}){
     if(!opened)return;
-    const buildingReturn=restoreInterior&&opened.kind==='building-interior'?interiorReturnSnapshot(returnPose,opened):null;
+    const buildingReturn=restoreInterior&&opened.kind==='building-interior'?interiorReturnSnapshot(returnPose,interiorExitEntry(opened,getInteriors(),returnEntryId)):null;
     attemptEvent('returned');opened.loadController?.abort();clearTimeout(loadingTimer);
     try{sessionStorage.removeItem('campus-return-pose');}catch{}
     frame?.contentWindow?.postMessage({type:'campus:dispose',attemptId:opened.attemptId},frameOrigin);
@@ -182,7 +182,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       }
     }
     if(event.data?.type==='campus:error'){opened.failed=true;clearTimeout(loadingTimer);attemptEvent('open_failed');loading('作品未能完成加载，请重试或返回校园。','error');}
-    if(event.data?.type==='campus:exit'&&!client.state.paused)closePortal();
+    if(event.data?.type==='campus:exit'&&!client.state.paused&&(!event.data.workId||event.data.workId===opened.workId))closePortal(undefined,{returnEntryId:event.data.returnEntryId});
   }
   window.addEventListener('message',message);
   function clearBeacons(){

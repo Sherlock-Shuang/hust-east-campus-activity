@@ -51,7 +51,11 @@ export function createCampusRouteFixture(){
   add('east-nine-entry-stairs','东九 A 东端门前台阶往返',[outside,a,outside],{maxY:1.14,sourceIds:['way/1023544717','east-nine-a-east-landing']});
   const arcade=model.architectureInfrastructure.viewpoints.arcade;
   add('east-nine-arcade','东九柱廊中段纵向通行',[{x:arcade.x,z:arcade.z-8},{x:arcade.x,z:arcade.z+8}],{maxY:.55,sourceIds:['way/1023544717']});
-  for(const entry of campus.optoEntries)add(entry.id,'光电楼入口至 C118 内门',entry.accessPath,{startY:entry.approach.y??.14,maxY:1.7,entry,sourceIds:[entry.id]});
+  for(const entry of campus.optoEntries){
+    // C1 is tested as its own exterior portal. Start the legacy inner-door case inside it.
+    const path=entry.id==='opto-c118-left-hall'?entry.accessPath.slice(1):entry.accessPath;
+    add(entry.id,'光电楼门厅与报告厅入口',path,{startY:entry.approach.y??.14,maxY:1.7,entry,sourceIds:[entry.id]});
+  }
   return{world,route,campus,model,cases,dispose(){campus.dispose();model.dispose();}};
 }
 

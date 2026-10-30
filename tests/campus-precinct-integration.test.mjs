@@ -28,7 +28,7 @@ test('refined precincts replace generic solids once, retain original GIS, and su
       assert.equal(campus.records.get(id).group.children.length,0,'old flat bridge geometry is removed');
       assert.ok(!model.bridgeInfrastructure.walkSurfaces.some(s=>s.sourceId===id));
     }
-    for(const place of ['einstein','opto','opto-main','opto-left','opto-rear','opto-east','yunyuan-south','xueer','east-gate','yunyuan-gate']){
+    for(const place of ['einstein','opto','opto-main','opto-left','opto-rear','opto-east','opto-c1','opto-c2','yunyuan-south','xueer','east-gate','yunyuan-gate']){
       const pose=campusLandmarkArrival(campus,place);
       assert.ok(pose&&Number.isFinite(pose.x+pose.z+pose.yaw),place);
       const route={points:[{x:pose.x+15,z:pose.z+15,y:.16},{x:pose.x+15,z:pose.z-100,y:.16}]};
@@ -36,14 +36,16 @@ test('refined precincts replace generic solids once, retain original GIS, and su
       assert.equal(player.placeWalker(pose).ok,true,`${place} visitor is not spawned in a solid`);
       assert.ok(Math.abs(player.state.y-pose.y)<.03,`${place} arrival height`);
     }
-    assert.equal(campus.optoEntries.length,3,'main-court left hall, east door and rear foyer inner door enter C118');
+    assert.equal(campus.optoEntries.length,5,'three hall entrances plus C1 and C2 connected foyer entrances');
     assert.ok(!campus.optoEntries.some(e=>e.id==='opto-c118-main'),'research-centre main staircase is not a C118 shortcut');
     for(const entry of campus.optoEntries){
       const player=createPlayerMotion({world,route:{points:[{x:400,z:400,y:.14},{x:1000,z:400,y:.14}]}});
-      assert.equal(player.placeWalker(entry.approach).ok,true);
+      // C1 now opens the connected interior; retain inner-door collision coverage from inside C1.
+      const accessPath=entry.id==='opto-c118-left-hall'?entry.accessPath.slice(1):entry.accessPath;
+      assert.equal(player.placeWalker({...accessPath[0],yaw:entry.approach.yaw}).ok,true,`${entry.id}: clear route start`);
       let previous={...player.state},crossed=null;
-      assert.ok(entry.accessPath.length>=2);
-      for(const [i,target]of entry.accessPath.slice(1).entries()){
+      assert.ok(accessPath.length>=2);
+      for(const [i,target]of accessPath.slice(1).entries()){
         let reached=false;
         for(let step=0;step<1800&&!crossed;step++){
           const dx=target.x-player.state.x,dz=target.z-player.state.z,d=Math.hypot(dx,dz);
@@ -52,7 +54,7 @@ test('refined precincts replace generic solids once, retain original GIS, and su
           crossed=crossedInteriorDoor(campus.optoEntries,previous,player.state);previous={...player.state};
         }
         assert.ok(reached||crossed,`${entry.id} segment ${i} blocked at ${JSON.stringify({x:player.state.x,y:player.state.y,z:player.state.z})}`);
-        if(crossed){assert.equal(i,entry.accessPath.length-2,'the college exterior door does not itself open the auditorium');break;}
+        if(crossed){assert.equal(i,accessPath.length-2,'the requested doorway opens at the final route segment');break;}
         player.suspend();previous={...player.state};
       }
       assert.equal(crossed?.id,entry.id,`${entry.id}: full campus colliders allow its actual route and door crossing`);

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {createOptoC118Interior} from './opto-c118-interior.js';
+import {optoFoyerExit,isInsideC118} from './opto-foyer.js';
 import {createC118Navigation,indoorMovement,crossedC118Door} from './c118-navigation.js';
 import {createPlayerPointerLock} from './player-pointer-lock.js';
 import {createC118VideoScreen} from './c118-video-screen.js';
@@ -49,7 +50,8 @@ const usable=()=>!disposed&&!paused&&!returning&&!contextLost&&!pageLifecycle?.s
 const lock=createPlayerPointerLock({canvas,document,canLock:usable,onChange:()=>resetInput(),onError:()=>{status.hidden=false;status.textContent='可直接移动鼠标环视，或在浏览器中按 L 锁定';}});
 function resetInput(){keys.clear();swimVertical=0;joy=look=mouse=null;axes={forward:0,sideways:0};stick.hidden=true;motion?.suspend();}
 function rotate(dx,dy,touch=false){if(cinema)return;const delta=controlLookDelta(dx,dy,{touch,width:innerWidth,height:innerHeight,preferences:controlsPreference});heading-=Math.max(-.8,Math.min(.8,delta.x));pitch=Math.max(-1.35,Math.min(1.3,pitch-Math.max(-.65,Math.min(.65,delta.y))));}
-function exit(){if(paused||returning)return;returning=true;screenPlayer?.update({active:false,visible:false});floodSensory?.update({active:false});resetInput();lock.release();if(window.parent!==window&&window.campusActivity)window.campusActivity.exit();else location.href='./';}
+function exit(returnEntryId){
+  returnEntryId=['opto-c1','opto-c2'].includes(returnEntryId)?returnEntryId:undefined;if(paused||returning)return;returning=true;screenPlayer?.update({active:false,visible:false});floodSensory?.update({active:false});resetInput();lock.release();if(window.parent!==window&&window.campusActivity)window.campusActivity.exit(returnEntryId);else location.href=returnEntryId?`./?place=${returnEntryId}`:'./';}
 onNavigation(document.querySelector('#hall-return'),'click',event=>{event.preventDefault();exit();});
 onNavigation(document.querySelector('#swim-exit'),'click',exit);
 onNavigation(window,'pagehide',event=>{if(!event.persisted)dispose();});
@@ -134,8 +136,8 @@ if(!disposed)try{
   if(diagnostics&&new URLSearchParams(location.search).get('gpu')==='1')gpuTimer=resources.own(createGpuFrameTimer(renderer,{enabled:true}),'gpu-timer');
   renderer.setPixelRatio(qualityBudget.pixelRatio);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;
   const scene=new THREE.Scene();scene.background=new THREE.Color('#26272c');
-  const camera=new THREE.PerspectiveCamera(65,1,.07,90);camera.rotation.order='YXZ';
-  interior=resources.own(createOptoC118Interior(THREE),'interior');scene.add(interior.group);motion=createC118Navigation(interior);
+  const camera=new THREE.PerspectiveCamera(65,1,.07,120);camera.rotation.order='YXZ';
+  interior=resources.own(createOptoC118Interior(THREE,{withFoyer:true}),'interior');scene.add(interior.group);motion=createC118Navigation(interior);
   seating=createC118Seating(interior.plan);audience=resources.own(createC118Audience(THREE,{plan:interior.plan}),'audience');scene.add(audience.group);
   floodEffect=resources.own(createC118FloodEffect(THREE,{plan:interior.plan,level:qualityBudget.waterLevel}),'flood-effect');scene.add(floodEffect.group);
   function applyQuality(budget){
@@ -166,19 +168,22 @@ if(!disposed)try{
   if(start!==interior.spawn)motion.placeWalker(start);
   heading=start.yaw??0;pitch=start.pitch??0;
   const seatStatus=document.querySelector('#seat-status'),seatEnter=document.querySelector('#seat-enter'),seatRise=document.querySelector('#seat-rise'),seatFace=document.querySelector('#seat-face'),seatLook=document.querySelector('#seat-look');
+  let inHall=isInsideC118(interior.plan,motion.state);
   function updateSeatControls(){
+    document.querySelector('header h1').textContent=inHall?'C118 报告厅':'C2 门厅 · C1 走廊';
+    canvas.setAttribute('aria-label',inHall?'C118 报告厅，可步行探索':'光电大楼门厅与走廊，可步行探索');
     seatEnter.hidden=Boolean(seatedSeat);seatRise.hidden=!seatedSeat;seatFace.hidden=!seatedSeat||cinema;seatLook.hidden=!seatedSeat||!cinema;
-    document.querySelector('#hall-seating-controls').hidden=swimming.state.active;
+    document.querySelector('#hall-seating-controls').hidden=swimming.state.active||!inHall;
     document.querySelector('#hall-swim-controls').hidden=!swimming.state.active;
     document.body.dataset.cinema=String(cinema);document.body.dataset.swimming=String(swimming.state.active);
     seatStatus.textContent=seatedSeat?`${seatedSeat.label} · ${cinema?'沉浸观影':'已入座'}`:'入座，欣赏舞台与大屏';
-    document.querySelector('#hall-input-hint').textContent=swimming.state.active?'WASD 游动 · 空格上浮 · C 下潜 · 可潜到侧门游出':seatedSeat?'鼠标或右侧滑动环视 · E 起身 · 看大屏':'WASD 移动 · E 就近入座 · 鼠标环视 · L 锁定';
+    document.querySelector('#hall-input-hint').textContent=swimming.state.active?'WASD 游动 · 空格上浮 · C 下潜 · 可潜到侧门游出':seatedSeat?'鼠标或右侧滑动环视 · E 起身 · 看大屏':inHall?'WASD 移动 · E 就近入座 · 鼠标环视 · L 锁定':'WASD 移动 · 鼠标环视 · L 锁定';
     canvas.dataset.seated=String(Boolean(seatedSeat));canvas.dataset.seatId=seatedSeat?.id||'';
     audience.setHiddenSeat(seatedSeat?.id||null);
   }
   function startSeatTransition(){seatTransition={at:performance.now(),position:camera.position.clone(),yaw:camera.rotation.y,pitch:camera.rotation.x,fov:camera.fov};}
   enterSeat=(nearby=false)=>{
-    if(!usable()||seatedSeat||swimming.state.active||floodRunning)return;
+    if(!usable()||!inHall||seatedSeat||swimming.state.active||floodRunning)return;
     const seat=(nearby&&seating.nearest(motion.state))||seating.recommendedSeat;if(!seat)return;
     beforeSeatPose={...motion.state,yaw:heading,pitch};startSeatTransition();
     seatedSeat=seat;seatView=seating.viewFor(seat.id);cinemaView=seating.focusViewFor(seat.id);cinema=true;heading=0;pitch=0;
@@ -214,8 +219,8 @@ if(!disposed)try{
       cinemaView=seatedSeat?seating.focusViewFor(seatedSeat.id):null;cinema=Boolean(seatedSeat&&saved.cinema);heading=saved.heading;pitch=saved.pitch;
       motion.placeWalker(saved.pose);eyeY=motion.state.y+1.65;seatTransition=null;
     }
-    updateSeatControls();audience.update?.({time:(activitySync?.now()??Date.now())/1000,elapsed:null,active:true,reducedMotion:calmMotion()});
-    scene.fog=null;document.querySelector('#hall-screen-controls').hidden=false;
+    inHall=isInsideC118(interior.plan,motion.state);updateSeatControls();audience.update?.({time:(activitySync?.now()??Date.now())/1000,elapsed:null,active:true,reducedMotion:calmMotion()});
+    scene.fog=null;document.querySelector('#hall-screen-controls').hidden=!inHall;
     canvas.dataset.floodEvent='';canvas.dataset.floodElapsed='';canvas.dataset.waterHeight='-10.00';
     // A host reset must also clear the frozen water frame during a global pause.
     if(paused&&!document.hidden&&!disposed&&!contextLost&&!pageLifecycle?.suspended){
@@ -233,9 +238,9 @@ if(!disposed)try{
     const frameStart=performance.now();activeRafCallbacks++;
     const serverNow=activitySync.now(),floodElapsed=getC118FloodElapsed(floodEvent,serverNow);
     floodRunning=floodElapsed!==null&&floodElapsed>=0;
-    if(floodRunning&&!floodReturn)floodReturn={seatId:seatedSeat?.id,cinema,heading,pitch,pose:{...motion.state}};
+    if(floodRunning&&inHall&&!floodReturn)floodReturn={seatId:seatedSeat?.id,cinema,heading,pitch,pose:{...motion.state}};
     if(floodRunning&&cinema)lookAround();
-    if(floodRunning&&!swimming.state.active){
+    if(floodRunning&&inHall&&!swimming.state.active){
       const body=seatView||{x:motion.state.x,y:motion.state.y+1.65,z:motion.state.z};
       if(floodEffect.sampleAt(body,floodElapsed).waterY>=body.y-.55){
         swimming.enter(body);seatedSeat=seatView=cinemaView=null;cinema=false;seatTransition=null;pitch=Math.min(pitch,.05);resetInput();updateSeatControls();
@@ -251,6 +256,10 @@ if(!disposed)try{
       if(swimming.state.exitDoorId){exit();return;}
     }else if(!seatedSeat)motion.step(dt,{...indoorMovement(heading,forward,sideways),fast:pressed('ShiftLeft','ShiftRight')});
     if(!swimming.state.active&&crossedC118Door(interior.plan,motion.state)){exit();return;}
+    if(!swimming.state.active){const destination=optoFoyerExit(interior.plan,motion.state);if(destination){exit(destination);return;}}
+    const nextInHall=swimming.state.active||isInsideC118(interior.plan,motion.state);
+    if(nextInHall!==inHall){inHall=nextInHall;updateSeatControls();}
+    canvas.dataset.location=inHall?'c118':'foyer';
     eyeY=THREE.MathUtils.damp(eyeY,motion.state.y+1.65,16,dt);
     const view=swimming.state.active?swimming.state:cinema?cinemaView:seatView;
     camera.position.set(view?.x??motion.state.x,view?.y??eyeY,view?.z??motion.state.z);camera.rotation.set(pitch,heading,0);
@@ -265,30 +274,30 @@ if(!disposed)try{
     if(Math.abs(camera.fov-desiredFov)>.01){camera.fov=desiredFov;camera.updateProjectionMatrix();}
     audience.update?.({time:floodEvent?floodEvent.startAt/1000+floodElapsed:serverNow/1000,elapsed:floodElapsed,active:true,reducedMotion:calmMotion()});
     floodEffect.update({active:floodRunning,elapsed:floodElapsed??0,reducedMotion:calmMotion()});
-    const floodSample=floodRunning?floodEffect.sampleAt(camera.position,floodElapsed):{waterY:-10,impact:0};
+    const floodSample=floodRunning&&inHall?floodEffect.sampleAt(camera.position,floodElapsed):{waterY:-10,impact:0};
     const depth=floodSample.waterY-camera.position.y;
     if(floodRunning&&!calmMotion()){
       const t=floodElapsed,hit=floodSample.impact||0,bob=depth>-.2?.018:0;
       camera.position.x+=hit*.10*Math.sin(t*24.1);camera.position.y+=hit*.075*Math.sin(t*31.7)+bob*Math.sin(t*2.1);
       camera.rotation.x+=hit*.055*Math.sin(t*19.3);camera.rotation.z=hit*.065*Math.sin(t*15.7)+bob*.25*Math.sin(t*1.7);
     }
-    floodSensory.update({active:floodRunning,elapsed:floodElapsed??0,waterDepth:depth,impact:floodSample.impact||0,reducedMotion:calmMotion()});
+    floodSensory.update({active:floodRunning&&inHall,elapsed:floodElapsed??0,waterDepth:depth,impact:floodSample.impact||0,reducedMotion:calmMotion()});
     scene.fog=floodRunning&&depth>.05?underwaterFog:null;
     if(scene.fog)underwaterFog.density=Math.min(.045,.018+depth*.004);
-    floodStatus.hidden=!floodEvent;
+    floodStatus.hidden=!floodEvent||!inHall;
     if(floodEvent){
       const message=floodElapsed<0?'门外传来低沉的轰鸣…':floodElapsed<3?'海浪正在冲破门口':floodElapsed<10?'海水猛烈涌入报告厅':floodElapsed<18?'水位正在迅速上涨':'急流持续翻涌';
       if(floodStatus.firstElementChild.textContent!==message)floodStatus.firstElementChild.textContent=message;
       floodStatus.lastElementChild.textContent=swimming.state.active?'WASD 游动 · 空格上浮 · C 下潜':'点击画面开启音效 · 海水上涨后可游泳';
     }
-    screenControls.hidden=floodRunning;
+    screenControls.hidden=floodRunning||!inHall;
     if(now-lastHudAt>=100||canvas.dataset.floodEvent!==(floodEvent?.id||'')){
       lastHudAt=now;if(swimming.state.active)swimDepth.textContent=depth>.2?`水下 ${depth.toFixed(1)} 米`:'水面 · 可下潜';
       canvas.dataset.swimming=String(swimming.state.active);canvas.dataset.cinema=String(cinema);
       canvas.dataset.floodEvent=floodEvent?.id||'';canvas.dataset.floodElapsed=floodElapsed===null?'':floodElapsed.toFixed(2);canvas.dataset.waterHeight=String(floodSample.waterY.toFixed(2));
     }
     camera.updateMatrixWorld();projectionView.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);screenFrustum.setFromProjectionMatrix(projectionView);
-    screenInView=camera.position.z>interior.videoScreen.position.z&&screenFrustum.intersectsObject(interior.videoScreen);
+    screenInView=inHall&&camera.position.z>interior.videoScreen.position.z&&screenFrustum.intersectsObject(interior.videoScreen);
     if(ready)screenPlayer.update({active:usable()&&!floodRunning,visible:screenInView});
     interior.update?.(camera);
     // Input, walking, swimming, event clocks and poses above remain RAF driven.

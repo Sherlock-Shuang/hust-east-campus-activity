@@ -116,7 +116,7 @@ test('ground openings retain overhead solids, adjacent walls and the bounded foy
     assert.ok(visibleSegment(local(plan.rear,side*2.4,2),local(plan.rear,side*2.4,-1),1.65),'fixed side glazing remains visible');
   }
   assert.equal(JSON.stringify([base,extension]),sourceBefore,'source GIS untouched');
-  assert.equal(campus.optoEntries.length,3,'only the rear inner door is added as the confirmed auditorium entrance');
+  assert.equal(campus.optoEntries.length,5,'three auditorium entries plus the confirmed C1/C2 foyer doors');
 });
 
 test('both explicit north arrival links place walk and spider on clear ground',()=>{

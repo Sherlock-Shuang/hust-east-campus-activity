@@ -38,7 +38,7 @@ test('every real campus doorway carries the host flood and playlist through the 
   const model=createGeoScene(THREE,new THREE.Scene(),{...source,features:[feature]},frame,geoToLocal);
   const building=createOptoBuilding(THREE,model.buildings[0],{frame,geoToLocal});
   try{
-    assert.equal(building.entries.length,3);
+    assert.equal(building.entries.length,5);
     for(const entry of building.entries){
       const pose=depth=>({x:entry.doorGate.center.x+entry.doorGate.normal.x*depth,y:entry.y,
         z:entry.doorGate.center.z+entry.doorGate.normal.z*depth,mode:'walk',grounded:true});
@@ -129,4 +129,11 @@ test('pause releases room input and disposal removes message listeners and preve
   f.message({type:'campus:activity',paused:false,c118Flood:null,serverTime:120000});
   assert.equal(seen.length,count);assert.equal(f.bridge.ready('runtime_ready'),false);assert.equal(f.bridge.exit(),false);
   assert.equal(f.bridge.fail('late error'),false);assert.equal(f.posts.length,postCount);
+});
+
+test('only the C118 bridge can request a named C1/C2 return, with the active attempt retained',()=>{
+  const f=fixture();assert.equal(f.bridge.exit('opto-c1'),true);
+  assert.deepEqual(f.posts.at(-1),{data:{type:'campus:exit',attemptId:'visit-1',workId:'opto-c118',returnEntryId:'opto-c1'},targetOrigin:origin});
+  f.bridge.exit('https://other.example');assert.equal(f.posts.at(-1).data.returnEntryId,undefined);
+  const unrelated=fixture({work:'tasay'});unrelated.bridge.exit('opto-c2');assert.equal(unrelated.posts.at(-1).data.returnEntryId,undefined);
 });

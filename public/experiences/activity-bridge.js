@@ -31,7 +31,7 @@
       sent.add(level);document.documentElement.dataset.campusWorkStatus=level;return send('campus:ready',{level});
     },
     fail(message){if(current.disposed)return false;document.documentElement.dataset.campusWorkStatus='failed';return send('campus:error',{message:String(message).slice(0,240)});},
-    exit(){if(current.paused||current.disposed)return false;return send('campus:exit');},
+    exit(returnEntryId){if(current.paused||current.disposed)return false;return send('campus:exit',workId==='opto-c118'&&['opto-c1','opto-c2'].includes(returnEntryId)?{returnEntryId}:{});},
   };
   function message(event){
     if(current.disposed||window.parent===window||event.source!==window.parent||event.origin!==parentOrigin||event.data?.attemptId!==attemptId)return;

@@ -64,14 +64,16 @@ for(const mode of ['walk','spider'])for(const fast of [false,true]){
         if(poll.crossed)break;
       }
       for(let i=0;i<24&&!poll.crossed;i++)poll.update();
-      assert.equal(poll.crossed?.id,entry.id,`${entry.id} does not open at realistic polling`);
-      assert.equal(poll.crossed.url,entry.url);
+      // The exterior C1 route now opens the connected foyer before its inner hall door.
+      const firstEntry=entry.id==='opto-c118-left-hall'?campus.optoEntries.find(e=>e.id==='opto-c1'):entry;
+      assert.equal(poll.crossed?.id,firstEntry.id,`${entry.id} does not open at realistic polling`);
+      assert.equal(poll.crossed.url,firstEntry.url);
       assert.ok(poll.nearSeen,'an accessible doorway also offers Enter/click admission');
     }
   });
 }
 
-test('spider sprint crosses all three real doors at every 120 Hz / 200 ms polling phase',()=>{
+test('spider sprint crosses all five real doors at every 120 Hz / 200 ms polling phase',()=>{
   for(const entry of campus.optoEntries)for(let phase=0;phase<24;phase++){
     const p=motion();assert.equal(p.placeMode(doorPose(entry,2.8),'spider').ok,true);
     const poll=detector(p,phase),normal=entry.doorGate.normal;

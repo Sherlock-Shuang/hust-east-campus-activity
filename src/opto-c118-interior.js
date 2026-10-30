@@ -1,3 +1,4 @@
+import {connectOptoFoyer,createOptoFoyer} from './opto-foyer.js';
 /**
  * C118 report hall, revised against two participant-provided rear/side photographs.
  * Colours and stage silhouette are photo observations; dimensions/row count are
@@ -122,12 +123,13 @@ export function planOptoC118Interior(options = {}) {
   rearEntry.yaw=Math.atan2(rearEntry.x,rearEntry.z-(stageFront-2.4));
   const exits=doors.map(d=>({id:`${d.id}-return`,doorId:d.id,x:d.x+d.side*.15,y:d.y,z:d.z,radius:1.15,polygon:rect(d.side<0?-halfW-1.5:halfW-.15,d.z-1.1,d.side<0?-halfW+.15:halfW+1.5,d.z+1.1)}));
   const exit={...exits.find(e=>e.doorId===legacyDoor.id),id:'c118-return'};
-  return{id:'opto-c118',config:c,evidence:OPTO_C118_EVIDENCE,dimensions:'photo-estimate',bounds:{minX:-halfW-1.6,maxX:halfW+1.6,minZ:front,maxZ:back,minY:c.floorY,maxY:c.floorY+c.height},
+  const plan={id:'opto-c118',config:c,evidence:OPTO_C118_EVIDENCE,dimensions:'photo-estimate',bounds:{minX:-halfW-1.6,maxX:halfW+1.6,minZ:front,maxZ:back,minY:c.floorY,maxY:c.floorY+c.height},
     stage:{polygon:stagePolygon,front:stageFront,back:stageBack,halfWidth:stageHalfW,height:c.floorY+c.stageHeight},
     doors,seats,seatRows,blocks,aisles,stairs,audienceSteps,terraces,crossAisle,rearLanding,guards,wallSegments,lectern,piano,colliders,walkSurfaces,spawn,exit,exits,
     viewpoints:{entry:{...spawn},westEntry:{...spawn},eastEntry:{x:halfW-1.05,y:c.floorY,z:legacyDoor.z,yaw:.5,pitch:.06},rearEntry,middle:{x:(centreHalf+sideInner)/2,y:crossAisle.y,z:crossAisle.z,yaw:0,pitch:-.19},
       front:{x:0,y:c.floorY,z:stageFront+1.55,yaw:0,pitch:.14},frontDoor:{x:-halfW+1.05,y:c.floorY,z:legacyDoor.z,yaw:-1.1,pitch:.06},
       rear:{x:(centreHalf+sideInner)/2,y:rearY,z:lastRow+1,yaw:0,pitch:-.25}},seatCount:seats.length,layoutEstimated:true};
+  return options.withFoyer?connectOptoFoyer(plan):plan;
 }
 
 /** No document/canvas, fetch, timer, input bindings or source-map mutations. */
@@ -269,8 +271,8 @@ export function createOptoC118Interior(THREE,options={}) {
     for(let j=0;j<4;j++){box('c118-side-light-arms',black,x-sign*.52,top-2.2-j*.85,rackZ,.5,.06,.06);box('c118-side-stage-spots',black,x-sign*.72,top-2.2-j*.85,rackZ,.22,.18,.32,0,sign*.35);}
   }
   const rearY=plan.seatRows.at(-1).y;
-  box('c118-rear-wall',wall,0,(c.floorY+top)/2,D,.18+c.width,c.height,.18);
-  for(let i=0;i<12;i++)box('c118-rear-acoustic-panels',wallPanel,-W+.95+i*(c.width-1.9)/11,(rearY+top)/2,D-.13,1.58,top-rearY-.5,.06);
+  if(!plan.foyer)box('c118-rear-wall',wall,0,(c.floorY+top)/2,D,.18+c.width,c.height,.18);
+  if(!plan.foyer)for(let i=0;i<12;i++)box('c118-rear-acoustic-panels',wallPanel,-W+.95+i*(c.width-1.9)/11,(rearY+top)/2,D-.13,1.58,top-rearY-.5,.06);
   box('c118-ceiling',ceiling,0,top+.06,0,c.width,.12,c.depth);
   for(let iz=0;iz<8;iz++){
     const z=-D+2+iz*(c.depth-4)/7;
@@ -331,11 +333,12 @@ export function createOptoC118Interior(THREE,options={}) {
     b.matrices.forEach((m,i)=>o.setMatrixAt(i,m));o.instanceMatrix.needsUpdate=true;o.computeBoundingSphere();
     o.receiveShadow=true;o.castShadow=false;o.userData.dimensions='photo-estimate';if(b.fine){o.userData.detailCenterZ=b.zValues.reduce((a,v)=>a+v,0)/b.zValues.length;detailMeshes.push(o);}group.add(o);
   }
+  const foyer=plan.foyer?createOptoFoyer(THREE,plan):null;if(foyer)group.add(foyer.group);
   group.updateMatrixWorld(true);
   let disposed=false;
   const update=camera=>{const p=camera?.position||camera;for(const mesh of detailMeshes)mesh.visible=!p||Math.abs(p.z-mesh.userData.detailCenterZ)<13;};
   return {group,plan,videoScreen,colliders:plan.colliders,walkSurfaces:plan.walkSurfaces,
     infrastructure:{barriers:plan.colliders,walkSurfaces:plan.walkSurfaces},
     spawn:plan.spawn,exit:plan.exit,exits:plan.exits,bounds:plan.bounds,viewpoints:plan.viewpoints,update,
-    dispose(){if(disposed)return;disposed=true;group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.removeFromParent();group.clear();}};
+    dispose(){if(disposed)return;disposed=true;foyer?.dispose();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.removeFromParent();group.clear();}};
 }

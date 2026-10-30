@@ -1,7 +1,7 @@
 // Building exploration is independent of hosted works and never emits a game
 // opening/completion event. It is still subject to the host's shared pause.
 const onFoot=state=>state&&['walk','spider'].includes(state.mode)&&['x','y','z'].every(k=>Number.isFinite(state[k]))&&state.grounded!==false;
-const portal=entry=>({...entry,kind:'building-interior',workId:'opto-c118',url:/^\.\/c118\.html(?:\?view=(?:westEntry|eastEntry|rearEntry))?$/.test(entry.url||'')?entry.url:'./c118.html'});
+const portal=entry=>({...entry,kind:'building-interior',workId:'opto-c118',url:/^\.\/c118\.html(?:\?view=(?:westEntry|eastEntry|rearEntry|c1Lobby|c2Lobby))?$/.test(entry.url||'')?entry.url:'./c118.html'});
 function gatePosition(gate,state){
   if(!gate||!['x','z'].every(k=>Number.isFinite(gate.center?.[k])&&Number.isFinite(gate.normal?.[k])))return null;
   const length=Math.hypot(gate.normal.x,gate.normal.z);
@@ -43,5 +43,12 @@ export function crossedInteriorDoor(entries,previous,current){
 export function interiorReturnSnapshot(saved,entry){
   const pose=entry?.returnPose;
   if(!saved||!pose||!['x','y','z'].every(k=>Number.isFinite(pose[k])))return saved;
-  return {...saved,state:{...saved.state,x:pose.x,y:pose.y,z:pose.z,vx:0,vz:0,speed:0,verticalSpeed:0,grounded:true}};
+  const facing=['opto-c1','opto-c2'].includes(entry.id)&&Number.isFinite(pose.yaw)?{lookHeading:pose.yaw,yawOffset:0,pitch:0,manualPitch:true}:{};
+  return {...saved,...facing,state:{...saved.state,...('lookHeading' in facing?{yaw:pose.yaw}:{}),x:pose.x,y:pose.y,z:pose.z,vx:0,vz:0,speed:0,verticalSpeed:0,grounded:true}};
+}
+
+/** Exit identities are resolved against host-owned doors, never iframe coordinates. */
+export function interiorExitEntry(opened,entries,returnEntryId){
+  if(opened?.kind!=='building-interior'||opened.workId!=='opto-c118'||!['opto-c1','opto-c2'].includes(returnEntryId))return opened;
+  return entries?.find(entry=>entry.id===returnEntryId&&entry.workId==='opto-c118')||opened;
 }

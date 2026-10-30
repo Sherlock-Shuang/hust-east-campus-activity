@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createCampusRouteFixture,replayCampusSegment,ROUTE_FRAME_PROFILES} from './helpers/campus-route-replay.mjs';
 
-test('complete campus collider world keeps 17 authored walking segments traversable under six input/frame profiles',()=>{
+test('complete campus collider world keeps 19 authored walking segments traversable under six input/frame profiles',()=>{
   const fixture=createCampusRouteFixture();
   try{
-    assert.equal(fixture.cases.length,17,'keep all named districts and three C118 entrances covered');
+    assert.equal(fixture.cases.length,19,'keep all named districts, three C118 entrances and both foyer entrances covered');
     assert.ok(fixture.world.buildings.length>300,'use the reconstructed full collision world, not isolated boxes');
     for(const segment of fixture.cases)for(const profile of ROUTE_FRAME_PROFILES){
       const result=replayCampusSegment(fixture,segment,profile);

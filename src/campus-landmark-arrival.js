@@ -9,6 +9,7 @@ export function campusLandmarkArrival(campus,place){
     if(fromApproach)return poem?.approach?{...poem.approach}:null;
     if(poem?.inspection)return {...poem.inspection};
   }
+  if(['opto-c1','opto-c2'].includes(place)){const entry=campus?.optoEntries?.find(e=>e.id===place);return entry?.approach?{...entry.approach}:null;}
   if(place==='opto-passage'&&campus?.optoViewpoints?.northPassage)return {...campus.optoViewpoints.northPassage};
   if(place==='opto-rear'&&campus?.optoViewpoints?.rearEntrance)return {...campus.optoViewpoints.rearEntrance};
   if(place==='opto-left'&&campus?.optoViewpoints?.leftCourtyard)return {...campus.optoViewpoints.leftCourtyard};
