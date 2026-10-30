@@ -75,6 +75,7 @@ Node 24.22.1，两套 serverless handler、两套客户端，共享新建本地 
 - SQL 共 56,900 次，COUNT 1,181 次。上一轮同类记录为 88,727 / 33,587，约减少 35.9% / 96.5%。两轮请求量略有差别，上一轮 Node 25.9；不是严格同版本延迟 A/B。
 - 已加入响应体中断、数据库故障、慢消费者和重连回归。此前一次旧测试在 19 分钟时的失败原因未被复现，不宣称已经定位其根因。
 - 最终合并代码另跑 100 人 5 分钟：零错误/重试，90 次自然连接轮换、10 次主动重连，全部主持命令覆盖通过，P95 1,465 ms；结束后租约为 0。文件内 SQL 8,712 次，终端随后多出的 101 次为收尾清理，不混用两个计数。
+- 正式域名另做只读真实 SSE：Node 24 直连，240.447 秒自然轮换，16 次时钟消息，最大间隔 15.137 秒；重连 371 ms 取得同一 revision 59。未创建观众或改主持状态，此时 revision 未变化，不能代替广播新命令验证。
 
 原始结果：`artifacts/performance-phase2/soak-100-30min.json`。这是连接与统计测试，**不是 100 台三维设备同屏、CDN 下载或公网 Turso 延迟测试**。
 
@@ -133,3 +134,5 @@ node scripts/soak-activity-local.mjs --seconds 1800 --audiences 100 --heartbeat-
 - 本轮没有证明方案中所有期望百分比；未达到的数值与设备前置条件如实保留，不以桌面截图代替验收。
 
 模块说明：[校园](PERFORMANCE-PHASE2-CAMPUS.md)、[C118/室外效果](PERFORMANCE-PHASE2-C118.md)、[作品资源](WORK-ASSET-PERFORMANCE-PHASE2-2026-10-30.md)。
+
+公网核对发现并修复了路由fragment未同步至实际 `vercel.json` 的问题：新增内容哈希模型原先返回默认重验证策略。现用 `npm run sync:routes` 同步，构建前强制检查，并覆盖未来Vite生成的哈希JS/CSS。原服务配置与所有旧路由保留，增加16条缓存路由；3项部署专项及重新资源构建通过。实际公网缓存验证与作品真实画面记录在 `artifacts/performance-phase2/public-release/`，不以本地HTTP测试冒充CDN结果。

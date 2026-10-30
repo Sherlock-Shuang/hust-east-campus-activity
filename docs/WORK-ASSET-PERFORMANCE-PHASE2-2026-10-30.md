@@ -55,6 +55,8 @@ node integration/library/prepare-library-performance.mjs
 
 `optimize`仅生成`.staging/library-optimized`可回退候选，人工视觉与结构检查通过后才`prepare`更新白名单与pack。不要提交.tools、.staging、Unity制作工程或原礼物资料。默认生产依赖不变。
 
+每次pack更新后执行 `npm run sync:routes` 并提交 `vercel.json`。Vercel在build之前读取路由，materialize生成的fragment本身不会自动发布；`build:vercel`已增加一致性检查，避免新哈希资源漏掉immutable配置。
+
 真实Unity候选的重建命令（构建输出目录必须是尚不存在的独立目录）：
 
 ```sh

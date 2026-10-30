@@ -25,6 +25,9 @@ export function createRoutes(manifest){
     const mutableDocument=/^(?:text\/(?:html|javascript|css)|application\/json)/.test(entry.mime);
     routes.push({src:source,headers:{'Content-Type':entry.mime,'Cache-Control':hashedAsset?'public, max-age=31536000, immutable':mutableDocument?'no-cache':'public, max-age=3600'},continue:true});
   }
+  // Vite produces new content-hashed chunks at build time, after Vercel has
+  // read its config. Do not pin their cache policy to old manifest filenames.
+  routes.push({src:'^/assets/[^/]+-[A-Za-z0-9_-]{8,}\\.(?:js|css)$',headers:{'Cache-Control':'public, max-age=31536000, immutable'},continue:true});
   routes.push(
     {src:'^/api/games/?$',dest:'/works/library/api/games.json',methods:['GET','HEAD']},
     {src:'^/works/library/api/games/?$',dest:'/works/library/api/games.json',methods:['GET','HEAD']},

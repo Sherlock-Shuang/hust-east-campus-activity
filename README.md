@@ -47,6 +47,8 @@ node --env-file=.env.production.local serverless/migrate.mjs
 
 部署应通过 Git 集成：本轮运行资源压缩源约 361 MB；仓库按块保存，构建时校验 SHA-256 并还原真实资源，不经 API 传输大模型。新增哈希资源与原资源共存，观众只在进入对应作品时请求所选版本，不会下载全部资源包。`.env*`、`.vercel/`、`server-data/`、`dist/` 均不提交。
 
+更新 `asset-source/manifest.json` 后执行 `npm run sync:routes`，把更新后的 `vercel.json` 一起提交。Vercel 在构建前读取路由，不能只生成 `routes.generated.json`；构建会检查两者一致，新的 Vite 哈希 JS/CSS 也有独立缓存规则。
+
 ## 作品、控制台与配置
 
 | 入口 | 内容 |
