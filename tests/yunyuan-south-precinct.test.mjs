@@ -58,9 +58,38 @@ test('the gallery is a thin overhead deck with an unobstructed ground-floor rout
   close(m.groundAt(p.x,p.z,0,.14).height,.14);assert.ok(!made.infrastructure.buildings.some(b=>b.id===YUNYUAN_SOUTH_BUILDING_ID),'solid generic footprint replaced by two west-side hall volumes');
 });
 
+test('photographed triple-lane student-one stairs remain climbable on both sides of the new divider rails',()=>{
+  const stair=made.plan.stairs.find(s=>s.id==='way/110398904'),dx=(stair.b.x-stair.a.x)/stair.length,dz=(stair.b.z-stair.a.z)/stair.length;
+  const dividers=made.plan.rails.filter(r=>r.id.startsWith(stair.id)&&r.divider);
+  assert.equal(dividers.length,2);assert.ok(stair.width>=6);
+  for(const offset of[-stair.width/3,0,stair.width/3]){
+    const m=motion(),start={x:stair.first.x-dx*.8-dz*offset,z:stair.first.z-dz*.8+dx*offset,yaw:Math.atan2(-dx,-dz)};
+    assert.equal(m.placeWalker(start).ok,true);
+    for(let i=0;i<6000&&Math.hypot(m.state.x-start.x,m.state.z-start.z)<stair.run+stair.upperLandingLength+1;i++){
+      m.step(1/120,{forward:.45});
+      assert.equal(m.state.blockedReason,'',`lane ${offset} clears steel rails and porch columns`);
+    }
+    close(m.state.y,3.54,.02);
+  }
+});
+
+test('blue-green canopy has headroom over the gallery and its fine supports disappear at distance',()=>{
+  const canopy=made.group.getObjectByName('south-glazed-gallery-canopy'),frameMesh=made.group.getObjectByName('south-canopy-frame');
+  assert.ok(canopy?.isInstancedMesh);assert.ok(frameMesh?.isInstancedMesh);
+  made.group.updateMatrixWorld(true);
+  const bounds=new THREE.Box3().setFromObject(canopy);
+  assert.ok(bounds.min.y>made.plan.galleryY+2.2,'standing players have unobstructed headroom');
+  assert.ok(bounds.max.y<made.plan.height,'canopy fits below the main roof');
+  made.update({x:10000,z:10000});assert.equal(frameMesh.visible,false);assert.equal(canopy.visible,true);
+  made.update(null);assert.equal(frameMesh.visible,true);
+});
+
 test('scene geometry remains finite, is batched, and disposing twice frees each small procedural texture once',()=>{
   made.group.updateMatrixWorld(true);let drawCalls=0,instances=0;
   made.group.traverse(o=>{assert.ok(o.matrixWorld.elements.every(Number.isFinite));if(o.isMesh){drawCalls++;if(o.isInstancedMesh)instances+=o.count;for(const n of o.geometry.attributes.position.array)assert.ok(Number.isFinite(n));}});
   assert.ok(drawCalls<40,`headless model uses ${drawCalls} batches`);assert.ok(instances>400);
   const isolated=createYunyuanSouthPrecinct(THREE,model,{frame,geoToLocal}),textures=new Set();isolated.group.traverse(o=>{if(o.material?.map)textures.add(o.material.map);});let disposals=0;for(const t of textures)t.addEventListener('dispose',()=>disposals++);isolated.dispose();isolated.dispose();assert.equal(disposals,textures.size);assert.equal(textures.size,1);
+  const gpuCheck=createYunyuanSouthPrecinct(THREE,model,{frame,geoToLocal}),instanceDisposals=new Map();
+  gpuCheck.group.traverse(o=>{if(o.isInstancedMesh){instanceDisposals.set(o,0);o.addEventListener('dispose',()=>instanceDisposals.set(o,instanceDisposals.get(o)+1));}});
+  gpuCheck.dispose();gpuCheck.dispose();assert.ok(instanceDisposals.size>0);for(const count of instanceDisposals.values())assert.equal(count,1,'instance attributes release exactly once');
 });

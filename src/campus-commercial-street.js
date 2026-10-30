@@ -9,12 +9,17 @@ export const CBD_SHOPS=Object.freeze([
   {id:'burger-king',title:'汉堡王',subtitle:'BURGER KING',poiId:'node/11395851428',buildingId:'way/1228820964'},
   {id:'zhou-mapo',title:'周麻婆',subtitle:'',poiId:'node/11395851431',buildingId:'way/1228820963'},
   {id:'oxygen',title:'氧气层',subtitle:'',poiId:'node/11395851434',buildingId:'way/1228820965'},
+  {id:'xiabu',title:'呷哺呷哺',subtitle:'',poiId:'node/11395851429',buildingId:'way/1228820964'},
+  {id:'yoshinoya',title:'吉野家',subtitle:'YOSHINOYA',poiId:'node/11395851433',buildingId:'way/1228820965'},
+  {id:'seven-eleven',title:'7-ELEVEN',subtitle:'',poiId:'node/11395851432',buildingId:'way/1228820963'},
 ]);
 export const COMMERCIAL_EVIDENCE=Object.freeze({
-  photo:'https://www.sohu.com/a/370401712_771598',photoPublished:'2020-02-03',
+  photo:'user-provided east-campus photographs, received 2026-10-30',photoPublished:'not published; capture time not verified',
+  photoFiles:['883cd40f52827573d3974513d878ed5a.jpg','e31bc8a07adb7d1b34e7b14b6ff3e4f1.jpg','43c334aebc39317809895c21fb3d115b.jpg','0e01a27fa3dfa814b793a7cfd85fd55e.jpg'],
+  historicPhoto:'https://www.sohu.com/a/370401712_771598',
   oxygenFloor:'https://dekrt.cn/tutorial/delicious/',
-  observed:'东CBD实景：低平棕檐汉堡王玻璃亭、后方灰砖坡屋顶、西侧米黄两层楼、铺地与花箱桌椅。学一楼下历史照片有玻璃门面。',
-  uncertainty:'Source footprints and shop POIs are retained. Heights, pavilion subdivision, shop widths and street furnishings are photo-informed estimates. Oxygen is placed upstairs following the published account; its sign styling and the Zhou Mapo facade are approximations, not a verified current elevation. Unidentified canteen shops have no invented tenant names.',
+  observed:'用户实拍校准：汉堡王黑棕低平檐、白字双面店招和通高玻璃；呷哺呷哺灰坡顶、屋顶字架及菱形镂空；白墙两层楼竖长窄窗；氧气层 O₂ CAFE 在吉野家红橙色门面上层；内街可见 7-Eleven 条纹招牌。',
+  uncertainty:'Source footprints and shop POIs are retained. Heights, pavilion subdivision, shop widths and street furnishings remain photo-informed estimates. The Zhou Mapo elevation is still unverified. The photographed bakery/service-centre block is not assigned to an uncertain neighbouring footprint. Unidentified canteen shops have no invented tenant names.',
 });
 const BASE=.14;
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
@@ -65,19 +70,21 @@ export function planCampusCommercialStreet(model,{frame,geoToLocal,southPlan}={}
     const sourceBuilding=buildings.get(shop.buildingId),face=faceFor(sourceBuilding.ring,direction),p=local(source.get(shop.poiId).feature.geometry.coordinates),placed=alongFace(face,p,width);
     const item={...shop,brand:shop.id,sourceId:shop.buildingId,...placed,width,height:3.45,baseY:BASE,fasciaColor:'#39352e',frameColor:'#333a37',wallColor:'#b6a48c',estimated:true,maxProjection:.18,...options};plan.frontages.push(item);return item;
   };
-  const bk=front(CBD_SHOPS[0],{x:1,z:0},11.9,{height:3.85,fasciaColor:'#392820',wallColor:'#a66339'});
+  const bk=front(CBD_SHOPS[0],{x:1,z:0},11.9,{height:3.85,fasciaHeight:.84,fasciaColor:'#302824',wallColor:'#494039',textColor:'#ffffff',styleEvidence:'user photos: low dark fascia, full-height glazing and roundel'});
   const low=plan.buildings.find(v=>v.style==='burger-pavilion'),side=faceFor(low.rings[0],{x:0,z:1});
   plan.frontages.push({...bk,id:'burger-king-south',...alongFace(side,side,Math.min(12,side.length-.7)),width:Math.min(12,side.length-.7)});
   const zhou=front(CBD_SHOPS[1],{x:0,z:1},9.3,{fasciaColor:'#663d34',height:3.45,maxProjection:.12,styleEvidence:'unverified sign colour; mapped shop identity'});
-  const oxygen=front(CBD_SHOPS[2],{x:1,z:0},10.6,{baseY:4.05,height:3.1,fasciaColor:'#4a5953',wallColor:'#d2c9ad',maxProjection:.12,styleEvidence:'floor corroborated; sign design inferred'});
+  const oxygen=front(CBD_SHOPS[2],{x:1,z:0},8.8,{baseY:4.05,height:3.1,subtitle:'O₂ CAFE',fasciaHeight:.62,fasciaColor:'#3c4140',wallColor:'#deded5',textColor:'#f5eee0',maxProjection:.12,styleEvidence:'user photo shows O2 CAFE fascia upstairs over Yoshinoya'});
+  const rear=plan.buildings.find(v=>v.style==='rear-gable'),rearFace=faceFor(rear.rings[0],{x:0,z:1});
+  const xiabu=front(CBD_SHOPS[3],{x:0,z:1},Math.min(7.8,rearFace.length-.6),{...alongFace(rearFace,rearFace,Math.min(7.8,rearFace.length-.6)),baseY:rear.eaveHeight+.12,height:1.05,fasciaHeight:1.05,signOnly:true,backing:false,textColor:'#dfddd2',maxProjection:.12,styleEvidence:'user photo: freestanding roof lettering behind Burger King'});
+  const yoshinoya=front(CBD_SHOPS[4],{x:1,z:0},8.8,{...alongFace(faceFor(west.ring,{x:1,z:0}),oxygen,8.8),height:3.55,fasciaHeight:.62,fasciaColor:'#bd462a',wallColor:'#dad9ce',textColor:'#fffaf0',maxProjection:.12,styleEvidence:'user photo: orange-red Yoshinoya fascia below Oxygen'});
+  front(CBD_SHOPS[5],{x:0,z:1},5.5,{height:3.35,fasciaHeight:.62,fasciaColor:'#eceade',wallColor:'#d5d3c8',textColor:'#235c46',maxProjection:.12,styleEvidence:'user photo: striped fascia visible inside the lane; mapped POI locates the bay'});
   // Other bays stay anonymous: a map POI is not proof of a current storefront.
   const northFace=faceFor(north.ring,{x:0,z:1});
-  for(const [index,t,width]of[[0,.12,7],[1,.72,8],[2,.91,7]]){
+  for(const [index,t,width]of[[0,.12,7],[1,.65,6]]){
     const target=world(frameFor(north.ring),frameFor(north.ring).width*t,frameFor(north.ring).depth);
     plan.frontages.push({id:`cbd-north-neutral-${index}`,sourceId:north.id,brand:'neutral',title:'',subtitle:'',...alongFace(northFace,target,width),width,height:3.35,baseY:BASE,fasciaColor:['#666d5e','#6e5743','#58695d'][index],frameColor:'#4c524b',wallColor:'#c5c3ad',estimated:true,maxProjection:.12});
   }
-  const westFace=faceFor(west.ring,{x:1,z:0});
-  plan.frontages.push({id:'cbd-west-ground-glazing',sourceId:west.id,brand:'neutral',title:'',...alongFace(westFace,oxygen,15.6),width:15.6,height:3.55,baseY:BASE,fasciaColor:'#c7bea5',frameColor:'#554b39',wallColor:'#d2c9ad',estimated:true,maxProjection:.1});
   if(southPlan?.accepted){
     const sf=southPlan.frame,porches=southPlan.porches.slice().sort((a,b)=>a.z-b.z),start=porches[0].z+porches[0].depth/2+.6,end=porches[1].z-porches[1].depth/2-.6;
     // Complete only the lower, street-facing bays between the two porches.
@@ -114,6 +121,7 @@ export function planCampusCommercialStreet(model,{frame,geoToLocal,southPlan}={}
   plan.viewpoints.cbd=approach(bk,'way/1483567171');
   plan.viewpoints['cbd-zhou']=approach(zhou,'way/1483567195');
   plan.viewpoints['cbd-oxygen']=approach(oxygen,'way/1483567194',13);
+  plan.viewpoints['cbd-yoshinoya']=approach(yoshinoya,'way/1483567194',8);
   // Furniture stays on spare hardscape; reject the whole footprint if it
   // overlaps any mapped road, footway, building or previously placed piece.
   const occupied=model.records.filter(r=>r.category==='building'&&r.shapes?.length).map(outline);
@@ -141,8 +149,8 @@ export function createCampusCommercialStreet(THREE,model,options={}){
   const plan=planCampusCommercialStreet(model,options),group=new THREE.Group();group.name='学一学二店廊与东 CBD';group.userData={component:'campus-commercial-street',...COMMERCIAL_EVIDENCE};
   const geometries=new Set(),materials=new Set(),batches=new Map(),dummy=new THREE.Object3D(),unit=new THREE.BoxGeometry(1,1,1);geometries.add(unit);let disposed=false;
   const material=color=>{const m=new THREE.MeshStandardMaterial({color,roughness:.88});materials.add(m);return m;};
-  const plaster=material('#d2cbb4'),brick=material('#858b80'),roof=material('#4d5852'),brown=material('#734a32'),trim=material('#b9b8a9'),glass=material('#63756f'),frame=material('#d6d7c7');
-  const box=(name,m,x,y,z,w,h,d,angle=0)=>{const key=name+'/'+m.uuid;if(!batches.has(key))batches.set(key,{name,m,items:[]});dummy.position.set(x,y,z);dummy.rotation.set(0,angle,0);dummy.scale.set(w,h,d);dummy.updateMatrix();batches.get(key).items.push(dummy.matrix.clone());};
+  const plaster=material('#e2e0d7'),brick=material('#919592'),roof=material('#5d6362'),brown=material('#453831'),trim=material('#c5c4b9'),glass=material('#63756f'),frame=material('#d6d7c7');
+  const box=(name,m,x,y,z,w,h,d,angle=0,roll=0)=>{const key=name+'/'+m.uuid;if(!batches.has(key))batches.set(key,{name,m,items:[]});dummy.position.set(x,y,z);dummy.rotation.set(0,angle,roll);dummy.scale.set(w,h,d);dummy.updateMatrix();batches.get(key).items.push(dummy.matrix.clone());};
   function slab(name,ring,bottom,top,m,sourceId){
     const shape=new THREE.Shape(ring.map(p=>new THREE.Vector2(p.x,-p.z))),g=new THREE.ExtrudeGeometry(shape,{depth:top-bottom,bevelEnabled:false});g.rotateX(-Math.PI/2);g.translate(0,bottom,0);geometries.add(g);const mesh=new THREE.Mesh(g,m);mesh.name=name;mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData={sourceId,estimated:true};group.add(mesh);
   }
@@ -172,13 +180,28 @@ export function createCampusCommercialStreet(THREE,model,options={}){
     for(let i=0;i<b.rings[0].length;i++){
       const a=b.rings[0][i],q=b.rings[0][(i+1)%b.rings[0].length],length=dist(a,q),angle=-Math.atan2(q.z-a.z,q.x-a.x);
       for(const y of b.style==='burger-pavilion'?[.25,3.98]:[.26,3.75,b.eaveHeight-.16])box('cbd-horizontal-wall-bands',trim,(a.x+q.x)/2,y,(a.z+q.z)/2,length,.12,.08,angle);
+      if(b.style==='burger-pavilion')box('cbd-low-dark-parapet',brown,(a.x+q.x)/2,4.08,(a.z+q.z)/2,length,.33,.12,angle);
+      if(b.style==='west-two-storey')for(const y of[3.80,7.52])box('cbd-white-projecting-cornice',plaster,(a.x+q.x)/2,y,(a.z+q.z)/2,length+.12,.18,.22,angle);
     }
     if(b.style==='north-row'||b.style==='west-two-storey'){
-      const face=faceFor(b.rings[0],b.style==='north-row'?{x:0,z:1}:{x:0,z:-1}),count=Math.floor(face.length/2.7);
+      const face=faceFor(b.rings[0],b.style==='north-row'?{x:0,z:1}:{x:0,z:-1}),whiteBlock=b.style==='west-two-storey',count=Math.floor(face.length/(whiteBlock?1.6:2.7));
       for(let i=0;i<count;i++){
-        const s=(i+.5)*face.length/count,p={x:face.a.x+face.tx*s+face.nx*.06,z:face.a.z+face.tz*s+face.nz*.06},angle=Math.atan2(face.nx,face.nz),y=b.style==='north-row'?4.65:5.45,h=b.style==='north-row'?1.35:1.85;
-        box('cbd-upper-window-surrounds',frame,p.x,y,p.z,1.92,h+.16,.09,angle);box('cbd-upper-window-glass',glass,p.x+face.nx*.055,y,p.z+face.nz*.055,1.74,h,.07,angle);box('cbd-upper-window-mullions',frame,p.x+face.nx*.1,y,p.z+face.nz*.1,.045,h,.04,angle);
+        const s=(i+.5)*face.length/count,p={x:face.a.x+face.tx*s+face.nx*.06,z:face.a.z+face.tz*s+face.nz*.06},angle=Math.atan2(face.nx,face.nz),y=whiteBlock?5.65:4.65,h=whiteBlock?2.28:1.35,w=whiteBlock?.70:1.74;
+        box('cbd-upper-window-surrounds',frame,p.x,y,p.z,w+.16,h+.16,.09,angle);box('cbd-upper-window-glass',glass,p.x+face.nx*.055,y,p.z+face.nz*.055,w,h,.07,angle);
+        if(!whiteBlock)box('cbd-upper-window-mullions',frame,p.x+face.nx*.1,y,p.z+face.nz*.1,.045,h,.04,angle);
+        else box('cbd-upper-window-transoms',roof,p.x+face.nx*.1,y+.55,p.z+face.nz*.1,w,.035,.04,angle);
       }
+    }
+    if(b.style==='rear-gable'){
+      const face=faceFor(b.rings[0],{x:0,z:1}),angle=Math.atan2(face.nx,face.nz),count=Math.floor((face.length-.6)/.54);
+      // Small dark diamond recesses describe the photographed perforated grey
+      // gable wall without adding alpha cards or opening its collision shell.
+      for(let row=0;row<4;row++)for(let i=0;i<count;i++){
+        const s=.4+(i+.5)*(face.length-.8)/count+(row%2)*.15;
+        if(s>face.length-.3)continue;
+        box('cbd-gable-diamond-recesses',roof,face.a.x+face.tx*s+face.nx*.045,4.20+row*.32,face.a.z+face.tz*s+face.nz*.045,.13,.13,.026,angle,Math.PI/4);
+      }
+      for(let y=.45;y<b.eaveHeight-.1;y+=.18)box('cbd-grey-brick-course-joints',trim,face.x+face.nx*.026,y,face.z+face.nz*.026,face.length-.2,.012,.012,angle);
     }
   }
   // Separate slabs are clipped around source paths, so the terrace never
@@ -194,7 +217,9 @@ export function createCampusCommercialStreet(THREE,model,options={}){
   }
   const fronts=createCommercialFrontages(THREE,{frontages:plan.frontages,fixtures:plan.fixtures});group.add(fronts.group);
   const infrastructure={buildings:plan.buildings,barriers:plan.barriers,walkSurfaces:plan.walkSurfaces,replacedBuildingIds:plan.replacedBuildingIds,replacedRoadIds:[]};
-  function update(camera,options){fronts.update(camera,options);}
-  function dispose(){if(disposed)return;disposed=true;fronts.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());group.removeFromParent();group.clear();}
+  const fine=[];group.traverse(o=>{if(o.isMesh&&/diamond-recesses|brick-course|window-transoms|window-mullions/.test(o.name))fine.push(o);});
+  const detailCenter=plan.buildings[0]?.frame.origin;
+  function update(camera,options={}){fronts.update(camera,options);const p=camera?.position||camera,near=!p||!detailCenter||Math.hypot(p.x-detailCenter.x,p.z-detailCenter.z)<170*(options.detailDistanceScale||1);for(const mesh of fine)mesh.visible=near;}
+  function dispose(){if(disposed)return;disposed=true;fronts.dispose();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());group.removeFromParent();group.clear();}
   return {group,plan,infrastructure,viewpoints:plan.viewpoints,update,dispose};
 }

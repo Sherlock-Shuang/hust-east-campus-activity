@@ -1,6 +1,7 @@
 import polygonClipping from 'polygon-clipping';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { streetFootprint } from './street-clearance.js';
+import { addOptoPhotoDetails, addOptoSignAtlas, makeOptoTerrazzoTexture } from './opto-photo-details.js';
 
 /** The new optoelectronics building lies south of the original capture extent.
  * Its identity is relation/13705821, not the unnamed relation/20970638.
@@ -169,11 +170,18 @@ export function createOptoBuilding(THREE, record, options = {}) {
   const geos = new Set(), mats = new Set(), batches = new Map(), dummy = new THREE.Object3D();
   const geometry = g => { geos.add(g); return g; };
   const material = (color, roughness = .82, metalness = 0) => { const m = new THREE.MeshStandardMaterial({ color, roughness, metalness }); mats.add(m); return m; };
-  const stone = material('#929895'), screen = material('#d7dbd8', .63, .3), glass = material('#326b70', .32, .28), frameMat = material('#435354', .65, .25), roof = material('#b9b9ae'), dark = material('#56615d'), paving = material('#aeaca0'), white = material('#e3e7df', .6, .15), grass = material('#728b55');
+  const stone = material('#9a9b94'), screen = material('#c8c7bc', .57, .32), glass = material('#5a959c', .24, .30), frameMat = material('#354248', .48, .30), roof = material('#b9b9ae'), dark = material('#56615d'), paving = material('#aeaca0'), white = material('#e3e7df', .6, .15), grass = material('#728b55');
   const openDoorGlass = material('#98c4c6', .2, .1);
   openDoorGlass.transparent = true; openDoorGlass.opacity = .3; openDoorGlass.depthWrite = false; openDoorGlass.side = THREE.DoubleSide;
-  const wayfinding = material('#166c70', .7, .1);
+  const wayfinding = material('#234d70', .7, .1);
+  const terrazzo = material('#f2f2ed', .27, .08);
+  terrazzo.map = makeOptoTerrazzoTexture(THREE);
   const boxGeo = geometry(new THREE.BoxGeometry(1, 1, 1));
+  // Screen fins are vertical extrusions seated between solid facade bands.
+  // Their concealed top/bottom caps cost two faces per fin without changing
+  // the visible screen; keep the four lateral faces and original normals.
+  const finGeo = geometry(boxGeo.clone());
+  finGeo.setIndex(Array.from(boxGeo.index.array).filter((_, i) => i < 12 || i >= 24));
   function mesh(name, geo, mat) { const o = new THREE.Mesh(geo, mat); o.name = name; o.castShadow = true; o.receiveShadow = true; o.renderOrder = 203; o.userData = { ...group.userData, component: name }; group.add(o); return o; }
   function box(name, mat, x, y, z, sx, sy, sz, yaw = 0, roll = 0) {
     if (Math.min(sx, sy, sz) <= 0) return;
@@ -222,19 +230,33 @@ export function createOptoBuilding(THREE, record, options = {}) {
     const polygon = streetFootprint(source.x + source.nx * 1.5, source.z + source.nz * 1.5, 6.2, 3, source.yaw);
     const geo = new THREE.ShapeGeometry(shapeFor([polygon])); geo.rotateX(-Math.PI / 2); geo.translate(0, ground.floorY, 0); accessPaving.push(geo);
     infrastructure.walkSurfaces.push({ id: `opto-c-${key}-landing`, sourceId: OPTO_BUILDING_ID, polygon, surfaceY: ground.floorY });
-    entranceLocal(source, 'opto-c-entrance-canopy', white, 0, 4.7, .7, 6, .34, 2.8);
+    entranceLocal(source, key === 'college' ? 'opto-c-entrance-canopy' : 'opto-college-canopy-frame', key === 'college' ? openDoorGlass : white, 0, 4.7, .7, 6, key === 'college' ? .08 : .22, 2.8);
     entranceLocal(source, 'opto-door-wayfinding-band', wayfinding, 0, 4.07, .20, 4.7, .40, .12);
   }
-  mesh('opto-ground-access-paving', geometry(mergeGeometries(accessPaving, false)), paving);
+  mesh('opto-ground-access-paving', geometry(mergeGeometries(accessPaving, false)), terrazzo);
   accessPaving.forEach(g => g.dispose());
   function openGroundDoor(source, key, halfWidth, totalWidth, height, mat = glass) {
+    const solid = key === 'left-hall' || key === 'rear-hall';
+    // An opaque C118 leaf must swing into its cut, not 1.34 m out across
+    // the narrow approach corridor where the old transparent leaf was.
+    const swing = solid ? -1 : 1;
     const panelWidth = (totalWidth - 2 * halfWidth) / 2;
     for (const side of [-1, 1]) {
       const sideU = side * (halfWidth + panelWidth / 2);
       entranceLocal(source, 'opto-c-entrance-glass', mat, sideU, .12 + height / 2, 0, panelWidth, height, .10);
       entranceLocal(source, 'opto-c-door-mullions', frameMat, side * halfWidth, .12 + height / 2, .03, .09, height, .14);
-      entranceLocal(source, 'opto-open-door-leaves', openDoorGlass, side * (halfWidth + .08), .12 + height / 2, .69, .075, height - .12, 1.3);
-      entranceLocal(source, 'opto-door-handles', white, side * (halfWidth - .02), 1.35, 1.12, .08, .55, .045);
+      entranceLocal(source, solid ? 'opto-college-canopy-frame' : 'opto-open-door-leaves', solid ? white : openDoorGlass, side * (halfWidth + .08), .12 + height / 2, swing * .69, .075, height - .12, 1.3);
+      entranceLocal(source, 'opto-door-handles', white, side * (halfWidth - .02), 1.65, swing * 1.12, .065, 1.80, .045);
+      if (solid) {
+        const leafX = source.x + source.tx * side * (halfWidth + .08) - source.nx * .69;
+        const leafZ = source.z + source.tz * side * (halfWidth + .08) - source.nz * .69;
+        infrastructure.barriers.push({ id: `opto-c-${key}-open-leaf-${side}`, sourceId: OPTO_BUILDING_ID,
+          polygon: streetFootprint(leafX, leafZ, .075, 1.3, source.yaw), minHeight: .12, height: height + .06, label: 'C118 开启白门扇' });
+      }
+      if (!solid) {
+        for (const edge of [.06, 1.32]) entranceLocal(source, 'opto-c-door-mullions', frameMat, side * (halfWidth + .08), .12 + height / 2, edge, .09, height - .10, .06);
+        for (const y of [.16, height + .04]) entranceLocal(source, 'opto-c-door-mullions', frameMat, side * (halfWidth + .08), y, .69, .09, .065, 1.3);
+      }
       infrastructure.barriers.push({ id: `opto-c-${key}-side-${side}`, sourceId: OPTO_BUILDING_ID,
         polygon: streetFootprint(source.x + source.tx * sideU, source.z + source.tz * sideU, panelWidth, .14, source.yaw), minHeight: .12, height: height + .12, label: '报告厅入口固定侧窗' });
     }
@@ -242,10 +264,10 @@ export function createOptoBuilding(THREE, record, options = {}) {
     entranceLocal(source, 'opto-c-entrance-glass', mat, 0, (height + .24 + 4.4) / 2, 0, totalWidth, 4.4 - height - .24, .10);
   }
   openGroundDoor(e, 'college', 1.6, 4.8, 3.2);
-  openGroundDoor(ground.hallDoor, 'left-hall', 1.3, 3.6, 3.1, dark);
+  openGroundDoor(ground.hallDoor, 'left-hall', 1.3, 3.6, 3.1, white);
   openGroundDoor(ground.east, 'east', 1.6, 4.8, 3.2);
   openGroundDoor(plan.rear, 'rear', 1.9, 5.8, 3.2);
-  openGroundDoor(plan.rearHallDoor, 'rear-hall', 1.3, 3.6, 3.1, dark);
+  openGroundDoor(plan.rearHallDoor, 'rear-hall', 1.3, 3.6, 3.1, white);
   // The same clipped footprint supplies a dark soffit and a continuous ground
   // slab on both open faces, so there is no painted wall or hidden curb.
   for (const rings of polygonClipping.intersection(plan.sourceFootprint, [closed(plan.northCut)]).map(fromClip)) {
@@ -365,7 +387,7 @@ export function createOptoBuilding(THREE, record, options = {}) {
     dummy.position.copy(start).add(end).multiplyScalar(.5); dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.clone().normalize()); dummy.scale.set(width, delta.length(), width); dummy.updateMatrix(); batches.get(key).items.push(dummy.matrix.clone());
   };
   for (const u of [-l * .29, l * .29]) for (const v of [5 * out, 13 * out]) {
-    const p = entrancePoint(u, v, .1), fork = entrancePoint(u, v, 7.2); beam('opto-tree-column-stems', p, fork, .48, white);
+    const p = entrancePoint(u, v, .1), fork = entrancePoint(u, v, 7.2); beam('opto-tree-column-branches', p, fork, .48, white);
     for (const [du, dv] of [[-3.5, -1.5 * out], [3.5, 1.5 * out]]) beam('opto-tree-column-branches', fork, entrancePoint(u + du, v + dv, 11.5), .34, white);
     infrastructure.barriers.push({ id: `opto-main-column-${u}-${v}`, sourceId: OPTO_BUILDING_ID, polygon: streetFootprint(p.x, p.z, .44, .44, yaw), minHeight: 0, height: 7.2, label: '光电入口雨棚柱' });
   }
@@ -439,7 +461,7 @@ export function createOptoBuilding(THREE, record, options = {}) {
   for (const side of [-1, 1]) {
     const foot = { x: cs.x + cs.tx * side * 8.8 + cs.nx * 4, z: cs.z + cs.tz * side * 8.8 + cs.nz * 4, y: .12 };
     const top = { x: cs.x + cs.tx * side * 8.8 + cs.nx * 1.8, z: cs.z + cs.tz * side * 8.8 + cs.nz * 1.8, y: 8.5 };
-    beam('opto-college-canopy-braces', foot, top, .26, white);
+    beam('opto-tree-column-branches', foot, top, .26, white);
   }
   const skylight = ground.skylight;
   if (skylight?.length === 4) {
@@ -462,43 +484,25 @@ export function createOptoBuilding(THREE, record, options = {}) {
     const glazing = mesh('opto-college-pyramid-skylights', geo, openDoorGlass); glazing.castShadow = false;
     glazing.userData.provenance = 'Public college atrium photographs and author-reported 46 pyramids; per-column placement and roof elevation are schematic, not a survey';
   }
-  // Only text generated from public building identity is rendered; no copied
-  // institutional logo/font/image. The added C118 labels are activity guides,
-  // explicitly distinct from surveyed room-direction signage.
-  if (typeof document !== 'undefined') {
-    const canvas = document.createElement('canvas'); canvas.width = 1536; canvas.height = 160;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.clearRect(0, 0, 1536, 160); ctx.font = 'bold 100px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#5288a4'; ctx.fillText('武汉光电国家研究中心', 768, 82);
-      const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-      const signMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, side: THREE.DoubleSide }); mats.add(signMat);
-      const sign = mesh('opto-main-name-sign', geometry(new THREE.PlaneGeometry(28, 2.9)), signMat), p = entrancePoint(0, 16.55 * out, 13.55);
-      sign.position.set(p.x, p.y, p.z); sign.rotation.y = Math.atan2(nx * out, nz * out);
-      group.userData.labelContent = '武汉光电国家研究中心';
-      const signSpecs = [
-        ['college', ground.collegeSteps, -1.3, 8.9, 18, 1.0, '光学与电子信息学院'],
-        ['college-route', e, -.29, 4.07, 4.5, .32, '进入后直走 · 左手 C118'],
-        ['left-guide', e, 9.67, 2.8, 3.0, .36, '← C118 报告厅'],
-        ['left-hall', ground.hallDoor, -.16, 3.65, 3.2, .32, 'C118 报告厅'],
-        ['east', ground.east, -.29, 4.07, 4.5, .32, 'C118 报告厅 · 东侧入口'],
-        ['rear', plan.rear, -.29, 4.07, 4.5, .32, '光电大楼 · 北侧入口'],
-        ['rear-hall', plan.rearHallDoor, -.16, 3.65, 3.4, .32, 'C118 报告厅 · 后门'],
-      ];
-      for (const [key, source, offset, y, width, height, text] of signSpecs) {
-        const board = document.createElement('canvas'); board.width = 1280; board.height = 150;
-        const paint = board.getContext('2d'); if (!paint) continue;
-        paint.font = '600 94px sans-serif'; paint.textAlign = 'center'; paint.textBaseline = 'middle'; paint.fillStyle = '#effff4';
-        paint.fillText(text, 640, 77);
-        const map = new THREE.CanvasTexture(board); map.colorSpace = THREE.SRGBColorSpace;
-        const mat = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, side: THREE.DoubleSide }); mats.add(mat);
-        const label = mesh(`opto-${key}-interior-guide`, geometry(new THREE.PlaneGeometry(width, height)), mat);
-        label.position.set(source.x - source.nx * offset, y, source.z - source.nz * offset); label.rotation.y = Math.atan2(source.nx, source.nz);
-        label.userData.signPurpose = 'user-confirmed-route-game-wayfinding-not-surveyed-signage';
-      }
-    }
-  }
+  // All unit names and route signs share one generated atlas. This also keeps
+  // the extra photographed foyer details from increasing the browser's former
+  // per-sign texture/draw-call cost.
+  const mainSign = entrancePoint(0, 16.55 * out, 13.55);
+  const signs = [{ ...mainSign, nx: nx * out, nz: nz * out, width: 28, height: 2.9, text: '武汉光电国家研究中心', color: '#4c93bd' }];
+  group.userData.labelContent = '武汉光电国家研究中心';
+  const signSpecs = [
+    [ground.collegeSteps, -1.3, 8.9, 18, 1.0, '光学与电子信息学院'],
+    [e, -.29, 4.07, 4.5, .32, '进入后直走 · 左手 C118'],
+    [e, 9.67, 2.8, 3.0, .36, '← C118 报告厅'],
+    [ground.east, -.29, 4.07, 4.5, .32, 'C118 报告厅 · 东侧入口'],
+    [plan.rear, -.29, 4.07, 4.5, .32, '光电大楼 · 北侧入口'],
+  ];
+  for (const [source, offset, y, width, height, text] of signSpecs) signs.push({ x: source.x - source.nx * offset, z: source.z - source.nz * offset, y, nx: source.nx, nz: source.nz, width, height, text });
+  const photoDetails = addOptoPhotoDetails(THREE, { plan, group, entranceLocal, box, beam, material, geometry, mesh,
+    materials: { glass, frame: frameMat, white, ceilingLight }, signs });
+  addOptoSignAtlas(THREE, { signs, mesh, geometry, mats });
   for (const { name, mat, items } of batches.values()) {
-    const o = new THREE.InstancedMesh(boxGeo, mat, items.length); o.name = name; items.forEach((m, i) => o.setMatrixAt(i, m)); o.instanceMatrix.needsUpdate = true; o.computeBoundingBox(); o.computeBoundingSphere(); o.castShadow = true; o.receiveShadow = true; o.renderOrder = 204; o.userData = { ...group.userData, component: name, instanceCount: items.length }; group.add(o);
+    const o = new THREE.InstancedMesh(name === 'opto-vertical-sunshade-screen' ? finGeo : boxGeo, mat, items.length); o.name = name; items.forEach((m, i) => o.setMatrixAt(i, m)); o.instanceMatrix.needsUpdate = true; o.computeBoundingBox(); o.computeBoundingSphere(); o.castShadow = true; o.receiveShadow = true; o.renderOrder = 204; o.userData = { ...group.userData, component: name, instanceCount: items.length }; group.add(o);
   }
   const outsidePose = source => ({ x: source.x + source.nx * 3, y: .12, z: source.z + source.nz * 3, yaw: Math.atan2(-source.nx, -source.nz), pitch: 0 });
   const entry = { id: 'opto-c118', name: 'C118报告厅', label: '主庭院左侧门 · 直走后左转至 C118',
@@ -540,10 +544,12 @@ export function createOptoBuilding(THREE, record, options = {}) {
   // The source solids, roof silhouette and broad glazing remain visible. Use
   // distance to the nearest point of the 278 m-long building, not its centre.
   const fineNames = new Set(['opto-window-head-sill', 'opto-window-mullions', 'opto-vertical-sunshade-screen', 'opto-roof-vent-plants', 'opto-roof-vent-grilles', 'opto-roof-maintenance-strips', 'opto-main-stair-handrails', 'opto-college-pyramid-frames']);
+  photoDetails.detailNames.forEach(name => fineNames.add(name));
   const fineMeshes = group.children.filter(o => fineNames.has(o.name));
   const cameraPoint = new THREE.Vector3(), lodBounds = plan.bounds;
-  let fineVisible = true;
+  let fineVisible = true, disposed = false;
   function update(camera, { detailDistanceScale = 1 } = {}) {
+    if (disposed) return false;
     let visible = true;
     if (camera?.position) {
       if (typeof camera.getWorldPosition === 'function') camera.getWorldPosition(cameraPoint);
@@ -563,5 +569,16 @@ export function createOptoBuilding(THREE, record, options = {}) {
     for (const mesh of fineMeshes) mesh.visible = visible;
     return true;
   }
-  return { group, infrastructure, entry, entries, viewpoints, plan, update, dispose() { const textures = new Set(); mats.forEach(m => { if (m.map) textures.add(m.map); m.dispose(); }); textures.forEach(t => t.dispose()); geos.forEach(g => g.dispose()); group.removeFromParent(); } };
+  return { group, infrastructure, entry, entries, viewpoints, photoViewpoints: photoDetails.viewpoints, plan, update, dispose() {
+    if (disposed) return;
+    disposed = true;
+    // InstancedMesh owns GPU instance buffers independently of its shared
+    // geometry/material. In particular the court shrubs own instanceColor.
+    group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
+    const textures = new Set();
+    mats.forEach(m => { if (m.map) textures.add(m.map); m.dispose(); });
+    textures.forEach(t => t.dispose());
+    geos.forEach(g => g.dispose());
+    group.removeFromParent();
+  } };
 }

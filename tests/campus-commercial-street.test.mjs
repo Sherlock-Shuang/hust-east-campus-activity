@@ -61,6 +61,18 @@ test('low pavilion and pitched restaurant volumes partition rather than enlarge 
   for(const id of CBD_BUILDING_IDS)assert.ok(!world.buildings.some(b=>b.id===id),'no invisible generic collision volume remains');
 });
 
+test('new photographed brands use their own mapped bays and keep upstairs/downstairs elevations separate',()=>{
+  const oxygen=made.plan.frontages.find(f=>f.id==='oxygen'),yoshinoya=made.plan.frontages.find(f=>f.id==='yoshinoya'),xiabu=made.plan.frontages.find(f=>f.id==='xiabu'),convenience=made.plan.frontages.find(f=>f.id==='seven-eleven');
+  assert.equal(oxygen.sourceId,yoshinoya.sourceId);assert.ok(yoshinoya.baseY+yoshinoya.height<oxygen.baseY);
+  close(oxygen.x,yoshinoya.x);close(oxygen.z,yoshinoya.z);
+  assert.equal(xiabu.sourceId,'way/1228820964');assert.equal(xiabu.signOnly,true);assert.equal(xiabu.backing,false);
+  assert.equal(convenience.sourceId,'way/1228820963');
+  assert.ok(!made.plan.frontages.some(f=>/烘焙|交流服务/.test(f.title)),'uncertain adjacent footprint is not assigned a new brand');
+  assert.ok(made.plan.evidence.photoFiles.includes('e31bc8a07adb7d1b34e7b14b6ff3e4f1.jpg'));
+  const diamonds=made.group.getObjectByName('cbd-gable-diamond-recesses');assert.ok(diamonds?.isInstancedMesh);
+  made.update({x:10000,z:10000});assert.equal(diamonds.visible,false);made.update(null);assert.equal(diamonds.visible,true);
+});
+
 test('pitched restaurant end walls close below the ridge instead of leaving triangular holes',()=>{
   made.group.updateMatrixWorld(true);let checked=0;
   for(const b of made.plan.buildings.filter(b=>b.roofRise>0)){
@@ -151,7 +163,7 @@ test('commercial detail is finite and batched, distance culled, and released exa
   assert.ok(detail.length>0);assert.ok(detail.every(o=>!o.visible),'distant shop frames and window dressing are culled');
   made.update(null);assert.ok(detail.every(o=>o.visible),'full export restores detail');
   const isolated=createCampusCommercialStreet(THREE,model,{frame,geoToLocal,southPlan:south.plan}),resources=new Set();
-  isolated.group.traverse(o=>{if(o.geometry)resources.add(o.geometry);for(const m of(Array.isArray(o.material)?o.material:o.material?[o.material]:[])){resources.add(m);if(m.map)resources.add(m.map);}});
+  isolated.group.traverse(o=>{if(o.isInstancedMesh)resources.add(o);if(o.geometry)resources.add(o.geometry);for(const m of(Array.isArray(o.material)?o.material:o.material?[o.material]:[])){resources.add(m);if(m.map)resources.add(m.map);}});
   const counts=new Map();for(const r of resources)r.addEventListener('dispose',()=>counts.set(r,(counts.get(r)||0)+1));
   isolated.dispose();isolated.dispose();for(const r of resources)assert.equal(counts.get(r),1,'resource is disposed once');
 });

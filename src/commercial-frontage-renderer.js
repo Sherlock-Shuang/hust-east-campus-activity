@@ -44,11 +44,25 @@ export function createCommercialFrontages(THREE,{frontages=[],fixtures=[]}={}){
     const f={...input,nx,nz,tx:nz,tz:-nx,yaw:Math.atan2(nx,nz),width,height,baseY:finite(input.baseY,.14),maxProjection:clamp(finite(input.maxProjection,.30),.035,.36)};
     const brand=String(f.brand||'neutral').toLowerCase(),burger=/burger|汉堡|\bbk\b/.test(brand);
     const frame=f.frameColor||'#373c36',fascia=f.fasciaColor||(burger?'#453c33':'#6e746c'),wall=f.wallColor||(burger?'#996642':'#c8c4b1');
-    const cap=clamp(height*.19,.38,.72),top=height-cap,glassTop=top-.16,glassBottom=.17,glassH=glassTop-glassBottom;
+    const cap=clamp(finite(f.fasciaHeight,height*.19),.38,height),top=height-cap,glassTop=top-.16,glassBottom=.17,glassH=glassTop-glassBottom;
     const jamb=clamp(width*.025,.13,.28),insideW=width-jamb*2;
+    if(f.signOnly){
+      if(f.backing!==false)frontBox(f,matte,fascia,0,top+cap/2,.22,width,cap,.22,false,'shopfront-fascia');
+      else{
+        for(let u=-width/2+.3;u<width/2;u+=.78)frontBox(f,metal,'#777b75',u,cap*.42,.19,.024,cap*.84,.035,true,'shopfront-roof-letter-support');
+        for(const y of[.05,cap*.48])frontBox(f,metal,'#777b75',0,y,.20,width,.025,.035,true,'shopfront-roof-letter-support');
+      }
+      if(f.title)signs.push({...f,burger,cap,top,fascia});
+      continue;
+    }
     frontBox(f,matte,wall,0,height/2,.11,width,height,.18,false,'shopfront-reveal');
     frontBox(f,inside,'#2e3934',0,glassBottom+glassH/2,.212,insideW,glassH,.022,false,'shopfront-dark-recess');
     frontBox(f,matte,fascia,0,top+cap/2,.22,width+.04,cap,.22,false,'shopfront-fascia');
+    if(brand==='seven-eleven'){
+      for(const [fraction,color]of[[.22,'#257957'],[.48,'#e18b35'],[.69,'#c94736']])frontBox(f,matte,color,0,top+cap*fraction,.337,width,.095,.012,false,'shopfront-convenience-stripes');
+      frontBox(f,matte,'#f3f0e4',0,top+cap/2,.348,2.25,cap*.90,.012,false,'shopfront-convenience-wordmark-plaque');
+      f.letteringWidth=2.1;
+    }
     frontBox(f,metal,'#6d6253',0,height-.018,.25,width+.10,.055,.20,true,'shopfront-drip-edge');
     for(const side of[-1,1])frontBox(f,matte,wall,side*(width-jamb)/2,top/2,.235,jamb,top,.24,false,'shopfront-side-pier');
     frontBox(f,matte,'#8e9389',0,.07,.22,width,.14,.26,false,'shopfront-stone-sill');
@@ -69,11 +83,15 @@ export function createCommercialFrontages(THREE,{frontages=[],fixtures=[]}={}){
         for(let i=0;i<count;i++)panels.push({u:a+(i+.5)*(b-a)/count,w:(b-a)/count,isDoor});
       }
       for(let i=0;i<panels.length;i++){
-        const p=panels[i],darkGlass=i%3===0?'#41524b':i%3===1?'#35473f':'#4b5c52';
+        const p=panels[i],darkGlass=burger?(i%3===0?'#3f4845':i%3===1?'#293632':'#4c5852'):(i%3===0?'#41524b':i%3===1?'#35473f':'#4b5c52');
         frontBox(f,glass,darkGlass,p.u,glassBottom+glassH/2,.242,p.w-.035,glassH,.022,false,'shopfront-window-glass');
         // Reflections are subdued and below signage. They use physical offsets,
         // avoiding coplanar canvases and log-depth fighting near the camera.
         frontBox(f,glass,'#64766c',p.u,glassTop-.34,.263,p.w-.05,.10,.013,true,'shopfront-window-reflection');
+        if(burger){
+          frontBox(f,inside,'#b5a06c',p.u,glassTop-.14,.268,p.w-.08,.045,.014,true,'shopfront-warm-ceiling-strip');
+          frontBox(f,glass,'#85958c',p.u-p.w*.24,glassBottom+glassH*.56,.267,.07,glassH*.65,.012,true,'shopfront-tall-glass-reflection');
+        }
         if(!p.isDoor){
           const warm=burger?'#b6a27b':'#a89977';
           frontBox(f,inside,warm,p.u,.62,.264,p.w-.13,.25,.015,true,'shopfront-window-counter');
@@ -154,7 +172,7 @@ export function createCommercialFrontages(THREE,{frontages=[],fixtures=[]}={}){
     // three Chinese characters into an oversized, wide billboard.
     let atlasY=0;
     const rows=signs.map(f=>{
-      const worldWidth=f.width*.9,worldHeight=f.cap*.8,pixelsPerMetre=canvas.width/worldWidth;
+      const worldWidth=f.letteringWidth||f.width*.9,worldHeight=f.cap*.8,pixelsPerMetre=canvas.width/worldWidth;
       const pixelHeight=worldHeight*pixelsPerMetre,py=atlasY+gutter;
       atlasY+=Math.ceil(pixelHeight)+gutter*2;
       return{f,worldWidth,worldHeight,pixelsPerMetre,pixelHeight,py};
@@ -172,19 +190,19 @@ export function createCommercialFrontages(THREE,{frontages=[],fixtures=[]}={}){
           // Photographed fascia: the roundel and English name share one line,
           // followed by a smaller Chinese name, rather than a translated stack.
           const english=String(f.subtitle||'BURGER KING'),chinese=String(f.title);
-          let englishSize=Math.min(.48,f.cap*.70)*ppm,chineseSize=englishSize*.73;
+          let englishSize=Math.min(.56,f.cap*.70)*ppm,chineseSize=englishSize*.82;
           ctx.font=`800 ${englishSize}px ${font}`;let enWidth=ctx.measureText(english).width;
           ctx.font=`600 ${chineseSize}px ${font}`;let cnWidth=ctx.measureText(chinese).width;
-          let diameter=Math.min(.49,f.cap*.69)*ppm,gap=.18*ppm;
+          let diameter=Math.min(.62,f.cap*.76)*ppm,gap=.18*ppm;
           const fit=Math.min(1,(canvas.width-.50*ppm)/(diameter+enWidth+cnWidth+gap*2));
           englishSize*=fit;chineseSize*=fit;enWidth*=fit;cnWidth*=fit;diameter*=fit;gap*=fit;
           const start=(canvas.width-(diameter+enWidth+cnWidth+gap*2))/2;
           ctx.font=`800 ${englishSize}px ${font}`;ctx.fillText(english,start+diameter+gap+enWidth/2,centerY);
           ctx.font=`600 ${chineseSize}px ${font}`;ctx.fillText(chinese,start+diameter+gap*2+enWidth+cnWidth/2,centerY);
           const x=start+diameter/2,y=centerY,r=diameter/2;
-          ctx.fillStyle='#c3b38c';ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
-          ctx.fillStyle='#ab4031';ctx.font=`800 ${diameter*.22}px ${font}`;ctx.fillText('BURGER',x,y-r*.22);ctx.fillText('KING',x,y+r*.25);
-          ctx.fillStyle='#c58e45';ctx.fillRect(x-r*.62,y-r*.68,r*1.24,r*.11);ctx.fillRect(x-r*.56,y+r*.58,r*1.12,r*.11);
+          ctx.fillStyle='#f4e7c7';ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='#b83226';ctx.font=`800 ${diameter*.22}px ${font}`;ctx.fillText('BURGER',x,y-r*.22);ctx.fillText('KING',x,y+r*.25);
+          ctx.fillStyle='#e3a23c';ctx.fillRect(x-r*.62,y-r*.68,r*1.24,r*.14);ctx.fillRect(x-r*.56,y+r*.56,r*1.12,r*.14);
         }else{
           const label=String(f.title),withSub=!!f.subtitle;
           let size=Math.min(withSub?.34:.46,f.cap*(withSub?.48:.72))*ppm;
@@ -215,6 +233,6 @@ export function createCommercialFrontages(THREE,{frontages=[],fixtures=[]}={}){
       mesh.visible=(p.x-at.x)**2+(p.z-at.z)**2<range*range;
     }
   }
-  function dispose(){if(disposed)return;disposed=true;geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.removeFromParent();group.clear();}
+  function dispose(){if(disposed)return;disposed=true;for(const {mesh}of meshes)if(mesh.isInstancedMesh)mesh.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.removeFromParent();group.clear();}
   return{group,update,dispose,counts:{frontages:frontages.length,fixtures:fixtures.length,batches:meshes.length,signs:signs.length,textures:textures.size}};
 }

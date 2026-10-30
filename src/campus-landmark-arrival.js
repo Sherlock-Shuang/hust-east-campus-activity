@@ -1,6 +1,8 @@
 // Explicit shared tour links only. The normal URL still starts at 韵苑食堂.
 export function campusLandmarkArrival(campus,place){
-  if(['cbd','cbd-zhou','cbd-oxygen','canteen-shops'].includes(place)&&campus?.commercialStreetViewpoints?.[place])return {...campus.commercialStreetViewpoints[place]};
+  if(place==='life-science'&&campus?.lifeScienceViewpoints?.exterior)return {...campus.lifeScienceViewpoints.exterior};
+  if(place==='life-science-entrance'&&campus?.lifeScienceViewpoints?.entrance)return {...campus.lifeScienceViewpoints.entrance};
+  if(['cbd','cbd-zhou','cbd-oxygen','cbd-yoshinoya','canteen-shops'].includes(place)&&campus?.commercialStreetViewpoints?.[place])return {...campus.commercialStreetViewpoints[place]};
   if(place?.startsWith('poem-')){
     const fromApproach=place.endsWith('-approach'),id=fromApproach?place.slice(0,-9):place;
     const poem=campus?.aiMuralPlan?.find(item=>item.id===id&&item.poetryId);

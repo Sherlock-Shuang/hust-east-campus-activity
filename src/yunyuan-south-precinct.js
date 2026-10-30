@@ -11,9 +11,10 @@ export const YUNYUAN_SOUTH_EVIDENCE=Object.freeze({
   article:'https://www.sohu.com/a/332453170_154724',
   officialGuide:'https://hq.hust.edu.cn/ysfw/stfw.htm',
   historicShopArticle:'https://www.sohu.com/a/251055569_154724',
-  photoDate:'2019-08-08 publication; capture date unknown',
-  observed:'学生会学一/学二实照：浅色墙、灰色水平带、方柱大挑檐、架空连廊、金属竖杆护栏及高台阶。学二在学一北侧，二层通道相连；后勤指南定位东操场南侧。',
-  uncertainty:'Source polygon is unchanged. The two hall divisions, 3.4 m raised-floor offset, porch depth, columns and window spacing are photograph-informed estimates. The OSM node only says 学生食堂; identifying the shared outline with 学一/学二 is a spatial inference from the official address, adjacent dormitories and mapped connected stairs. No current survey or measured facade is available.',
+  photoDate:'user reference received 2026-10-30; capture date not independently verified',
+  photoFiles:['92554cbfd49deba97eacfa2733f40c19.jpg','d32d5e5fbf4fdd735759a382cd930886.jpg'],
+  observed:'本轮实拍直接确认学生一食堂：米灰墙、两道灰色水平带、深平挑檐和四方柱、宽楼梯及两道中间钢栏、连续二层金属栏外廊、底层小门面，主入口右侧蓝绿玻璃雨棚。学二布局仍沿用此前学生会照片和源地图。',
+  uncertainty:'Source polygon is unchanged. The two hall divisions, 3.4 m raised-floor offset, porch depth, stair width, columns and window spacing remain photograph-informed estimates. The OSM node only says 学生食堂; identifying the shared outline with 学一/学二 is a spatial inference from the official address, adjacent dormitories and mapped connected stairs. The new photo confirms the student-one facade details but supplies no measured facade dimensions.',
   market:'教育超市韵苑店在北侧韵苑食堂底层；东学店仅核实到紫荆路与东三路交会处，未把未核实商业店名贴到本楼。',
 });
 const BASE=.14, UPPER=3.54, FLOOR_OFFSET=UPPER-BASE;
@@ -63,20 +64,20 @@ export function planYunyuanSouthPrecinct(model,{frame,geoToLocal}={}){
   // A continuous open two-level colonnade, with larger entrance porches where
   // the two mapped east-facing stairways meet the gallery. No opaque box fills it.
   for(const [key,stairId]of[['xueyi','way/110398904'],['xueer','way/110398907']]){
-    const target=to(sourceLines.get(stairId).at(-1)),porch={id:`${key}-porch`,hallId:key,x:(frontX+target.x)/2,z:target.z,width:target.x-frontX+.8,depth:14.2,height:7.88,front:target.x+.4};
+    const target=to(sourceLines.get(stairId).at(-1)),porch={id:`${key}-porch`,hallId:key,x:(frontX+target.x)/2,z:target.z,width:target.x-frontX+.8,depth:14.2,height:7.88,front:target.x+.4,stairWidth:key==='xueyi'?6.6:4.8};
     plan.porches.push(porch);
     plan.walkSurfaces.push({id:porch.id,sourceId:source.id,polygon:rect(porch.x,porch.z,porch.width,porch.depth),surfaceY:UPPER,bridge:true,deckDepth:.25,kind:'porch',estimated:true});
-    for(const x of [frontX+.6,porch.front-.65])for(const dz of [-6.1,-2.6,2.6,6.1]){
+    for(const x of [frontX+.6,porch.front-.65])for(const dz of [-6.1,-porch.stairWidth/2-.55,porch.stairWidth/2+.55,6.1]){
       const col={id:`${key}-column-${x}-${dz}`,x,z:porch.z+dz,width:.6,depth:.7,height:7.55};plan.columns.push(col);barrier(col.id,rect(col.x,col.z,col.width,col.depth),BASE,col.height,'食堂方柱');
     }
     // Split the front guard at the real stair landing, never fence its entrance.
-    const stairWidth=key==='xueyi'?4.2:4.8;
+    const stairWidth=porch.stairWidth;
     for(const side of[-1,1]){
       const a=at(porch.front,porch.z+side*(stairWidth/2+.15)),b=at(porch.front,porch.z+side*(porch.depth/2));plan.rails.push({id:`${key}-front-rail-${side}`,a,b,y:UPPER});
     }
   }
   for(const id of ['way/110398904','way/110398906','way/110398907']){
-    const points=sourceLines.get(id),reversed=id==='way/110398906',a=reversed?points.at(-1):points[0],b=reversed?points[0]:points.at(-1),length=distance(a,b),width=id==='way/110398907'?4.8:id==='way/110398904'?4.2:2.7;
+    const points=sourceLines.get(id),reversed=id==='way/110398906',a=reversed?points.at(-1):points[0],b=reversed?points[0]:points.at(-1),length=distance(a,b),width=id==='way/110398907'?4.8:id==='way/110398904'?6.6:2.7;
     const count=20,upperLandingLength=2,run=Math.min(8.7,length-upperLandingLength-.5),landing=length-run-upperLandingLength,first=mix(a,b,landing/length),stairEnd=mix(a,b,(length-upperLandingLength)/length),steps=[];
     plan.walkSurfaces.push({id:`${id}:upper-landing`,sourceId:id,polygon:segmentPolygon(stairEnd,b,width),surfaceY:UPPER,kind:'stair-landing',bridge:false,estimated:true});
     plan.walkSurfaces.push({id:`${id}:approach`,sourceId:id,polygon:segmentPolygon(a,first,width),surfaceY:BASE,kind:'approach',estimated:true});
@@ -86,12 +87,14 @@ export function planYunyuanSouthPrecinct(model,{frame,geoToLocal}={}){
     }
     const stair={id,a,b,first,stairEnd,width,length,run,upperLandingLength,steps};plan.stairs.push(stair);
     const dx=(b.x-a.x)/length,dz=(b.z-a.z)/length;
-    for(const side of[-1,1]){
-      const offset=width/2+.04,aa={x:first.x-dz*offset*side,z:first.z+dx*offset*side},bb={x:stairEnd.x-dz*offset*side,z:stairEnd.z+dx*offset*side};
-      plan.rails.push({id:`${id}:stair-rail:${side}`,a:aa,b:bb,y:BASE,endY:UPPER,stair:true});
+    const offsets=[-width/2-.04,width/2+.04];
+    if(id==='way/110398904')offsets.push(-width/6,width/6);
+    for(const [index,offset]of offsets.entries()){
+      const aa={x:first.x-dz*offset,z:first.z+dx*offset},bb={x:stairEnd.x-dz*offset,z:stairEnd.z+dx*offset};
+      plan.rails.push({id:`${id}:stair-rail:${index}`,a:aa,b:bb,y:BASE,endY:UPPER,stair:true,divider:index>1});
       // Short per-step barriers match the sloped rail; a single high prism would
       // block someone walking underneath the neighbouring raised gallery.
-      for(const step of steps){const pa={x:step.a.x-dz*offset*side,z:step.a.z+dx*offset*side},pb={x:step.b.x-dz*offset*side,z:step.b.z+dx*offset*side};barrier(`${step.id}:side:${side}`,segmentPolygon(pa,pb,.1),step.surfaceY,step.surfaceY+1.05,'楼梯扶手');}
+      for(const step of steps){const pa={x:step.a.x-dz*offset,z:step.a.z+dx*offset},pb={x:step.b.x-dz*offset,z:step.b.z+dx*offset};barrier(`${step.id}:rail:${index}`,segmentPolygon(pa,pb,.1),step.surfaceY,step.surfaceY+1.05,'楼梯扶手');}
     }
   }
   // Main longitudinal gallery: leave both ends open to the porch connections.
@@ -125,11 +128,11 @@ export function createYunyuanSouthPrecinct(THREE,model,options={}){
   const plan=planYunyuanSouthPrecinct(model,options),group=new THREE.Group();group.name='学一 · 学二食堂照片校准';group.userData={component:'yunyuan-south-precinct',...YUNYUAN_SOUTH_EVIDENCE,estimated:true};
   const infrastructure={buildings:plan.buildings,barriers:plan.barriers,walkSurfaces:plan.walkSurfaces,replacedBuildingIds:plan.replacedBuildingIds,replacedRoadIds:plan.replacedRoadIds,viewpoints:plan.viewpoints};
   const geometry=new Set(),materials=new Set(),textures=new Set(),batches=new Map(),slabBatches=new Map(),dummy=new THREE.Object3D();let disposed=false;
-  const dispose=()=>{if(disposed)return;disposed=true;geometry.forEach(x=>x.dispose());materials.forEach(x=>x.dispose());textures.forEach(x=>x.dispose());group.removeFromParent();group.clear();};
+  const dispose=()=>{if(disposed)return;disposed=true;group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});geometry.forEach(x=>x.dispose());materials.forEach(x=>x.dispose());textures.forEach(x=>x.dispose());group.removeFromParent();group.clear();};
   if(!plan.accepted)return{group,plan,infrastructure,viewpoints:plan.viewpoints,dispose,update(){}};
   const {origin,ex,ez,yaw}=plan.frame,at=(x,z)=>({x:origin.x+ex.x*x+ez.x*z,z:origin.z+ex.z*x+ez.z*z});
   const mat=(color,roughness=.9,metalness=0)=>{const m=new THREE.MeshStandardMaterial({color,roughness,metalness});materials.add(m);return m;};
-  const plaster=mat('#dfdcc6'),grey=mat('#858c80'),shadow=mat('#50574b'),concrete=mat('#aaa99e'),glass=mat('#4c6259',.35,.15),metal=mat('#aeb5ae',.48,.5),dark=mat('#3b443d'),warm=mat('#c7b58e');
+  const plaster=mat('#ddd9c9'),grey=mat('#898a81'),shadow=mat('#50574b'),concrete=mat('#aaa99e'),glass=mat('#4c6259',.35,.15),metal=mat('#b9bdb6',.38,.62),dark=mat('#3b443d'),warm=mat('#c7b58e'),canopyGlass=mat('#8aafa5',.26,.18);
   const paint=renderTexture(THREE);textures.add(paint);plaster.map=paint;concrete.map=paint;
   const boxGeo=new THREE.BoxGeometry(1,1,1);geometry.add(boxGeo);
   function box(name,m,x,y,z,w,h,d,angle=yaw){const key=`${name}/${m.uuid}`;if(!batches.has(key))batches.set(key,{name,material:m,items:[]});dummy.position.set(x,y,z);dummy.rotation.set(0,angle,0);dummy.scale.set(w,h,d);dummy.updateMatrix();batches.get(key).items.push(dummy.matrix.clone());}
@@ -138,7 +141,7 @@ export function createYunyuanSouthPrecinct(THREE,model,options={}){
   function slab(name,poly,top,depth,m){const shape=new THREE.Shape(poly.map(p=>new THREE.Vector2(p.x,-p.z))),geo=new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:false});geo.rotateX(-Math.PI/2);geo.translate(0,top-depth,0);applyWorldUV(geo);const flat=geo.index?geo.toNonIndexed():geo;if(flat!==geo)geo.dispose();const key=name+'/'+m.uuid;if(!slabBatches.has(key))slabBatches.set(key,{name,material:m,items:[]});slabBatches.get(key).items.push(flat);}
   for(const h of plan.halls){
     localBox('south-hall-shell',plaster,h.x,(BASE+h.height)/2,h.z,h.width,h.height-BASE,h.depth);
-    for(const y of [.48,3.32,5.9,7.65])localBox('south-grey-horizontal-band',grey,h.frontX+.06,y,h.z,.16,y===3.32?.32:.18,h.depth);
+    for(const y of [3.32,6.12])localBox('south-grey-horizontal-band',grey,h.frontX+.06,y,h.z,.16,y===3.32?.32:.22,h.depth);
     localBox('south-flat-roof-coping',grey,h.x,h.height+.14,h.z,h.width+.5,.28,h.depth+.4);
     // Side and rear openings are modest repeated windows, with explicitly
     // estimated spacing. The front is dominated by the photographed entrances.
@@ -170,6 +173,19 @@ export function createYunyuanSouthPrecinct(THREE,model,options={}){
     localBox('south-main-door-transom',metal,h.frontX+.48,5.98,p.z,.06,.07,6.93);
     for(const dz of[-.22,.22])localBox('south-main-door-handle',metal,h.frontX+.59,4.65,p.z+dz,.14,.65,.035);
     if(p.hallId==='xueyi'){
+      // The user's street photo exposes the long blue-green canopy to the
+      // north (viewer-right) of the principal porch. Its supports share the
+      // existing outside gallery rail, keeping the walking strip clear.
+      const canopyStart=h.start+.8,canopyEnd=p.z-p.depth/2-.45,canopyDepth=canopyEnd-canopyStart,canopyX=h.frontX+1.68,canopyZ=(canopyStart+canopyEnd)/2;
+      localBox('south-glazed-gallery-canopy',canopyGlass,canopyX,7.43,canopyZ,3.35,.065,canopyDepth);
+      for(const x of[h.frontX+.08,h.frontX+3.26])localBox('south-canopy-frame',metal,x,7.38,canopyZ,.055,.10,canopyDepth);
+      for(let z=canopyStart;z<=canopyEnd;z+=1.35)localBox('south-canopy-frame',metal,canopyX,7.38,z,3.35,.10,.05);
+      for(let z=canopyStart+.2;z<canopyEnd;z+=5.4)localBox('south-canopy-frame',metal,h.frontX+3.26,(UPPER+7.38)/2,z,.06,7.38-UPPER,.06);
+      // Paired exposed rain pipes are visible beside the deep entrance eave.
+      for(const dz of[7.48,7.78]){
+        localBox('south-exposed-pipework',metal,h.frontX+.34,5.88,p.z-dz,.10,3.18,.10);
+        localBox('south-exposed-pipework',metal,h.frontX+.34,7.42,p.z-dz+.72,.10,.10,1.5);
+      }
       // A 2018 student-union close-up explicitly places a glazed optical shop
       // below 学一. Reproduce the shopfront construction, not its historical
       // brand, phone number, advertisements or an invented current tenant.
@@ -222,7 +238,7 @@ export function createYunyuanSouthPrecinct(THREE,model,options={}){
     const combined=mergeGeometries(items,false);items.forEach(g=>g.dispose());geometry.add(combined);const mesh=new THREE.Mesh(combined,material);mesh.name=name;mesh.receiveShadow=true;mesh.castShadow=false;mesh.userData={component:name,sourceId:plan.sourceId,estimated:true};group.add(mesh);
   }
   const center=at(plan.frame.width/2,plan.frame.depth/2),fine=[];
-  group.traverse(o=>{if(o.isMesh&&/window-bars|window-transom|rail-bars|rail-posts|door-handle|louvers|stair-nosing/.test(o.name))fine.push(o);});
+  group.traverse(o=>{if(o.isMesh&&/window-bars|window-transom|rail-bars|rail-posts|door-handle|louvers|stair-nosing|canopy-frame|pipework/.test(o.name))fine.push(o);});
   function update(camera,{detailDistanceScale=1}={}){
     group.visible=true;const p=camera?.position||camera,near=!p||Math.hypot(p.x-center.x,p.z-center.z)<240*detailDistanceScale;
     for(const mesh of fine)mesh.visible=near;
