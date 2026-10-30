@@ -1,3 +1,4 @@
+import {IMPORT_LIMIT,IMPORT_PROMPT,validateImportInput,validateImportResult} from './import.mjs';
 import {createTasayProxy} from '../tasay/proxy.mjs';
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const error=(status,message,extra={})=>Response.json({error:{message}},{status,headers:{...headers,...extra}});
@@ -33,27 +34,29 @@ export function validateAnalysis(value,sample){
 export function createSheLoveProxy({proxy=createTasayProxy()}={}){
   return async function handle(request,context={}){
     const url=new URL(request.url);
-    if(url.pathname!=='/api/works/she-love-me/analyze')return null;
+    const importing=url.pathname==='/api/works/she-love-me/import';
+    if(!importing&&url.pathname!=='/api/works/she-love-me/analyze')return null;
     if(request.method!=='POST')return error(405,'请使用 POST 请求。');
     if(typeof context.audienceId!=='string'||!context.audienceId)return error(401,'请先填写校园昵称。');
     if(request.headers.get('Origin')!==url.origin)return error(403,'请求来源不被允许。');
     if(!/^application\/json(?:\s*;|$)/i.test(request.headers.get('Content-Type')||''))return error(415,'请使用 JSON 请求。');
     if(request.signal.aborted)return error(499,'请求已取消。');
-    let sample;
-    try{if(Number(request.headers.get('Content-Length'))>98304)return error(413,'抽样内容过长。');sample=validateInput(await readBounded(request.body,98304));}
+    let sample;const limit=importing?IMPORT_LIMIT:98304;
+    try{if(Number(request.headers.get('Content-Length'))>limit)return error(413,'内容过长，请分段整理。');sample=(importing?validateImportInput:validateInput)(await readBounded(request.body,limit));}
     catch(e){return error(e instanceof RangeError?413:400,e instanceof SyntaxError?'请求 JSON 无效。':e.message==='empty'?'请提供样本。':e.message==='large'?'抽样内容过长。':e.message);}
     if(request.signal.aborted)return error(499,'请求已取消。');
-    const internal=new Request(new URL('/api/works/tasay/default/chat/completions',url),{method:'POST',headers:{'Content-Type':'application/json',Origin:url.origin},signal:request.signal,body:JSON.stringify({messages:[{role:'system',content:SYSTEM_PROMPT},{role:'user',content:JSON.stringify(sample)}],stream:false,max_tokens:2048,temperature:0.4,response_format:{type:'json_object'}})});
+    const internal=new Request(new URL('/api/works/tasay/default/chat/completions',url),{method:'POST',headers:{'Content-Type':'application/json',Origin:url.origin},signal:request.signal,body:JSON.stringify({messages:[{role:'system',content:importing?IMPORT_PROMPT:SYSTEM_PROMPT},{role:'user',content:importing?(sample.images.length?[{type:'text',text:'请按顺序转录这些聊天截图。相邻分片有少量重叠。'},...sample.images.map(url=>({type:'image_url',image_url:{url}}))]:sample.text):JSON.stringify(sample)}],stream:false,max_tokens:importing?8192:2048,temperature:importing?0:0.4,response_format:{type:'json_object'}})});
     try{
-      const response=await proxy(internal,context);
+      const response=await proxy(internal,importing?{...context,modelTask:sample.images.length?'she-love-vision':'she-love-import'}:context);
       if(!response.ok){const data=await response.json().catch(()=>({}));const message=data.error?.message,retry=response.headers.get('Retry-After');return error(response.status,message==='response_format unsupported'?'当前模型暂不支持结构化解读，请联系主持人配置兼容模型。':message||'模型服务暂不可用，本地统计仍可使用。',/^\d{1,3}$/.test(retry||'')?{'Retry-After':String(Math.max(1,Math.min(120,Number(retry))))}:{});}
-      const data=await readBounded(response.body,160000);
+      const data=await readBounded(response.body,300000);
       let content=data.choices?.[0]?.message?.content;
-      if(typeof content!=='string'||content.length>20000)throw new Error('invalid content');
+      if(typeof content!=='string'||content.length>(importing?120000:20000))throw new Error('invalid content');
       content=content.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
-      const analysis=validateAnalysis(JSON.parse(content),sample);
+      if(data.choices?.[0]?.finish_reason==='length')return error(502,'内容较长，模型未能完整整理，请减少消息或截图后重试。');
+      const analysis=importing?validateImportResult(JSON.parse(content)):validateAnalysis(JSON.parse(content),sample);
       if(request.signal.aborted)return error(499,'请求已取消。');
-      return Response.json({analysis,sampleCount:sample.messages.length},{headers});
-    }catch{return error(request.signal.aborted?499:502,request.signal.aborted?'请求已取消。':'AI 没有返回完整、可核对的解读。统计结果已保留，可以重试。');}
+      return Response.json(importing?{imported:analysis}:{analysis,sampleCount:sample.messages.length},{headers});
+    }catch{return error(request.signal.aborted?499:502,request.signal.aborted?'请求已取消。':importing?'AI 未能完整识别，请换清晰截图或缩短文字后重试。':'AI 没有返回完整、可核对的解读。统计结果已保留，可以重试。');}
   };
 }

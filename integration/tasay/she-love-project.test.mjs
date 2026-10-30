@@ -121,7 +121,7 @@ test('examples run without storage or network, render stats, export safely and c
  await f.click('#clear');assert.equal(f.document.getElementById('chat-text').value,'');assert.equal(f.document.getElementById('report').hidden,true);assert.equal(f.document.getElementById('sample-preview').textContent,'');
 });
 test('raw input and model content render as text; changing selection invalidates consent and report',async t=>{
- const malicious='<img src=x onerror="alert(1)">';const f=pageFixture(t,{fetchImpl:async()=>Response.json({analysis:{...aiResult,summary:malicious}})});await f.click('#tab-paste');const input=f.document.getElementById('chat-text');input.value=`甲: ${malicious}\n乙: 好呀\n甲: 来看看\n乙: 好的`;input.dispatchEvent(new f.win.Event('input'));await f.click('#analyze');assert.equal(f.document.querySelector('#report img'),null);assert.match(f.document.getElementById('sample-preview').textContent,/<img/);
+ const malicious='<img src=x onerror="alert(1)">';const f=pageFixture(t,{fetchImpl:async()=>Response.json({analysis:{...aiResult,summary:malicious}})});await f.click('#tab-paste');const input=f.document.getElementById('chat-text');input.value=`甲: ${malicious}\n乙: 好呀\n甲: 来看看\n乙: 好的`;input.dispatchEvent(new f.win.Event('input'));await f.click('#local-analyze');assert.equal(f.document.querySelector('#report img'),null);assert.match(f.document.getElementById('sample-preview').textContent,/<img/);
  f.consent();await f.click('#ai-analyze');assert.equal(f.requests.length,1);const sent=JSON.parse(f.requests[0].init.body);assert.equal(sent.consent,true);assert.equal(sent.messages.length,4);assert.equal(f.document.getElementById('ai-result').textContent.includes(malicious),true);assert.equal(f.document.querySelector('#ai-result img'),null);
  f.document.getElementById('self-select').dispatchEvent(new f.win.Event('change'));assert.equal(f.document.getElementById('report').hidden,true);assert.equal(f.document.getElementById('consent').checked,false);
 });
@@ -160,4 +160,18 @@ test('chat has no hidden project entry before or after completion, including old
   assert.ok(f.document.querySelector('.wx-profile'));
   assertNoEntry();
   for (const name of ['SheLoveProject.tsx', 'sheLoveCompletion.ts', 'she-love-project.css']) assert.equal(existsSync(path.join(overrideRoot, 'components', name)), false);
+});
+
+test('AI import requires consent, previews editable rows and only analyzes after confirmation',async t=>{
+ const imported={messages:['我','对方','我','对方'].map((sender,i)=>({sender,content:i===1?'<img src=x onerror=alert(1)>':'消息 '+i,timestamp:null,uncertain:i===1})),warnings:['缺少日期'],truncated:false};
+ const f=pageFixture(t,{fetchImpl:async()=>Response.json({imported})});await f.click('#tab-paste');const input=f.document.querySelector('#chat-text');input.value='我\n明天一起看展\n对方\n好呀';input.dispatchEvent(new f.win.Event('input'));
+ await f.click('#analyze');assert.equal(f.requests.length,0);const consent=f.document.querySelector('#import-consent');consent.checked=true;consent.dispatchEvent(new f.win.Event('change'));await f.click('#analyze');
+ assert.equal(f.requests[0].url,'/api/works/she-love-me/import');assert.equal(JSON.parse(f.requests[0].init.body).text,input.value);assert.equal(f.document.querySelector('#import-review').hidden,false);assert.equal(f.document.querySelector('#report').hidden,true);assert.equal(f.document.querySelector('#review-rows img'),null);assert.equal(f.document.querySelectorAll('.review-row').length,4);
+ const message=f.document.querySelector('.review-row textarea');message.value='修改过的消息';message.dispatchEvent(new f.win.Event('input'));await f.click('#analyze');assert.equal(f.document.querySelector('#report').hidden,false);assert.match(f.document.querySelector('#sample-preview').textContent,/修改过/);assert.equal(f.requests.length,1);
+ await f.click('#clear');assert.equal(f.document.querySelectorAll('.review-row').length,0);assert.equal(f.document.querySelector('#import-consent').checked,false);
+});
+test('changing source or pausing cancels import and prevents stale result replacing input',async t=>{
+ let resolve;const f=pageFixture(t,{embedded:true,fetchImpl:()=>new Promise(r=>{resolve=r;})});await f.click('#tab-paste');const input=f.document.querySelector('#chat-text');input.value='任意聊天';input.dispatchEvent(new f.win.Event('input'));f.document.querySelector('#import-consent').checked=true;await f.click('#analyze');const signal=f.requests[0].init.signal;
+ f.hostMessage({type:'campus:activity',paused:true});assert.equal(signal.aborted,true);resolve(Response.json({imported:{messages:[],warnings:[],truncated:false}}));await new Promise(r=>setImmediate(r));assert.equal(f.document.querySelector('#import-review').hidden,true);
+ f.hostMessage({type:'campus:activity',paused:false});assert.equal(f.document.querySelector('#analyze').disabled,false);assert.equal(input.value,'任意聊天');
 });

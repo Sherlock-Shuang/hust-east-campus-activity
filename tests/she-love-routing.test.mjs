@@ -22,8 +22,10 @@ test('standalone project supports GET, HEAD, redirect and only its explicit publ
   assert.equal((await fetch(base+'/works/unknown/')).status,404);
   const input={method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:'{}'};
   assert.equal((await fetch(base+'/api/works/she-love-me/analyze',input)).status,401);
+  assert.equal((await fetch(base+'/api/works/she-love-me/import',input)).status,401);
   const joined=await fetch(base+'/api/audience/join',{...input,body:JSON.stringify({nickname:'隔离测试',tabId:'she-love-qa'})});
   assert.equal(joined.status,200);const cookie=joined.headers.get('set-cookie').split(';')[0];
   assert.equal((await fetch(base+'/api/works/she-love-me/analyze',{...input,headers:{...input.headers,Cookie:cookie}})).status,400);
+  assert.equal((await fetch(base+'/api/works/she-love-me/import',{...input,headers:{...input.headers,Cookie:cookie}})).status,400);
 
 });

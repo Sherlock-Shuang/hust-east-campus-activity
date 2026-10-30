@@ -18,6 +18,7 @@
       <div class="tabs" role="tablist" aria-label="聊天来源">
         <button type="button" id="tab-demo" role="tab" aria-selected="true" aria-controls="panel-demo" data-tab="demo">示例</button>
         <button type="button" id="tab-paste" role="tab" aria-selected="false" aria-controls="panel-paste" tabindex="-1" data-tab="paste">粘贴</button>
+        <button type="button" id="tab-image" role="tab" aria-selected="false" aria-controls="panel-image" tabindex="-1" data-tab="image">图片</button>
         <button type="button" id="tab-file" role="tab" aria-selected="false" aria-controls="panel-file" tabindex="-1" data-tab="file">导入</button>
       </div>
       <button class="text-button" id="clear" type="button">清空</button>
@@ -27,16 +28,29 @@
       <div class="chat-preview" id="chat-preview" aria-label="示例聊天预览"></div>
     </div>
     <div id="panel-paste" role="tabpanel" aria-labelledby="tab-paste" hidden>
-      <textarea id="chat-text" aria-label="聊天记录" spellcheck="false" placeholder="小林: 周末一起去看展吗？&#10;小夏: 好呀！&#10;&#10;至少 4 条双人消息"></textarea>
-      <details class="format-help"><summary>格式说明</summary><p>每行「姓名: 内容」，可在前面加「2026-10-12 18:00」。也支持 JSON messages 数组：sender、content、timestamp（可选）。</p></details>
+      <textarea id="chat-text" aria-label="聊天记录" spellcheck="false" placeholder="把聊天记录原样粘贴在这里，AI 会帮你整理。"></textarea>
+
+    </div>
+    <div id="panel-image" role="tabpanel" aria-labelledby="tab-image" hidden>
+      <label class="upload-zone" for="chat-images"><span>选择聊天截图</span><small>JPG / PNG / WebP · 最多 4 张，按选择顺序</small><input id="chat-images" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
+      <div id="image-preview" class="image-preview"></div>
     </div>
     <div id="panel-file" role="tabpanel" aria-labelledby="tab-file" hidden>
       <label class="upload-zone" for="chat-file"><span>选择聊天文件</span><small>JSON / TXT / Markdown · ≤ 2 MB</small><input id="chat-file" type="file" accept=".json,.txt,.md,text/plain,application/json,text/markdown"></label>
       <p class="micro" id="file-name"></p>
     </div>
-    <div class="controls"><label>我是<select id="self-select" aria-label="选择你的发送者"></select></label><label>范围<select id="range-select" title="以最后一条消息为基准"><option value="0">全部</option><option value="7">最近 7 天</option><option value="30">最近 30 天</option></select></label></div>
+    <div id="import-options" hidden>
+      <label class="consent"><input type="checkbox" id="import-consent"><span>同意将这段原文或图片发送给 AI 整理。</span></label>
+      <div id="import-join-box" hidden><label class="field-label" for="import-nickname">校园昵称</label><input id="import-nickname" maxlength="24" placeholder="填写昵称后继续" autocomplete="off"></div>
+    </div>
+    <section id="import-review" class="import-review" hidden aria-label="核对聊天记录">
+      <div class="subheading"><h3>核对消息</h3><button class="text-button" id="add-message" type="button">添加</button></div>
+      <p class="micro" id="import-summary"></p><p class="micro" id="import-warnings"></p>
+      <div id="review-rows"></div>
+    </section>
+    <div class="controls" id="chat-controls"><label>我是<select id="self-select" aria-label="选择你的发送者"></select></label><label>范围<select id="range-select" title="以最后一条消息为基准"><option value="0">全部</option><option value="7">最近 7 天</option><option value="30">最近 30 天</option></select></label></div>
     <p class="micro" id="range-note"></p>
-    <div class="run-row"><button class="primary" id="analyze" type="button">分析</button><span class="micro">本地统计，不保存聊天。</span></div>
+    <div class="run-row"><button class="primary" id="analyze" type="button">分析</button><button class="text-button" id="local-analyze" type="button" hidden>直接统计</button><button class="text-button" id="cancel-import" type="button" hidden>取消</button><span class="micro" id="input-privacy">本地统计，不保存聊天。</span></div>
     <p id="input-status" class="status" role="status" aria-live="polite"></p>
   </section>
   <section id="report" aria-labelledby="report-title" hidden>
