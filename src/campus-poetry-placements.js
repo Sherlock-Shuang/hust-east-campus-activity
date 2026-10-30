@@ -102,20 +102,20 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
   // sits in front of the upper windowed gym; painting the upper wall at eye
   // level would bury artwork behind that actual rendered lower volume.
   sourceWall(2,'way/1484333086',[114.42899115417319,30.51535230642861],{
-    width:3,height:1.4,y:2.2,out:.04,distance:5,surface:'gym-southwest-base-blank-wall',expectedSupportNames:[''],
+    width:8.4,height:3.8,y:2.75,out:.04,distance:8,surface:'gym-southwest-base-blank-wall',expectedSupportNames:[''],
   });
   sourceWall(4,'way/1484333086',[114.4293349597728,30.51532522465536],{
-    width:3.4,height:1.8,y:2.2,out:.04,distance:5,surface:'gym-southeast-base-blank-wall',expectedSupportNames:[''],
+    width:10,height:3.8,y:2.75,out:.04,distance:12,surface:'gym-southeast-base-blank-wall',expectedSupportNames:[''],
   });
 
   // A-wing end is intentionally blind here, unlike its glazed stair tower.
   sourceWall(3,'way/1023544717',[114.422122550059,30.51621457780646],{
-    width:3.2,height:1.8,y:1.8,out:.06,distance:5,surface:'east-nine-a-blank-end-wall-low',expectedSupportNames:[''],
+    width:8.4,height:3.1,y:2,out:.06,distance:11,surface:'east-nine-a-blank-end-wall-low',expectedSupportNames:[''],
   });
-  // Raise the lakeside phrase above the first-row windows, and move it six
-  // metres toward the path junction. It no longer sits at shoe height.
+  // Use the blank strip above the first-row windows and below the floor
+  // band. The projecting band must not cut across the enlarged letters.
   sourceWall(8,'way/1023544717',[114.42165914853514,30.5150771016799],{
-    width:2.4,height:.5,y:3.8,out:.06,along:6,distance:6,surface:'east-nine-d-path-facing-wall-band',expectedSupportNames:[''],
+    width:6.4,height:.5,y:3.8,out:.06,along:6,distance:9,surface:'east-nine-d-path-facing-wall-band',expectedSupportNames:[''],
     approachRoadId:'way/97080595',approachLabel:'东九 D 区湖边弯道 · 步道交汇处',
   });
 
@@ -125,7 +125,7 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
     // The original inscription is on +Z. Use the west SIDE of the existing
     // dark stone plinth and keep clear of its cap and foot course.
     add(5,squareRecord,{x:p.x-c*p.plinthWidth/2,z:p.z+s*p.plinthWidth/2,nx:-c,nz:s},{
-      width:1.9,height:1.1,y:p.y+.96,out:.025,distance:4,floor:.16,
+      width:2.12,height:1.38,y:p.y+.96,out:.025,distance:4,floor:.16,
       surface:'einstein-plinth-west-side',ink:'#bcc2b2',expectedSupportNames:['雕塑、阶梯、柱架与矮篱'],
     });
   }
@@ -133,25 +133,25 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
   const opto=source.get(OPTO_BUILDING_ID),optoPlan=opto&&planOptoBuilding(opto,{frame,geoToLocal});
   if(optoPlan){
     for(const [index,e,width,height,y,distance]of[
-      [6,optoPlan.groundFloor.college,2.6,2.6,1.8,4],
-      [7,optoPlan.rear,2,2.8,1.9,4.2],
-    ])add(index,opto,{x:e.x-e.nx*1.6+e.tx*e.width/2,z:e.z-e.nz*1.6+e.tz*e.width/2,nx:-e.tx,nz:-e.tz},{
+      [6,optoPlan.groundFloor.college,5.2,3.4,2.1,4],
+      [7,optoPlan.rear,3.6,3.4,2.22,4.2],
+    ])add(index,opto,{x:e.x-e.nx*(index===6?2.8:2)+e.tx*e.width/2,z:e.z-e.nz*(index===6?2.8:2)+e.tz*e.width/2,nx:-e.tx,nz:-e.tz},{
       // The photo-derived stone lining/poster relief projects up to 0.1225 m
-      // into this corridor. Keep the same copy rectangle and eye positions,
-      // with 7.5 mm clearance above that real finish instead of buried paint.
+      // into this corridor. Keep the enlarged paint 7.5 mm clear of that
+      // finish, while the ordinary entrance approach stays unchanged.
       width,height,y,out:.13,distance,floor:.14,surface:index===6?'opto-left-entry-corridor-right-wall':'opto-north-foyer-right-wall',
       approach:{x:e.x-e.nx*.35-e.tx*e.width*.15,z:e.z-e.nz*.35-e.tz*e.width*.15,y:.14},
       approachLabel:index===6?'学院左侧楼门 · 进入门槛即见':'光电楼后门 · 进入门槛即见',
-      ink:'#e4e2d3',expectedSupportNames:['opto-photo-light-stone-details','opto-photo-dark-details','opto-window-head-sill'],
+      ink:'#304139',expectedSupportNames:['opto-photo-light-stone-details','opto-photo-dark-details','opto-window-head-sill'],
     });
   }
 
   // Keep STAY on the same road-facing blank band. The photographed seven-row
   // facade has its next window reveal at y=4.755 m; the old 4.775 m centre
-  // overlapped it. Lower the small inscription 0.325 m without moving its
-  // source-edge location, width or ordinary-road viewing point.
+  // overlapped it. Keep the enlarged inscription below that next window
+  // without moving its source-edge location or ordinary-road viewing point.
   sourceWall(9,'way/98867881',[114.4278446600322,30.513006891543753],{
-    width:1.8,height:.48,y:4.45,out:.04,along:-8,distance:8,surface:'east-eleven-entry-wall-band',
+    width:5.4,height:1.25,y:3.95,out:.04,along:-8,distance:10,surface:'east-eleven-entry-wall-band',
     expectedSupportNames:['way/98867881:photo-main:0'],approachRoadId:'way/103495015',approachLabel:'东十一教学楼入口前道路',
   });
   return plan.sort((a,b)=>a.index-b.index);

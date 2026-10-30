@@ -215,7 +215,7 @@ test('production artwork meshes stay matte and readable nearby, fade continuousl
       save(){stack.push({font:this.font,textAlign:this.textAlign,globalAlpha:this.globalAlpha});},
       restore(){Object.assign(this,stack.pop());},
     };
-    for(const name of ['clearRect','fillRect','scale','beginPath','moveTo','lineTo','bezierCurveTo','stroke','strokeRect','arc','ellipse','fill'])ctx[name]=()=>{};
+    for(const name of ['clearRect','fillRect','scale','beginPath','moveTo','lineTo','bezierCurveTo','stroke','strokeRect','strokeText','arc','ellipse','fill'])ctx[name]=()=>{};
     const canvas={width:0,height:0,text,getContext(type){assert.equal(type,'2d');return ctx;}};canvases.push(canvas);return canvas;
   }}});
   try{

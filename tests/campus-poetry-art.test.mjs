@@ -38,7 +38,7 @@ function recordingContext(width,height,advanceScale=1){
     save(){stack.push({font:this.font,textAlign:this.textAlign,textBaseline:this.textBaseline,globalAlpha:this.globalAlpha});},
     restore(){Object.assign(this,stack.pop());},
   };
-  for(const name of ['scale','beginPath','moveTo','lineTo','bezierCurveTo','stroke','strokeRect','arc','ellipse','fill'])ctx[name]=(...args)=>operations.push([name,...args]);
+  for(const name of ['scale','beginPath','moveTo','lineTo','bezierCurveTo','stroke','strokeRect','strokeText','arc','ellipse','fill'])ctx[name]=(...args)=>operations.push([name,...args]);
   return {ctx,text,operations,width,height};
 }
 

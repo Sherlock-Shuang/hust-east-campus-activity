@@ -48,26 +48,36 @@ function motif(ctx,w,h,kind,ink){
 
 export function paintCampusMural(ctx,canvas,item){
   const w=canvas.width,h=canvas.height,poem=item.poetryId;
+  const prominent=poem&&poem!=='life-ai'&&poem!=='life-art';
   const shallow=poem&&item.lines.length===1&&item.height/item.width<.35;
   ctx.clearRect(0,0,w,h);ctx.fillStyle=item.color;ctx.textBaseline='middle';ctx.textAlign='center';
+  function drawText(value,x,y,size){
+    // A thin paint outline keeps the two foyer pieces legible across the
+    // existing light stone panels and dark decorative bands.
+    if(poem==='heroes'||poem==='breeze'){
+      ctx.strokeStyle='#e4e2d3';ctx.lineWidth=size*.06;ctx.lineJoin='round';
+      ctx.strokeText(value,x,y);
+    }
+    ctx.fillText(value,x,y);
+  }
   if(poem&&!shallow)motif(ctx,w,h,item.motif,item.color);
   const family=item.latin?'Georgia, "Times New Roman", serif':item.vertical||item.motif==='mountains'?kai:song;
   if(item.vertical){
-    const size=Math.min(h*.059,w*.12);
+    const size=Math.min(h*.073,w*.16);
     ctx.font=`400 ${size}px ${family}`;
-    item.lines.forEach((line,i)=>[...line].forEach((char,j)=>ctx.fillText(char,w*(.63-i*.26),h*.13+j*size*1.06)));
+    item.lines.forEach((line,i)=>[...line].forEach((char,j)=>drawText(char,w*(.66-i*.32),h*.06+j*size*1.06,size)));
     return;
   }
   const count=item.lines.length;
-  const blockHeight=h*(poem?.46:count>1?.7:.8),step=blockHeight/count;
-  const first=shallow?h*.5:poem?(count===1?h*.46:h*.28):h*.5-step*(count-1)/2;
+  const blockHeight=h*(prominent?(count>2?.60:.54):poem?.46:count>1?.7:.8),step=blockHeight/count;
+  const first=shallow?h*.5:poem?(count===1?h*.46:prominent?h*.23:h*.28):h*.5-step*(count-1)/2;
   item.lines.forEach((line,i)=>{
-    let size=shallow?h*.50:poem?(count===1?h*.19:step*.64):step*.65;
+    let size=shallow?h*(prominent?.80:.60):poem?(count===1?h*.23:step*(prominent?.82:.77)):step*.65;
     const font=n=>`${item.latin&&item.motif!=='orbit'?'italic ':''}400 ${n}px ${family}`;
-    ctx.font=font(size);size*=Math.min(1,w*(poem?.78:.94)/Math.max(1,ctx.measureText(line).width));ctx.font=font(size);
+    ctx.font=font(size);size*=Math.min(1,w*(poem?.90:.94)/Math.max(1,ctx.measureText(line).width));ctx.font=font(size);
     if(item.motif==='orbit'){
       const gap=size*.42,chars=[...line],widths=chars.map(c=>ctx.measureText(c).width),total=widths.reduce((a,b)=>a+b,0)+gap*(chars.length-1);
       let x=(w-total)/2;ctx.textAlign='left';chars.forEach((c,j)=>{ctx.fillText(c,x,first);x+=widths[j]+gap;});ctx.textAlign='center';
-    }else ctx.fillText(line,w/2,first+i*step);
+    }else drawText(line,w/2,first+i*step,size);
   });
 }
