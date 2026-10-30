@@ -25,6 +25,8 @@
 
 模型和 Unity 新入口采用内容哈希路径及 immutable 缓存，配置/HTML 及时更新，ETag/Range/304/206 有测试。解码器随包提供，不依赖外部 CDN。图书馆 `?assets=original` 可用保留模型作视觉对照。原生日礼物工程、原 ta-say 工程、剧情、胜利条件和存档均未修改。
 
+公网实际Brotli模型传输补测为39.49 → 15.15 MB（减少61.6%），不能混同原GLB减少69.8%。在Chrome模拟10 Mbps/80 ms的新浏览器环境中，原/优化图书馆各一次真实ready为48.19 / 22.24秒；原文件CDN MISS、新文件HIT，只有单轮，故不把时间差说成严格受控的普遍收益或真手机结论。
+
 ### 活动服务
 
 - SSE 校时只发送时间，不再为每个连接反复执行全场 COUNT。展示人数短缓存并合并同时发起的查询；入场上限、身份、权限和探索事件仍实时校验。
@@ -65,6 +67,12 @@
 流畅档另外一组冷/热运行，P95 均为 33.4 ms，末段绘制率 29.6–30.4 Hz。没有把主动 30 Hz 当作性能下降或自动降档条件。以上仅是本机短测，不是手机的稳定帧率承诺。
 
 原始报告及截图：`artifacts/performance-phase2/release-baseline-browser/`、`release-final-browser/`、`release-smooth-browser/`。更早受其他进程或源码同步影响的数据只作排障，不用于这里的收益数字。
+
+### 真实 30 分钟连续渲染
+
+同一实际 Chrome 页面，固定流畅档、韵苑出生区持续环视，实际运行 1,800.136 秒，没有刷新、假时钟或强制 GC。非滚动会话共 53,998 次绘制，平均 29.9765 FPS，P95/P99 直方图上界均为 34 ms；超过 100 ms 的长帧累计 3 次。会话包含开测前的14个间隔/1.2秒，其中已有1次长帧，正式计时段新增2次。30次每分钟检查Documents始终为1，零脚本错误、零模型/运行资源错误（仅favicon图标404），结束后测试资源关闭。记录包含六份每五分钟的完整会话报告及首末截图。
+
+期间另一次公网验收与模型弱网测试存在短暂并行图形负载，动态车流和环视可见量也会变化，因此不以开始/结尾 CPU 差异声称热稳定收益。后约十分钟没有额外 GPU 测试。这仍是本机桌面测试，不是中低端手机或全图最高速路线的半小时结果。条件、内存波动和时间区间见 [30 分钟原始会话验收](PERFORMANCE-PHASE2-BROWSER-SOAK.md)，原始数据位于 `artifacts/performance-phase2/browser-soak-30m/`。
 
 ### 服务端 100 人长测
 
@@ -111,6 +119,8 @@ npm start
 
 普通页面不增加诊断 UI。需要导出报告时用 `/?diagnostics=1`，需真实 GPU 计时再加 `&gpu=1`。绘制调用统计本轮含倒影和阴影/主画面，旧版只读最后一个 render 的快照；不能直接比较两者原始 calls。
 
+以下性能验收脚本在本机 `deployment/performance-phase2-20261030/` 或对应 Git 部署仓库执行；非 Git 主目录仅同步运行源码和适用测试，未复制半套部署工具。
+
 重现命令：
 
 ```sh
@@ -136,3 +146,5 @@ node scripts/soak-activity-local.mjs --seconds 1800 --audiences 100 --heartbeat-
 模块说明：[校园](PERFORMANCE-PHASE2-CAMPUS.md)、[C118/室外效果](PERFORMANCE-PHASE2-C118.md)、[作品资源](WORK-ASSET-PERFORMANCE-PHASE2-2026-10-30.md)。
 
 公网核对发现并修复了路由fragment未同步至实际 `vercel.json` 的问题：新增内容哈希模型原先返回默认重验证策略。现用 `npm run sync:routes` 同步，构建前强制检查，并覆盖未来Vite生成的哈希JS/CSS。原服务配置与所有旧路由保留，增加16条缓存路由；3项部署专项及重新资源构建通过。实际公网缓存验证与作品真实画面记录在 `artifacts/performance-phase2/public-release/`，不以本地HTTP测试冒充CDN结果。
+
+生产代码提交 `fdcdbed1b1c9bd78c16b2cab59fc1be6e3e0818b` 已经Vercel Ready，正式域名真实Chrome核对11项全部通过：校园buildId匹配、完整细节ready、管理员登录页与匿名统计401、5项版本化资源200/206/304/immutable、真实图书馆、Unity游戏运行、恋人界面及adapterVersion2。零pageerror。检查未登录、未改主持状态、未创建观众、未请求模型。此后仅补充验收脚本与文档的发布不改变上述运行代码。

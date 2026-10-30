@@ -18,6 +18,8 @@
 
 本地 Brotli quality=5 实际编码字节：建筑32,973,227→14,107,891；角色23,365,528→12,323,719。CDN可能使用不同压缩设置，因此这些不是HTTP实测传输量。
 
+正式域名后来补测了实际Brotli传输：原建筑encodedBodySize为39,489,817 B，优化版15,151,335 B，约减少61.6%；decodedBodySize分别严格为127,924,180 / 38,608,840 B。Chrome CDP模拟10 Mbps、80ms，新建浏览器环境各一轮，图书馆真正ready为48.19 / 22.24秒，首人称两轮均未下载hero。原文件CDN MISS、优化版HIT，且只各一次，因此时间差不作为严格受控多轮收益或真手机承诺。数据/截图：`artifacts/performance-phase2/library-network/`。后者缓存为一年immutable，原文件仍保留一小时策略。
+
 ## 图书馆加载与缓存
 
 第一人称只等建筑；角色从初始下载链移除，V或菜单切第三人称才触发一次共享加载。准备期间继续用第一人称；角色失败可重试，建筑不会因此判失败。返回校园会中止未完成下载，迟到的GLTF解析结果释放几何、材质、纹理与ImageBitmap；已经载入的资源亦释放。默认模型URL与meshopt decoder都使用完整SHA256路径，只有匹配路径与内容hash的资源返回一年immutable；配置/HTML no-cache，原版路径保持原缓存策略。decoder随包本地提供，不依赖外部CDN。
@@ -83,3 +85,4 @@ node deploy-assets/export-work-update.mjs --base a120315 --output artifacts/work
 - `integration/library/verify-library-browser.mjs` 和 `verify-wanyan-browser.mjs` 生成真实画面与请求证据；这些是功能/画面对照，不作并行构建下的FPS比较。
 - 根任务 `scripts/verify-performance-works.mjs` 验证真实校园十轮进出、强制GC后文档/堆平台与全场记录。下一步仍需真机长时与公网压缩响应验收，未把这些写成通过。
 - 证据在`artifacts/performance-phase2-20261030/`；这些不含模型凭据，不作为生产运行资源发布。
+- 正式域名 `https://www.the-most-interesting.online/` 在提交fdcdbed上实际打开优化图书馆、进入Unity运行画面、打开恋人原剧情界面；5项版本化资源均返回200、Range206、ETag304及immutable，零pageerror。未登录管理端、未生成观众或假通关、未调用模型。证据在`artifacts/performance-phase2/public-release/`。
