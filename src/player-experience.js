@@ -1,3 +1,4 @@
+import {renderControlHints} from './control-hints.js';
 import {planCanteenBoundary} from './yunyuan-canteen.js';
 import { installHoverboardReferences } from './hoverboard-references.js';
 import { installRoadsterReferences } from './roadster-references.js';
@@ -80,7 +81,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   const inputBlocked=()=>suspended||document.hidden||!!document.querySelector('dialog[open]');
   const pointerLock=createPlayerPointerLock({canvas,document,canLock:()=>active&&!disposed&&!inputBlocked(),
     onChange(locked){clearInput();if(!locked)escapeReleaseUntil=performance.now()+300;updateUI();invalidate();},
-    onError(){notify(pointerLock.supported?'暂未锁定鼠标：请先点一下游戏画面，再按 L；仍可直接移动鼠标环视。':'当前浏览器不支持鼠标锁定，仍可移动鼠标环视；在 Chrome 中打开此预览可使用锁定。');},
+    onError(){notify(pointerLock.supported?'暂未锁定鼠标：请在游戏画面内按中键或 L 重试；仍可直接移动鼠标环视。':'当前浏览器不支持鼠标锁定，仍可移动鼠标环视；在 Chrome 中打开此预览可使用锁定。');},
   });
   function releaseLookContact(){const previous=drag;drag=null;mouseLook=null;if(previous)try{if(canvas.hasPointerCapture?.(previous.id))canvas.releasePointerCapture(previous.id);}catch{}}
   function clearInput(){spiderRequest=null;if(!suspended)motion.clearActionInputs?.();keys.clear();held.clear();mobileHeld.clear();mobileAxes={forward:0,sideways:0};mobileControls?.reset();pulses.clear();cruise=false;liftTarget=null;landing=false;releaseLookContact();held.delete('mouse-swing');webAudio.setActive(false);}
@@ -187,7 +188,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     };
     const escapeHint=pointerLock.locked?'Esc 释放，再按退出':'Esc 退出';
     const actionHint=!interaction?'':s.mode==='walk'?'靠近载具 / 战衣 · F 使用':s.mode==='spider'?'F 空中前冲 / 地面脱下战衣':s.mode==='boat'?'靠岸停稳 · F 下船':'停稳落地 · F 下车';
-    updateElement('player-help',{textContent:`${basics[s.mode]}${actionHint?'\n'+actionHint:''}\n鼠标环视 · L 锁定 · V 切视角 · ${escapeHint}`});
+    let helpText=`${basics[s.mode]}${actionHint?'\n'+actionHint:''}\n中键 / L 锁定鼠标 · V 切视角 · ${escapeHint}`;
     const nearby=active&&!suspended?interaction?.nearest():null;
     updateElement('transport-interact',{hidden:!nearby});
     updateElement('transport-interact-label',{textContent:nearby?`${nearby.item.mode==='spider'?'穿上':nearby.item.mode==='boat'?'登上':'驾驶'}${nearby.item.label}`:''});
@@ -196,9 +197,10 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
       interactionLabel:nearby?`${nearby.item.mode==='spider'?'穿上':'使用'}${nearby.item.label}`:s.mode==='spider'?'脱下战衣':s.mode==='boat'?'靠岸下船':'落地 / 停稳下车'});
     if(mobileControls?.enabled){
       const touchHelp={walk:'左侧任意空白处拖动移动 · 右侧拖动视角',scooter:'摇杆骑行 · 按住刹车后下车',roadster:'摇杆驾驶 · 按住喷气飞起，松开下落',helicopter:'摇杆移动 · 按住升降 · 落地后下机',hoverboard:'摇杆移动 · 按住升降 · 落地后退出',boat:'摇杆航行 · 刹车停稳，靠岸下船',spider:'按住「摆荡」挂丝 · 松开后重按换点\n「定点弹射」锁定屋沿，再点「跳跃」弹出'};
-      updateElement('player-help',{textContent:touchHelp[s.mode]});
+      helpText=touchHelp[s.mode];
       if(spider){const target=$('web-target-label');if(target)target.textContent=target.textContent.replaceAll('按 E / 左键挂丝','按住「摆荡」').replaceAll('空格','「跳跃」').replaceAll('WASD','摇杆').replaceAll('E 接丝','按住「摆荡」').replaceAll('松开 X','松开「俯冲」').replaceAll('松开 T','松开「空中特技」');}
     }
+    renderControlHints($('player-help'),helpText,{document,keycaps:!mobileControls?.enabled});
     updateElement('web-point-label',{textContent:mobileControls?.enabled?'定点':'G'});
   }
   function armRoadsterJet(){
@@ -290,7 +292,9 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   const seedMouse=e=>{mouseLook={id:e.pointerId,x:e.clientX,y:e.clientY,looking:false};lookHold=1.5;};
   on(canvas,'pointerenter',e=>{if(active&&!inputBlocked()&&!pointerLock.locked&&e.pointerType==='mouse')seedMouse(e);});
   on(canvas,'pointerdown',e=>{
-    if(!active||inputBlocked())return;canvas.focus({preventScroll:true});
+    if(!active||inputBlocked())return;
+    if(e.pointerType==='mouse'&&e.button===1){e.preventDefault();canvas.focus({preventScroll:true});pointerLock.toggle();updateUI();return;}
+    canvas.focus({preventScroll:true});
     if(e.pointerType==='mouse'){
       const wasLooking=!!mouseLook?.looking;seedMouse(e);mouseLook.looking=wasLooking;
       if(motion.state.mode==='spider'&&e.button===0&&!suitView){held.add('mouse-swing');}
@@ -343,6 +347,8 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   on(canvas,'pointerleave',e=>{if(e.pointerType==='mouse'&&!pointerLock.locked){mouseLook=null;held.delete('mouse-swing');}});
   on(canvas,'wheel',e=>{if(!active)return;e.preventDefault();if(suitView){suitDistance=Math.max(1.8,Math.min(6,suitDistance*Math.exp(e.deltaY*.001)));return;}const base=motion.state.mode==='helicopter'?18:motion.state.mode==='roadster'?9.4:motion.state.mode==='hoverboard'?8.8:motion.state.mode==='spider'?6.6:motion.state.mode==='scooter'?8.8:6.4;distance=Math.max(2,Math.min(35,(distance??base)*Math.exp(e.deltaY*.001)));},{passive:false});
   on(canvas,'contextmenu',e=>{if(active)e.preventDefault();});
+  on(canvas,'auxclick',e=>{if(active&&e.button===1)e.preventDefault();});
+  on(canvas,'mousedown',e=>{if(active&&e.button===1)e.preventDefault();});
   on($('player-mouse-toggle'),'click',()=>{pointerLock.toggle();updateUI();});
   on($('look-sensitivity'),'input',e=>{const value=Number(e.target.value);if(Number.isFinite(value))preferences.set({sensitivity:value});});
   document.querySelectorAll('[data-player-mode]').forEach(b=>on(b,'click',()=>enter(b.dataset.playerMode)));

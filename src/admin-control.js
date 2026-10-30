@@ -22,29 +22,14 @@ const now = () => Date.now() + serverOffset;
 const id = prefix => `${prefix}-${crypto.randomUUID()}`;
 const clone = value => structuredClone(value);
 const dateLabel = value => new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(value);
-function toLocalInput(value) {
-  if (!value) return '';
-  const d = new Date(value);
-  return new Date(value - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
-}
+
 function eventStatus(item) {
   if (!item || item.enabled === false) return { text: '已关闭', type: 'off' };
   if (item.startAt != null && item.startAt > now()) return { text: '等待开始', type: 'scheduled' };
   if (item.endAt != null && item.endAt <= now()) return { text: '已结束', type: 'off' };
   return { text: '正在显示', type: 'active' };
 }
-function schedule(prefix) {
-  const read = suffix => {
-    const input = $(`${prefix}-${suffix}`);
-    if (!input.value) return null;
-    const value = new Date(input.value).getTime();
-    if (!Number.isFinite(value)) throw new Error('请填写有效的日期和时间。');
-    return value;
-  };
-  const startAt = read('start'), endAt = read('end');
-  if (endAt != null && endAt <= (startAt ?? now())) throw new Error('结束时间需要晚于开始时间；立即发布时，结束时间需要在当前时间之后。');
-  return { startAt, endAt };
-}
+
 function showNotice(message, error = false) {
   const el = $('admin-notice'); el.textContent = message; el.dataset.error = String(error); el.hidden = false;
 }
@@ -162,8 +147,6 @@ function renderState() {
   $('portal-count').textContent = String(state.portals.filter(portal=>eventStatus(portal).type==='active').length);
   const status = state.announcement ? eventStatus(state.announcement) : { text: '暂无公告', type: 'off' };
   $('announcement-status').textContent = status.text; $('announcement-status').dataset.status = status.type;
-  const announcement = state.announcement;
-  $('announcement-timing').textContent = announcement ? `${announcement.startAt ? dateLabel(announcement.startAt) : '立即'} → ${announcement.endAt ? dateLabel(announcement.endAt) : '持续显示'}` : '';
   renderActivityChoices();renderObjects('marker', state.markers); renderObjects('portal', state.portals);syncLinkedPortalControls();renderPins();
 }
 function renderActivityChoices() {
@@ -187,7 +170,7 @@ function renderActivityChoices() {
       if(linked)input.dataset.tasayLinkedControl='true';
       input.setAttribute('aria-label',`选择${portal.label}`);
       const info=element('span',null,'activity-choice-copy');
-      info.append(element('strong',portal.label),element('small',linked?'随过拟合恋人同步开放与定时；无需通关，可独立前往爱因斯坦广场。':portal.description||'靠近地图光柱后进入体验'));
+      info.append(element('strong',portal.label),element('small',linked?'随过拟合恋人同步开关；无需通关，可独立前往爱因斯坦广场。':portal.description||'靠近地图光柱后进入体验'));
       const status=eventStatus(portal),pill=element('span',status.type==='active'?'光柱已亮 · 可进入':status.text,'status-pill');pill.dataset.status=status.type;
       input.addEventListener('change',()=>{
         if(linked)return;
@@ -222,10 +205,10 @@ function renderObjects(type, items) {
     const title = document.createElement('strong'); title.textContent = item.label;
     const note = document.createElement('small'); const status = eventStatus(item);
     const linked=type==='portal'&&isTasayLinkedPortal(item);
-    note.textContent = `${linked?'随过拟合恋人 · ':''}${status.text} · X ${item.x.toFixed(1)} / Z ${item.z.toFixed(1)}${item.startAt ? ` · ${dateLabel(item.startAt)}` : ''}`;
+    note.textContent = `${linked?'随过拟合恋人 · ':''}${status.text} · X ${item.x.toFixed(1)} / Z ${item.z.toFixed(1)}`;
     info.append(title, note);
     const actions = document.createElement('div'); actions.className = 'object-actions';
-    for (const [action, text] of [['edit', '编辑'], ['toggle', item.enabled ? '关闭' : '开启'], ['delete', '删除']]) {
+    for (const [action, text] of [['edit', '编辑'], ['toggle', eventStatus(item).type==='active' ? '关闭' : '开启'], ['delete', '删除']]) {
       const button = document.createElement('button'); button.type = 'button'; button.textContent = text; button.dataset.action = action; button.disabled = busy||(linked&&action!=='edit');
       if(linked&&action!=='edit')button.dataset.tasayLinkedControl='true';
       button.setAttribute('aria-label', `${text}${item.label}`);
@@ -238,21 +221,21 @@ async function objectAction(type, itemId, action) {
   const key = type === 'marker' ? 'markers' : 'portals';
   const item = snapshot?.state[key].find(entry => entry.id === itemId);
   if (!item) return;
-  if(type==='portal'&&isTasayLinkedPortal(item)&&action!=='edit')return showNotice('该点位随过拟合恋人开放，请调整过拟合恋人的开关与时间。');
+  if(type==='portal'&&isTasayLinkedPortal(item)&&action!=='edit')return showNotice('该点位随过拟合恋人开放，请调整过拟合恋人的开关。');
   if (action === 'edit') { fillObjectForm(type, item); return; }
   if (action === 'delete' && !window.confirm(`删除“${item.label}”？对应的${type === 'marker' ? '光柱' : '入口'}会从玩家地图中移除。`)) return;
+  const enable=eventStatus(item).type!=='active';
   await mutate(state => {
     const target = state[key].find(entry => entry.id === itemId);
     if (!target) throw new Error('此项目已被其他管理员删除，请刷新后操作。');
     if (action === 'delete') state[key] = state[key].filter(entry => entry.id !== itemId);
-    else target.enabled = !target.enabled;
+    else Object.assign(target,{enabled:enable,startAt:null,endAt:null});
   }, action === 'delete' ? '已删除，玩家界面将同步更新。' : '开放状态已更新。');
 }
 function fillObjectForm(type, item) {
   if(type==='portal')document.querySelector('.activity-configuration').open=true;
   $(`${type}-id`).value = item.id; $(`${type}-label`).value = item.label;
   $(`${type}-enabled`).checked = item.enabled; $(`${type}-radius`).value = item.radius;
-  $(`${type}-start`).value = toLocalInput(item.startAt); $(`${type}-end`).value = toLocalInput(item.endAt);
   if (type === 'marker') { $('marker-color').value = item.color; $('marker-height').value = item.height; }
   else { $('portal-description').value = item.description; $('portal-url').value = item.url;const known=ACTIVITY_WORKS.some(work=>work.id===item.workId);$('portal-work').value=known?item.workId:'';$('portal-custom-work-id').value=known?'':item.workId||item.id;syncCustomWork(); }
   setSelection(item.x, item.z, item.label); $(`${type}-submit`).textContent = '保存修改';
@@ -270,7 +253,7 @@ function submitObject(type, event) {
     const objectId = $(`${type}-id`).value || id(type);
     const coordinates = coordinateInputs.read();
     const item = { id: objectId, label: $(`${type}-label`).value.trim(), ...coordinates,
-      enabled: $(`${type}-enabled`).checked, radius: Number($(`${type}-radius`).value), ...schedule(type) };
+      enabled: $(`${type}-enabled`).checked, radius: Number($(`${type}-radius`).value), startAt:null,endAt:null };
     if (!item.label) throw new Error('请填写名称。');
     if (type === 'marker') Object.assign(item, { color: $('marker-color').value, height: Number($('marker-height').value) });
     else Object.assign(item, { workId:$('portal-work').value||$('portal-custom-work-id').value.trim()||objectId, description: $('portal-description').value.trim(), url: $('portal-url').value.trim() });
@@ -279,13 +262,13 @@ function submitObject(type, event) {
       if ($(`${type}-id`).value && index < 0) throw new Error('此项目已被删除。清空表单后可重新添加。');
       if (index >= 0) state[key][index] = item;
       else { if (state[key].length >= 12) throw new Error('已达到 12 个的上限，请先删除不再使用的项目。'); state[key].push(item); }
-    }, type==='portal'&&isTasayLinkedPortal(item)?'点位已保存；开放状态与时段跟随过拟合恋人。':`${type === 'marker' ? '光柱' : '入口'}已保存${item.enabled ? '并启用' : '，当前保持关闭'}。`).then(ok => { if (ok) clearObjectForm(type); });
+    }, type==='portal'&&isTasayLinkedPortal(item)?'点位已保存；开放状态跟随过拟合恋人。':`${type === 'marker' ? '光柱' : '入口'}已保存${item.enabled ? '并启用' : '，当前保持关闭'}。`).then(ok => { if (ok) clearObjectForm(type); });
   } catch (error) { showNotice(error.message, true); }
 }
 function previewAnnouncement() {
   $('preview-title').textContent = $('announcement-title').value || '下一站，东九！';
   $('preview-body').textContent = $('announcement-body').value || '把大家的目光，带到同一个地方。';
-  $('announcement-preview').dataset.tone = $('announcement-tone').value;
+  $('announcement-preview').dataset.tone = 'info';
 }
 function syncPhase() {
   if (!snapshot || phaseDirty) return;
@@ -303,9 +286,9 @@ function syncLinkedPortalControls(){
   const current=snapshot?.state.portals.find(portal=>portal.id===$('portal-id').value);
   const linked=isTasayLinkedPortal(current)||$('portal-work').value==='she-love-me';
   $('portal-linked-note').hidden=!linked;
-  for(const field of ['portal-enabled','portal-start','portal-end','portal-url'])$(field).disabled=busy||linked;
+  for(const field of ['portal-enabled','portal-url'])$(field).disabled=busy||linked;
   $('portal-work').disabled=busy||isTasayLinkedPortal(current);
-  if(linked){const master=getTasayPortal(snapshot?.state.portals||[]);$('portal-enabled').checked=master?.enabled===true;$('portal-start').value=toLocalInput(master?.startAt);$('portal-end').value=toLocalInput(master?.endAt);}
+  if(linked){const master=getTasayPortal(snapshot?.state.portals||[]);$('portal-enabled').checked=master?.enabled===true;}
   document.querySelectorAll('[data-tasay-linked-control]').forEach(control=>{control.disabled=true;});
 }
 function element(tag, text, className = '') {
@@ -441,7 +424,8 @@ function activateTab(name, focus = false) {
   });
   for (const type of ['announcement', 'marker', 'portal','audience']) $(`panel-${type}`).hidden = type !== name;
   document.querySelector('.workspace').classList.toggle('show-audience',name==='audience');
-  document.querySelector('.map-workspace').hidden=name==='audience';
+  document.querySelector('.workspace').classList.toggle('with-map',['marker','portal'].includes(name));
+  document.querySelector('.map-workspace').hidden=!['marker','portal'].includes(name);
   if(name==='audience')refreshAudience();
   document.querySelector('.map-workspace').dataset.tab = name;
   $('map-instruction').textContent = name === 'announcement' ? '查看当前地图事件与体验入口。' : `点击地图，为${name === 'marker' ? '光柱' : '入口'}选择位置。`;
@@ -617,7 +601,7 @@ $('restart-c118-screen').addEventListener('click',()=>{
 $('trigger-c118-flood').addEventListener('click',()=>mutate(state=>{
   if(state.c118Flood)throw new Error('校园海啸已开启，请先恢复报告厅再触发。');
   state.c118Flood={id:id('flood'),startAt:Math.floor(now()),pausedAt:null,pausedMs:0};
-},'校园海啸已排期：外侧巨浪与 C118 涌水同步开始；若全场暂停，将在恢复后开始。'));
+},'校园海啸已启动：外侧巨浪与 C118 涌水同步开始；若全场暂停，将在恢复后开始。'));
 $('reset-c118-flood').addEventListener('click',()=>{
   const expectedId=snapshot?.state.c118Flood?.id;
   mutate(state=>{
@@ -632,13 +616,13 @@ $('save-pause-message').addEventListener('click', () => {
 $('announcement-form').addEventListener('submit', event => {
   event.preventDefault();
   try {
-    const announcement = { id: id('announcement'), title: $('announcement-title').value.trim(), body: $('announcement-body').value.trim(), tone: $('announcement-tone').value, ...schedule('announcement') };
+    const announcement = { id: id('announcement'), title: $('announcement-title').value.trim(), body: $('announcement-body').value.trim(), tone:'info',startAt:null,endAt:null };
     if (!announcement.title) throw new Error('请填写公告标题。');
-    mutate(state => { state.announcement = announcement; }, announcement.startAt && announcement.startAt > now() ? '公告已排期，将在设定时间显示。' : '公告已发布到玩家界面。');
+    mutate(state => { state.announcement = announcement; }, '公告已发布到玩家界面。');
   } catch (error) { showNotice(error.message, true); }
 });
 $('withdraw-announcement').addEventListener('click', () => mutate(state => { state.announcement = null; }, '公告已撤回。'));
-for (const suffix of ['title', 'body', 'tone']) $(`announcement-${suffix}`).addEventListener('input', previewAnnouncement);
+for (const suffix of ['title', 'body']) $(`announcement-${suffix}`).addEventListener('input', previewAnnouncement);
 for (const type of ['marker', 'portal']) $(`${type}-form`).addEventListener('submit', event => submitObject(type, event));
 document.querySelectorAll('[data-clear-form]').forEach(button => button.addEventListener('click', () => clearObjectForm(button.dataset.clearForm)));
 document.querySelectorAll('[role=tab][data-tab]').forEach(button => {
@@ -678,8 +662,7 @@ function populateInitialForms() {
   phaseDirty=false;syncPhase();refreshAudience();
   const a = snapshot.state.announcement;
   if (a) {
-    $('announcement-title').value = a.title; $('announcement-body').value = a.body; $('announcement-tone').value = a.tone;
-    $('announcement-start').value = toLocalInput(a.startAt); $('announcement-end').value = toLocalInput(a.endAt);
+    $('announcement-title').value = a.title; $('announcement-body').value = a.body;
   } else {
     $('announcement-form').reset();
   }

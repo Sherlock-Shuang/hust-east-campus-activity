@@ -17,6 +17,7 @@ class Element {
   emit(type,values={}){const event={type,target:this,code:'',repeat:false,button:0,buttons:0,pointerId:1,pointerType:'mouse',clientX:0,clientY:0,detail:1,preventDefault(){this.defaultPrevented=true;},stopPropagation(){this.propagationStopped=true;},...values};for(const fn of this.handlers.get(type)||[])fn(event);return event;}
   setAttribute(name,value){this.attrs[name]=String(value);}
   getAttribute(name){return this.attrs[name]??null;}
+  replaceChildren(...children){this.children=[];this.textContent='';for(const child of children)this.append(child);}
   append(child){this.children.push(child);child.parent=this;}
   remove(){if(this.parent)this.parent.children=this.parent.children.filter(c=>c!==this);}
   closest(selector){return selector.split(',').some(tag=>tag.trim().toUpperCase()===this.tagName)?this:this.parent?.closest(selector)||null;}
@@ -789,7 +790,7 @@ test('scene F mounts the nearby car, does not arm jets or repeat, and dismounts 
   f.key('KeyF');assert.equal(f.experience.state.mode,'roadster');assert.equal(source.items[0].taken,true);assert.equal(f.experience.state.flightEnabled,false);
   f.key('KeyF','keydown',{repeat:true});assert.equal(f.experience.state.mode,'roadster');
   f.key('KeyF','keyup');f.key('KeyF');assert.equal(f.experience.state.mode,'walk');assert.equal(source.items[0].taken,false);
-  assert.match(f.el('player-help').textContent,/F 使用/);
+  assert.match(f.el('player-help').dataset.controlHints,/F 使用/);
 });
 test('scene interactions respect admin pause and preserve manual spider controls in air',t=>{
   const source=inventory('spider'),f=fixture(t,{transportSources:[source],legacyControls:false});f.experience.enter('walk');
@@ -797,7 +798,7 @@ test('scene interactions respect admin pause and preserve manual spider controls
   f.key('KeyF');assert.equal(f.experience.state.mode,'spider');f.key('KeyF','keyup');
   f.key('Space');f.tick(.35);f.key('Space','keyup');assert.equal(f.experience.state.grounded,false);
   f.key('KeyF');f.tick(.08);assert.equal(f.experience.state.mode,'spider');assert.equal(source.items[0].taken,true);
-  assert.ok(f.experience.state.zipCount>0);assert.match(f.el('player-help').textContent,/松手后重按换点/);
+  assert.ok(f.experience.state.zipCount>0);assert.match(f.el('player-help').dataset.controlHints,/松手后重按换点/);
 });
 test('refresh return places the saved helicopter at its own location and claims one world copy',t=>{
   const source=inventory('helicopter',{x:40,z:20}),f=fixture(t,{transportSources:[source],legacyControls:false});f.experience.enter('walk');
@@ -1112,4 +1113,16 @@ test('look survives missing pointer capture, releases outside the canvas and acc
   // Embedding hosts may send directly to canvas without the document adapter.
   touch(f.canvas,'pointerdown',53,{clientX:600,clientY:160});touch(f.canvas,'pointermove',53,{clientX:680,clientY:160});touch(f.win,'pointerup',53);
   const third=f.experience.captureActivityPose();touch(f.canvas,'pointerdown',54,{clientX:620,clientY:160});touch(f.canvas,'pointermove',54,{clientX:690,clientY:160});assert.notEqual(f.experience.captureActivityPose().yawOffset,third.yawOffset);
+});
+
+test('middle mouse toggles pointer lock without swinging, zooming or changing modes',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});enablePointerLock(f);f.experience.enter('walk');
+  const before=f.experience.captureActivityPose();let focused=0;f.canvas.focus=()=>{focused++;};
+  const press=f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4});
+  assert.equal(press.defaultPrevented,true);assert.equal(focused,1);assert.equal(f.doc.pointerLockElement,f.canvas);
+  assert.equal(f.el('player-hud').dataset.pointerLocked,'true');assert.equal(f.experience.state.mode,'walk');
+  assert.equal(f.canvas.emit('auxclick',{button:1}).defaultPrevented,true);
+  assert.equal(f.experience.captureActivityPose().distance,before.distance);
+  f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4});assert.equal(f.doc.pointerLockElement,null);
+  f.experience.setSuspended(true);f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4});assert.equal(f.doc.pointerLockElement,null);
 });
