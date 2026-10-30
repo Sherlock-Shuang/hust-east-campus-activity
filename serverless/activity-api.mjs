@@ -4,6 +4,7 @@ import {createDefaultLiveState,validateLiveState} from '../src/live-state.js';
 import {reconcileC118Flood} from '../src/c118-flood-state.js';
 import {reconcileC118Screen} from '../src/c118-screen-state.js';
 import {ACTIVITY_WORKS,activityPortals} from '../src/activity-catalog.js';
+import {createPublicStateCache} from './public-state-cache.mjs';
 import {createAudienceRecord,touchAudience,applyAudienceEvent,summarizeAudience,audienceDetail,aggregateAudiences,normalizeNickname,validId,PRESENCE_TTL} from '../server/audience-store.mjs';
 
 const ADMIN_COOKIE='campus_admin',AUDIENCE_COOKIE='campus_audience';
@@ -31,6 +32,15 @@ const adminCsrf=token=>digest(`campus-admin:${token}`);
 const audienceCsrf=token=>digest(`campus-audience:${token}`);
 const allRows=async statement=>(await statement.all()).results||[];
 const changes=result=>Number(result?.meta?.changes||0);
+// Key by the configured database adapter, never by a hostname/token. A process
+// may host more than one independent environment. Weak keys do not retain old
+// deployments or closed test databases.
+const publicStateCaches=new WeakMap();
+function publicStateCache(env){
+  let cache=publicStateCaches.get(env.DB);
+  if(!cache){cache=createPublicStateCache(env.STREAM_CLOCK?{now:env.STREAM_CLOCK.now}:{});publicStateCaches.set(env.DB,cache);}
+  return cache;
+}
 
 async function stateRow(env){
   let row=await env.DB.prepare('SELECT revision,payload FROM activity_state WHERE key=?').bind('current').first();
@@ -144,7 +154,7 @@ async function liveStream(request,env){
   const pump=async()=>{
     if(closed)return;
     try{
-      const row=await stateRow(env);if(closed)return;
+      const row=await publicStateCache(env).read(()=>stateRow(env));if(closed)return;
       if(row.revision!==lastRevision){send('snapshot',await snapshot(env,row));lastRevision=row.revision;}
       const time=streamClock.now();
       if(time-lastHeartbeat>=15000){
@@ -189,6 +199,9 @@ export async function handleActivityAPI(request,env){
       next.revision=input.expectedRevision+1;
       const saved=await env.DB.prepare('UPDATE activity_state SET revision=?,payload=? WHERE key=? AND revision=?').bind(next.revision,JSON.stringify(next),'current',input.expectedRevision).run();
       if(!changes(saved))return json({error:'状态已被其他管理员修改，请载入最新状态',...await snapshot(env)},409);
+      // Only a durable successful CAS may update the local public cache. Reads
+      // for CAS/admission and all GET state/admin/authentication remain fresh.
+      publicStateCaches.get(env.DB)?.publish({revision:next.revision,payload:JSON.stringify(next)});
       return json({state:next,serverTime:Date.now(),...await counts(env)});
     }
     if(request.method==='GET'&&path==='/api/audience/me'){

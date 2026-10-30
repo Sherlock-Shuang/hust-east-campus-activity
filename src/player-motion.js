@@ -4,6 +4,7 @@
  * y is the feet / wheel / helicopter skid contact plane, not the actor centre.
  */
 import {createWebSwingMotion} from './web-swing-motion.js';
+import {getBuildingSpatialIndex} from './building-spatial-index.js';
 const STEP=1/120,BASE_Y=.14,EPS=1e-7,STEP_UP=.22;
 const MODES=new Set(['walk','scooter','helicopter','roadster','hoverboard','spider','boat']);
 // Roadster dimensions and dynamics below are gameplay/model estimates, not
@@ -35,7 +36,9 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   if(!route?.points||route.points.length<2)throw new TypeError('Player movement requires a metre-scale route.');
   const points=route.points.map((p,i)=>({...p,progress:finite(p.progress)?p.progress:i?NaN:0}));
   for(let i=1;i<points.length;i++)if(!finite(points[i].progress))points[i].progress=points[i-1].progress+Math.hypot(points[i].x-points[i-1].x,points[i].z-points[i-1].z);
-  const length=route.length??points.at(-1).progress,buildings=polygonRecords(world.buildings),water=polygonRecords(world.water),bounds=world.bounds;
+  const buildingIndex=getBuildingSpatialIndex(world.buildings);
+  const length=route.length??points.at(-1).progress,buildings=buildingIndex.records,water=polygonRecords(world.water),bounds=world.bounds;
+  function buildingsForBodies(bodies){let minX=Infinity,minZ=Infinity,maxX=-Infinity,maxZ=-Infinity;for(const p of bodies){minX=Math.min(minX,p.x-p.radius);minZ=Math.min(minZ,p.z-p.radius);maxX=Math.max(maxX,p.x+p.radius);maxZ=Math.max(maxZ,p.z+p.radius);}return buildingIndex.queryBounds(minX,minZ,maxX,maxZ);}
   const bridgeSurfaceCells=new Map(),bridgeSolidCells=new Map(),walkSurfaceCells=new Map(),barrierCells=new Map(),surfaceCell=24;
   // Photo-aligned stair/arcade models replace a source road's generic flat
   // bridge. Exclude only the old ribbon; retain the replacement deck and steps.
@@ -280,7 +283,8 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     // step. Check the resulting support height against overhead structures.
     const barrierY=grounded&&mode!=='helicopter'&&mode!=='boat'?Math.max(y,ground.height,groundContactHeight(x,z,yaw,mode,y)):y;
     if(barriers.length)for(const p of bodies){const hit=barrierAt({...p,y:barrierY},p.radius,p.minY??0,p.maxY??(mode==='helicopter'?3.4:mode==='roadster'?1.7:2));if(hit)return hit.label||'围栏边界';}
-    if(bodies.some(p=>buildings.some(b=>barrierY+(p.minY??0)<(b.height??18)+.5&&barrierY+(p.maxY??(mode==='helicopter'?3.4:mode==='roadster'?1.7:2))>(b.minHeight??0)&&overlapsPolygon(p,p.radius,b))))return'建筑边界';
+    const nearbyBuildings=buildingsForBodies(bodies);
+    if(bodies.some(p=>nearbyBuildings.some(b=>barrierY+(p.minY??0)<(b.height??18)+.5&&barrierY+(p.maxY??(mode==='helicopter'?3.4:mode==='roadster'?1.7:2))>(b.minHeight??0)&&overlapsPolygon(p,p.radius,b))))return'建筑边界';
     if(mode==='boat'){
       if(bodies.some(p=>!waterAt(p.x,p.z,p.radius)))return'请在水域内航行';
       if(bodies.some(p=>[[0,0],[p.radius,0],[-p.radius,0],[0,p.radius],[0,-p.radius]].some(([dx,dz])=>{const g=groundAt(p.x+dx,p.z+dz);return g.onBridge&&g.height>y-.4&&g.height<y+2.8;})))return'桥下净空不足';
@@ -416,7 +420,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     for(const body of bodies){
       const minY=body.minY??0,maxY=body.maxY??height;
       if(barrierAt({...body,y:bodyY},body.radius,minY,maxY))return{ok:false,reason:'返回位置被设施占用'};
-      if(buildings.some(b=>bodyY+minY<(b.height??18)-.012&&bodyY+maxY>(b.minHeight??0)+.012&&overlapsPolygon(body,body.radius,b)))return{ok:false,reason:'返回位置被建筑占用'};
+      if(buildingIndex.queryPoint(body.x,body.z,body.radius).some(b=>bodyY+minY<(b.height??18)-.012&&bodyY+maxY>(b.minHeight??0)+.012&&overlapsPolygon(body,body.radius,b)))return{ok:false,reason:'返回位置被建筑占用'};
     }
     if(mode==='boat'){
       const water=waterAt(pose.x,pose.z);
@@ -555,7 +559,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       let floor=ground.height+(waterFloor?2.5:0),ceiling=BASE_Y+maximum;
       // Rotor clearance determines building collisions in flight. A roof is a
       // hover floor, not a landing pad; switching to a ground mode stays blocked.
-      for(const building of buildings){const overlaps=flightBodies.filter(p=>overlapsPolygon(p,p.radius,building));if(!overlaps.length)continue;
+      for(const building of buildingsForBodies(flightBodies)){const overlaps=flightBodies.filter(p=>overlapsPolygon(p,p.radius,building));if(!overlaps.length)continue;
         if(hoverboard){for(const p of overlaps){if(state.y+p.maxY<=(building.minHeight??0)+.02)ceiling=Math.min(ceiling,(building.minHeight??0)-p.maxY);else floor=Math.max(floor,(building.height??18)-p.minY+.05);}}
         else if(state.y+height<=(building.minHeight??0)+.02)ceiling=Math.min(ceiling,(building.minHeight??0)-height);
         else floor=Math.max(floor,(building.height??18)+.5);

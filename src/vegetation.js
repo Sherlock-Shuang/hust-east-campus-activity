@@ -1,4 +1,4 @@
-import {createStaticInstanceSelection} from './static-instance-lod.js';
+import {createStaticInstanceSelection,createDistanceLodSelection} from './static-instance-lod.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 
 function randomFrom(seed) {
@@ -138,6 +138,7 @@ export function createTreeLayer(THREE, trees, {name='photo-informed-trees',detai
   let disposed=false,lastView=null,lastDetailScale=-1;
   const frustum=new THREE.Frustum(),view=new THREE.Matrix4(),sphere=new THREE.Sphere(),cameraPosition=new THREE.Vector3(),visibleByVariant=Array.from({length:variantCount},()=>({near:[],far:[],horizon:[]}));
   const variantBatches=[...new Map(batches.map(batch=>[batch.variant,batch])).values()];
+  const treeLod=createDistanceLodSelection(trees.length,[detail==='forest'?70:100,280]),treeLodNames=['near','far','horizon'];
   function update(camera,{detailDistanceScale=1}={}) {
     const detailScale=Number.isFinite(detailDistanceScale)?Math.max(.35,Math.min(1.5,detailDistanceScale)):1;
     if(disposed)return;
@@ -146,11 +147,12 @@ export function createTreeLayer(THREE, trees, {name='photo-informed-trees',detai
       const stamp=[...cameraPosition.toArray(),...camera.quaternion.toArray(),camera.projectionMatrix.elements[0],camera.projectionMatrix.elements[5]];
       if(lastView&&lastDetailScale===detailScale&&stamp.every((v,i)=>Math.abs(v-lastView[i])<(i<3?.25:.0005)))return;
       lastView=stamp;lastDetailScale=detailScale;view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(view);
-    } else lastView=null;
+    } else {lastView=null;treeLod.reset();}
+    treeLod.setScale(detailScale);
     // Visibility is classified once per tree and reused by its trunk, leaf and
     // paint batches. This avoids 4–5 repeated spatial checks per moving frame.
     for(const batch of variantBatches){const visible=visibleByVariant[batch.variant];visible.near.length=0;visible.far.length=0;visible.horizon.length=0;
-      batch.samples.forEach((tree,i)=>{const height=tree.height||9;sphere.center.set(tree.x,(tree.y||.1)+height*.5,tree.z);sphere.radius=Math.max(height*.65,(tree.radius||3.3)*1.6);if(camera&&!frustum.intersectsSphere(sphere))return;const distanceSq=camera?sphere.center.distanceToSquared(cameraPosition):0;const lod=distanceSq>(280*detailScale)**2?'horizon':distanceSq>((detail==='forest'?70:100)*detailScale)**2?'far':'near';visible[lod].push(i);});
+      batch.samples.forEach((tree,i)=>{const height=tree.height||9;sphere.center.set(tree.x,(tree.y||.1)+height*.5,tree.z);sphere.radius=Math.max(height*.65,(tree.radius||3.3)*1.6);if(camera&&!frustum.intersectsSphere(sphere))return;const distanceSq=camera?sphere.center.distanceToSquared(cameraPosition):0;const lod=camera?treeLodNames[treeLod.levelAt(tree.index,distanceSq)]:'near';visible[lod].push(i);});
     }
     for(const batch of batches){batch.selection.update(visibleByVariant[batch.variant][batch.lod]);batch.mesh.frustumCulled=false;}
 
@@ -173,12 +175,14 @@ export function createShrubLayer(THREE,shrubs,{name='source-low-shrub-clusters'}
   shrubs.forEach(s=>{dummy.position.set(s.x,s.y||.035,s.z);dummy.scale.set(s.radius,s.height,s.radius);dummy.rotation.set(0,s.seed*Math.PI*2,0);dummy.updateMatrix();matrices.push(dummy.matrix.clone());color.setHSL(.08,.03,.84+s.seed*.12);tints.push(color.clone());});
   const meshes=[near,far].map((geometry,i)=>{const mesh=new THREE.InstancedMesh(geometry,material,shrubs.length);mesh.name=`${name}-${i?'distant':'near'}`;mesh.castShadow=!i;mesh.receiveShadow=true;mesh.renderOrder=204;mesh.raycast=()=>{};mesh.userData={component:name,dimensionsStatus:'photo-informed estimate',positionsStatus:'sampled within explicit planting sources',foliage:'alpha-cutout leaf sprays'};matrices.forEach((matrix,n)=>{mesh.setMatrixAt(n,matrix);mesh.setColorAt(n,tints[n]);});group.add(mesh);return mesh;});
   const selections=meshes.map(mesh=>createStaticInstanceSelection(mesh,{matrices,colors:tints,ids:shrubs.map(s=>s.featureId)})),visible=[[],[]];
+  const shrubLod=createDistanceLodSelection(shrubs.length,[65,260]);
   const cameraPosition=new THREE.Vector3(),frustum=new THREE.Frustum(),view=new THREE.Matrix4(),sphere=new THREE.Sphere();let disposed=false,lastView=null,lastDetailScale=-1;
   function update(camera,{detailDistanceScale=1}={}){
     const detailScale=Number.isFinite(detailDistanceScale)?Math.max(.35,Math.min(1.5,detailDistanceScale)):1;
-    if(disposed)return;if(camera){camera.updateMatrixWorld();camera.getWorldPosition(cameraPosition);const stamp=[...cameraPosition.toArray(),...camera.quaternion.toArray(),camera.projectionMatrix.elements[0],camera.projectionMatrix.elements[5]];if(lastView&&lastDetailScale===detailScale&&stamp.every((v,i)=>Math.abs(v-lastView[i])<(i<3?.25:.0005)))return;lastView=stamp;lastDetailScale=detailScale;view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(view);}else lastView=null;
+    if(disposed)return;if(camera){camera.updateMatrixWorld();camera.getWorldPosition(cameraPosition);const stamp=[...cameraPosition.toArray(),...camera.quaternion.toArray(),camera.projectionMatrix.elements[0],camera.projectionMatrix.elements[5]];if(lastView&&lastDetailScale===detailScale&&stamp.every((v,i)=>Math.abs(v-lastView[i])<(i<3?.25:.0005)))return;lastView=stamp;lastDetailScale=detailScale;view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(view);}else {lastView=null;shrubLod.reset();}
+    shrubLod.setScale(detailScale);
     visible[0].length=0;visible[1].length=0;
-    if(!camera||cameraPosition.y<420)shrubs.forEach((s,i)=>{sphere.center.set(s.x,(s.y||.035)+s.height*.5,s.z);sphere.radius=Math.max(s.radius,s.height);if(camera&&!frustum.intersectsSphere(sphere))return;const distanceSq=camera?sphere.center.distanceToSquared(cameraPosition):0;if(camera&&distanceSq>(260*detailScale)**2)return;visible[distanceSq>(65*detailScale)**2?1:0].push(i);});
+    if(!camera||cameraPosition.y<420)shrubs.forEach((s,i)=>{sphere.center.set(s.x,(s.y||.035)+s.height*.5,s.z);sphere.radius=Math.max(s.radius,s.height);if(camera&&!frustum.intersectsSphere(sphere))return;const distanceSq=camera?sphere.center.distanceToSquared(cameraPosition):0,lod=camera?shrubLod.levelAt(i,distanceSq):0;if(lod<2)visible[lod].push(i);});
     meshes.forEach((mesh,lod)=>{selections[lod].update(visible[lod]);mesh.frustumCulled=false;});
   }
   update(null);

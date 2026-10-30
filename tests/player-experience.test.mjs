@@ -50,7 +50,7 @@ const REMOVED_HUD_IDS = new Set([
   'web-phase','web-length','web-chain','web-actions','web-release-hint','web-zip-status',
   'web-maneuvers','web-point-status','web-trick-status','web-launch-meter','web-launch-fill','web-launch-hint',
 ]);
-function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePointer=false,roadSurfaces=[],joystickRect={left:24,top:190,width:120,height:120}}={}){
+function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePointer=false,roadSurfaces=[],spiderPreparation,storage,joystickRect={left:24,top:190,width:120,height:120}}={}){
   const previous={document:globalThis.document,window:globalThis.window};
   const doc=new Element(),win=new Element(),ids=new Map(),html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const fromHTML=(tag,attributes)=>{
@@ -80,14 +80,14 @@ function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePo
   doc.querySelector=selector=>selector==='dialog[open]'?doc.body.children.find(el=>el.open)||null:selector==='[data-player-input=brake]'?inputs.find(el=>el.dataset.playerInput==='brake'):null;
   const coarseMedia=Object.assign(new Element(),{matches:coarsePointer}),landscapeMedia=Object.assign(new Element(),{matches:true}),reducedMedia=Object.assign(new Element(),{matches:false});
   win.matchMedia=query=>query.includes('coarse')?coarseMedia:query.includes('orientation')?landscapeMedia:reducedMedia;
-  win.innerWidth=844;win.innerHeight=390;win.screen={orientation:new Element()};win.visualViewport=new Element();
+  win.localStorage=storage;win.innerWidth=844;win.innerHeight=390;win.screen={orientation:new Element()};win.visualViewport=new Element();
   globalThis.document=doc;globalThis.window=win;
   const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(44,16/9,.3,2000),canvas=new Element('canvas');canvas.clientWidth=1280;canvas.clientHeight=720;canvas.rect={left:0,top:0,width:844,height:390};
   const controls=Object.assign(new THREE.EventDispatcher(),{target:new THREE.Vector3(),enabled:true,enableDamping:true,update(){}});
   const route={length:300,dismountProgress:280,roadSurfaces,points:[{x:0,y:.16,z:0,progress:0},{x:0,y:.16,z:-300,progress:300}],segments:[{startProgress:0,endProgress:300,width:7.2}]};
   const rectangle=(x1,z1,x2,z2)=>{const shape=new THREE.Shape();shape.moveTo(x1,-z1);shape.lineTo(x2,-z1);shape.lineTo(x2,-z2);shape.lineTo(x1,-z2);shape.closePath();return {category:'building',feature:{properties:{height:18}},shapes:[shape]};};
   const model={buildings:buildings?[rectangle(8,-160,18,25),rectangle(-18,-160,-8,25)]:[],water:[],bounds:{minX:-200,maxX:200,minZ:-400,maxZ:200}};
-  const notices=[];const experience=createPlayerExperience({THREE,scene,camera,controls,canvas,route,simulation:{agents:[]},model,transportSources,onEnter(){},notify:s=>notices.push(s),invalidate(){}});
+  const notices=[];const experience=createPlayerExperience({THREE,scene,camera,controls,canvas,route,simulation:{agents:[]},model,transportSources,spiderPreparation,onEnter(){},notify:s=>notices.push(s),invalidate(){}});
   t.after(()=>{experience.dispose();globalThis.document=previous.document;globalThis.window=previous.window;});
   const tick=seconds=>{for(let remaining=seconds;remaining>1e-9;remaining-=1/60)experience.tick(Math.min(remaining,1/60));};
   const key=(code,type='keydown',extra={})=>win.emit(type,{code,target:canvas,...extra});
@@ -1027,4 +1027,75 @@ test('the shipped first-level mobile G action reaches a roof and its jump button
   assert.equal(f.experience.state.pointPhase,'perch');
   touch(f.mobileAction('jump'),'pointerdown',32);f.tick(.05);
   assert.equal(f.experience.state.pointLaunchCount,1);assert.equal(f.experience.state.pointCount,1);
+});
+
+
+test('real camera touch turns are normalized by the CSS viewport and inverted preference survives reload',t=>{
+  const entries=new Map([['dongjiu.controls.v1',JSON.stringify({sensitivity:1.25,invertY:true,joystickScale:1.1})]]);
+  const storage={getItem:key=>entries.get(key),setItem:(key,value)=>entries.set(key,value)};
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true,storage});f.experience.enter('walk');f.tick(.2);
+  const original=f.experience.captureActivityPose(),results=[];
+  for(const [width,height]of [[844,390],[667,375],[1024,768]]){
+    f.canvas.rect={left:0,top:0,width,height};f.experience.restoreActivityPose(original);
+    touch(f.canvas,'pointerdown',20,{clientX:width*.7,clientY:height*.4});
+    touch(f.canvas,'pointermove',20,{clientX:width*.8,clientY:height*.45});
+    const pose=f.experience.captureActivityPose();results.push([pose.yawOffset-original.yawOffset,pose.pitch-original.pitch]);
+    touch(f.canvas,'pointerup',20);
+  }
+  for(const [yaw,pitch]of results){assert.ok(Math.abs(yaw-results[0][0])<1e-9);assert.ok(Math.abs(pitch-results[0][1])<1e-9);assert.ok(pitch<0,'inverted Y reverses only vertical look');}
+});
+
+test('reload restoration waits for Spider preparation without dropping its position or inventory',async t=>{
+  let resolve;const spiderPreparation=new Promise(r=>resolve=r),source=inventory('spider');
+  const f=fixture(t,{buildings:false,legacyControls:false,transportSources:[source],spiderPreparation});f.experience.enter('walk');
+  const saved={mode:'spider',transport:{id:source.items[0].id,mode:'spider'},view:'third',state:{x:40,y:3,z:-20,yaw:.5,grounded:false}};
+  assert.equal(f.experience.restoreActivityPose(saved),false);
+  const restoring=f.experience.restorePreparedActivityPose(saved);assert.equal(source.items[0].taken,false);
+  resolve(true);assert.equal(await restoring,true);assert.equal(f.experience.state.mode,'spider');assert.equal(f.experience.state.x,40);assert.equal(source.items[0].taken,true);
+});
+
+test('walking is ready while Spider prepares, deliberate early pickup is deduplicated and uses the same nearby suit',async t=>{
+  let resolve;const spiderPreparation=new Promise(r=>resolve=r),source=inventory('spider');
+  const f=fixture(t,{buildings:false,legacyControls:false,transportSources:[source],spiderPreparation});
+  f.experience.enter('walk');assert.equal(f.experience.state.mode,'walk');assert.equal(f.scene.getObjectByName('spider-character'),undefined);
+  f.key('KeyF');f.key('KeyF','keyup');f.key('KeyF');f.key('KeyF','keyup');
+  assert.equal(f.experience.state.mode,'walk');assert.equal(source.items[0].taken,false);assert.equal(f.notices.filter(s=>s.includes('战衣正在准备')).length,1);
+  resolve(true);await new Promise(r=>setImmediate(r));
+  assert.equal(f.experience.state.mode,'spider');assert.equal(source.items[0].taken,true);assert.ok(f.scene.getObjectByName('spider-character'));
+});
+
+for(const boundary of ['pause','blur','rotation','leave','dispose'])test(`pending Spider pickup is cancelled by ${boundary} and cannot switch the player later`,async t=>{
+  let resolve;const spiderPreparation=new Promise(r=>resolve=r),source=inventory('spider');
+  const f=fixture(t,{buildings:false,legacyControls:false,transportSources:[source],spiderPreparation});
+  f.experience.enter('walk');f.key('KeyF');f.key('KeyF','keyup');
+  if(boundary==='pause'){f.experience.setSuspended(true);f.experience.setSuspended(false);}
+  if(boundary==='blur')f.win.emit('blur');
+  if(boundary==='rotation')f.win.emit('orientationchange');
+  if(boundary==='leave'){f.key('KeyW');f.tick(2);f.key('KeyW','keyup');}
+  if(boundary==='dispose')f.experience.dispose();
+  resolve(true);await new Promise(r=>setImmediate(r));
+  assert.equal(f.experience.state.mode,'walk');assert.equal(source.items[0].taken,false);assert.equal(f.scene.getObjectByName('spider-character'),undefined);
+});
+
+test('opening control preferences releases both mobile gestures and closing never resumes their old contacts',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('walk');
+  pushJoystick(f,10);touch(f.canvas,'pointerdown',20,{clientX:600,clientY:160});assert.equal(f.canvas.captures.has(20),true);
+  const settings=f.el('player-hud').children.find(e=>e.attrs['aria-label']==='调整操作偏好');assert.ok(settings);settings.emit('click');
+  const dialog=f.doc.body.children.find(e=>e.tagName==='DIALOG');assert.equal(dialog.open,true);assert.equal(f.canvas.captures.has(20),false);
+  assert.equal(f.el('mobile-joystick').captures.size,0);f.tick(.5);const pose=f.experience.captureActivityPose();
+  dialog.close();dialog.emit('close');touch(f.win,'pointermove',10,{clientY:0});touch(f.canvas,'pointermove',20,{clientX:800,clientY:50});f.tick(.5);
+  assert.equal(f.experience.state.x,pose.state.x);assert.equal(f.experience.state.z,pose.state.z);assert.equal(f.experience.captureActivityPose().yawOffset,pose.yawOffset);
+});
+
+
+test('control settings persist changes and continue or Escape restores canvas focus without relocking',t=>{
+  const entries=new Map(),storage={getItem:key=>entries.get(key),setItem:(key,value)=>entries.set(key,value)};
+  const f=fixture(t,{buildings:false,legacyControls:false,storage});f.experience.enter('walk');let focused=0;f.canvas.focus=()=>{focused++;};
+  const button=f.el('player-hud').children.find(e=>e.attrs['aria-label']==='调整操作偏好');button.emit('click');
+  const dialog=f.doc.body.children.find(e=>e.tagName==='DIALOG'),sensitivity=dialog.querySelector('[aria-label="视角灵敏度"]'),invert=dialog.querySelector('[aria-label="反转上下视角"]');
+  sensitivity.value='1.4';sensitivity.emit('input');invert.checked=true;invert.emit('change');
+  assert.equal(JSON.parse(entries.get('dongjiu.controls.v1')).sensitivity,1.4);assert.equal(JSON.parse(entries.get('dongjiu.controls.v1')).invertY,true);
+  const done=dialog.children.at(-1).children.find(e=>e.textContent==='继续探索');done.emit('click');assert.equal(dialog.open,false);assert.equal(focused,1);assert.notEqual(f.doc.pointerLockElement,f.canvas);
+  dialog.emit('close');assert.equal(focused,1,'native close arriving after the button must not repeat restoration');
+  button.emit('click');dialog.emit('cancel');dialog.close();dialog.emit('close');assert.equal(focused,2);assert.notEqual(f.doc.pointerLockElement,f.canvas);
 });

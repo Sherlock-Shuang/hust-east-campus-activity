@@ -19,9 +19,11 @@ export function createPlayerModels(THREE){
   walker.position.y=-.024;
   const roadster=createRoadsterModel(THREE);roadster.group.name='player-roadster';
   const hoverboard=createHoverboardModel(THREE);hoverboard.group.name='player-hoverboard';
-  const spider=createSpiderModel(THREE);spider.group.name='player-spider';
+  // Walking must not synchronously generate the Spider skin while its worker
+  // is still preparing it. Parked suits use their own lightweight mesh.
+  const spiderRoot=new THREE.Group();spiderRoot.name='player-spider';let spider=null;
   const boat=createBoatModel(THREE,{occupied:true});boat.group.name='player-boat';
-  group.add(walker,scooter,helicopter,roadster.group,hoverboard.group,spider.group,boat.group);
+  group.add(walker,scooter,helicopter,roadster.group,hoverboard.group,spiderRoot,boat.group);
   group.userData={forward:'-Z',units:'metres',contactOrigin:true};
   const library=createActorLibrary(THREE,{registerGeometry:ownGeometry,registerMaterial:ownMaterial});
   const playerColors={paint:'#c9d6cc',coat:'#346d6b',pants:'#343f46',skin:'#c59a7a',hair:'#302923',bag:'#ad704c'};
@@ -160,7 +162,7 @@ export function createPlayerModels(THREE){
   rod(helicopter,[0,2.28,-.20],[0,2.72,-.40],.012,dark,'helicopter-roof-antenna');
   rod(helicopter,[0,.70,1.07],[0,.36,1.34],.013,dark,'helicopter-belly-antenna');
   helicopter.userData={representative:true,lengthMetres:6.5,rotorDiameterMetres:7.72,skidWidthMetres:2.17};
-  const modeGroups={walk:walker,scooter,helicopter,roadster:roadster.group,hoverboard:hoverboard.group,spider:spider.group,boat:boat.group};
+  const modeGroups={walk:walker,scooter,helicopter,roadster:roadster.group,hoverboard:hoverboard.group,spider:spiderRoot,boat:boat.group};
   // All templates remain attached for parked-prop extraction and mode changes.
   // Object3D normally walks hidden subtrees too; a dormant rig need not compose
   // hundreds of wheel/panel/bone matrices in every main, shadow and water pass.
@@ -170,12 +172,18 @@ export function createPlayerModels(THREE){
     root.updateMatrixWorld=function(force){if(this.visible)return updateWorld.call(this,force);};
   }
   let rotorAngle=0,disposed=false,walkProgress=0,previousWalkDistance=null,previousWalkSpeed=0;
+  function ensureMode(mode){
+    if(disposed)return false;
+    if(mode==='spider'&&!spider){spider=createSpiderModel(THREE);spider.group.name='spider-rig';spiderRoot.add(spider.group);spiderRoot.userData=spider.group.userData;}
+    return !!modeGroups[mode];
+  }
   // Keep the original leg/arm poses and their pre-speed-up cadence. Travel is
   // faster now, but that must not fast-forward the familiar walking animation.
   const walkingAnimationSpeed=speed=>speed<=3.2?speed*2.2/3.2:2.2+(Math.min(speed,5.2)-3.2)*1.6/2;
   function update(state={},dt=0){
     if(disposed)return;
     const mode=state.mode??'walk';
+    ensureMode(mode);
     group.position.set(finite(state.x),finite(state.y),finite(state.z));
     group.rotation.set(finite(state.pitch),finite(state.yaw),finite(state.lean),'YXZ');
     for(const[key,root]of Object.entries(modeGroups))root.visible=key===mode;
@@ -210,10 +218,10 @@ export function createPlayerModels(THREE){
     modeGroups[mode]?.updateMatrixWorld(true);
   }
   function dispose(){
-    if(disposed)return;disposed=true;group.removeFromParent();roadster.dispose();hoverboard.dispose();spider.dispose();boat.dispose();
+    if(disposed)return;disposed=true;group.removeFromParent();roadster.dispose();hoverboard.dispose();spider?.dispose();boat.dispose();
     for(const geometry of geometries)geometry.dispose();for(const material of materials)material.dispose();
     group.clear();geometries.clear();materials.clear();
   }
   update({mode:'walk'});
-  return{group,update,dispose,setScooterAppearance};
+  return{group,update,dispose,setScooterAppearance,ensureMode,get spiderReady(){return !!spider;}};
 }

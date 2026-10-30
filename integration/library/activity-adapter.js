@@ -8,7 +8,14 @@
   try { const own=new URL(parentOrigin),supplied=params.get('campusParentOrigin');if(!['http:','https:'].includes(own.protocol)||(supplied&&supplied!==parentOrigin))return; } catch { return; }
   if(attemptId&&!/^[a-zA-Z0-9_-]{1,128}$/.test(attemptId))return;
   let controller=null,stateKnown=false,paused=false,disposed=false;
-  const sent=new Set();
+  const sent=new Set(),disposeListeners=new Set(),disposedControllers=new WeakSet();
+  function disposeController(value){
+    if(!value||typeof value!=='object'||disposedControllers.has(value))return;
+    disposedControllers.add(value);
+    // Quit may reject after its iframe has already been detached. Teardown is
+    // idempotent and must not turn that expected race into an unhandled promise.
+    try{value.dispose?.()?.catch?.(()=>{});}catch{}
+  }
   function send(type,extra={}){
     if(parent===window)return;
     parent.postMessage({type,workId,attemptId,...extra},parentOrigin);
@@ -20,10 +27,16 @@
   }
   window.campusWorkAdapter={
     get paused(){return paused;},
-    register(value){controller=value;apply();},
+    get disposed(){return disposed;},
+    register(value){controller=value;try{apply();}finally{if(disposed)disposeController(value);}},
+    onDispose(listener){
+      if(typeof listener!=='function')return ()=>{};
+      if(disposed){listener();return ()=>{};}
+      disposeListeners.add(listener);return ()=>disposeListeners.delete(listener);
+    },
     ready(level){if(disposed||!['page_opened','runtime_ready'].includes(level)||sent.has(level))return;sent.add(level);document.documentElement.dataset.campusWorkStatus=level;send('campus:ready',{level});},
     fail(message){if(disposed)return;document.documentElement.dataset.campusWorkStatus='failed';send('campus:error',{message:String(message).slice(0,240)});},
-    exit(){send('campus:exit');if(parent===window)location.assign(parentOrigin+'/');},
+    exit(){if(disposed)return;send('campus:exit');if(parent===window)location.assign(parentOrigin+'/');},
   };
   addEventListener('message',event=>{
     if(disposed)return;
@@ -32,7 +45,12 @@
     if(event.data?.type==='campus:activity'&&typeof event.data.paused==='boolean'){
       stateKnown=true;paused=event.data.paused;apply();
     }else if(event.data?.type==='campus:dispose'){
-      disposed=true;stateKnown=true;paused=true;apply();controller?.dispose?.();
+      disposed=true;stateKnown=true;paused=true;
+      try{apply();}finally{
+        disposeController(controller);
+        for(const listener of disposeListeners){try{listener();}catch{}}
+        disposeListeners.clear();
+      }
     }
   });
   // Do not bind Escape/Space/Enter: each original game owns its existing keys.

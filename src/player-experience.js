@@ -11,6 +11,9 @@ import { createPlayerPointerLock } from './player-pointer-lock.js';
 import { createWorldTransport } from './world-transport.js';
 import { createTransportInteraction } from './transport-interaction.js';
 import { createMobileControls } from './mobile-controls.js';
+import { createControlPreferences, controlLookDelta } from './control-preferences.js';
+import { createControlPreferencesUI } from './control-preferences-ui.js';
+import { preloadSpiderGeometry } from './spider-geometry-loader.js';
 
 // Keep the spawn relative to the model's projected entrance, not a GIS origin
 // or the separate dorm-to-class traffic route. Leave room for all vehicle sizes.
@@ -39,7 +42,7 @@ export function createPlayerWorld(model,{movableParking=false}={}) {
 }
 
 export function createPlayerExperience({ THREE, scene, camera, controls, canvas, route, simulation,
-  model, onEnter, notify, invalidate, scooterTransport, transportSources }) {
+  model, onEnter, notify, invalidate, scooterTransport, transportSources, spiderPreparation }) {
   const $ = id => document.getElementById(id), world = createPlayerWorld(model,{movableParking:!!scooterTransport});
   const updateElement = (id, properties) => {
     const element = $(id);
@@ -53,12 +56,20 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   const worldTransport=scooterTransport?createWorldTransport({THREE,scene,model,route,simulation,playerModels:models,groundAt:motion.groundAt,canPlaceMode:motion.canPlaceMode}):null;
   const interaction=worldTransport||transportSources?createTransportInteraction({motion,sources:transportSources||[worldTransport,scooterTransport],notify,onChange:mode=>{if(mode==='scooter')models.setScooterAppearance(interaction.mounted.item.appearance);enter(mode);}}):null;
   const keys = new Set(), held = new Set(), pulses = new Map(), listeners = [];
-  const mobileHeld=new Set();let mobileControls=null,mobileAxes={forward:0,sideways:0};
+  const mobileHeld=new Set();let mobileControls=null,mobileAxes={forward:0,sideways:0},preferencesUI=null;
   let active=false, suspended=false, initialized=false, view='third', yawOffset=0, pitch=.25, distance, drag=null, mouseLook=null,
     cruise=false, liftTarget=null, landing=false, uiElapsed=0, savedNear=camera.near, savedFov=camera.fov, disposed=false, immersive=true, driveImmersive=true, suitView=false, lookHold=0, manualPitch=false, steeringSideways=false, suitAngle=0, suitPitch=.03, suitDistance=3.15;
   const aimPosition=new THREE.Vector3();
-  let comfortableCamera=!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let lookSensitivity=1,escapeReleaseUntil=0;
+  const reducedMotion=!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  let storage;try{storage=window.localStorage;}catch{}
+  const preferences=createControlPreferences({storage,defaults:{comfortableCamera:reducedMotion},onChange:applyPreferences});
+  let comfortableCamera=preferences.value.comfortableCamera,escapeReleaseUntil=0;
+  const preparation=spiderPreparation??(typeof Worker==='function'?preloadSpiderGeometry():null);
+  let spiderPrepared=!preparation,spiderRequest=null,preparationState=preparation?'preparing':'fallback';
+  const ready=Promise.resolve(preparation).then(result=>{spiderPrepared=true;preparationState=result?'ready':'fallback';},()=>{spiderPrepared=true;preparationState='fallback';});
+  let lookViewport={width:844,height:390};
+  function measureLookViewport(){const rect=canvas.getBoundingClientRect();lookViewport={width:rect.width,height:rect.height};}
+  function applyPreferences(value){comfortableCamera=value.comfortableCamera;mobileControls?.setJoystickScale(value.joystickScale);updateElement('look-sensitivity',{value:String(value.sensitivity)});updateElement('look-sensitivity-value',{textContent:`${value.sensitivity.toFixed(2)}×`});preferencesUI?.refresh();invalidate();}
   const followPosition = new THREE.Vector3(), lookTarget = new THREE.Vector3();
   const modeNames={walk:'步行探索',scooter:'电动车骑行',helicopter:'直升机探索',roadster:'特斯拉 · 喷气跑车',hoverboard:'电动飞行器',spider:'蜘蛛侠 · 蛛丝摆荡',boat:'湖上游艇'};
   const codes=new Set(['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyQ','KeyE','KeyF','KeyX','KeyG','KeyT','Space','ShiftLeft','ShiftRight','KeyV','KeyC','KeyL','Escape']);
@@ -71,7 +82,27 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     onChange(locked){clearInput();if(!locked)escapeReleaseUntil=performance.now()+300;updateUI();invalidate();},
     onError(){notify(pointerLock.supported?'暂未锁定鼠标：请先点一下游戏画面，再按 L；仍可直接移动鼠标环视。':'当前浏览器不支持鼠标锁定，仍可移动鼠标环视；在 Chrome 中打开此预览可使用锁定。');},
   });
-  function clearInput(){if(!suspended)motion.clearActionInputs?.();keys.clear();held.clear();mobileHeld.clear();mobileAxes={forward:0,sideways:0};mobileControls?.reset();pulses.clear();cruise=false;liftTarget=null;landing=false;drag=null;mouseLook=null;held.delete('mouse-swing');webAudio.setActive(false);}
+  function releaseLookContact(){const previous=drag;drag=null;mouseLook=null;if(previous)try{if(canvas.hasPointerCapture?.(previous.id))canvas.releasePointerCapture(previous.id);}catch{}}
+  function clearInput(){spiderRequest=null;if(!suspended)motion.clearActionInputs?.();keys.clear();held.clear();mobileHeld.clear();mobileAxes={forward:0,sideways:0};mobileControls?.reset();pulses.clear();cruise=false;liftTarget=null;landing=false;releaseLookContact();held.delete('mouse-swing');webAudio.setActive(false);}
+  function waitForSpider(run,key){
+    if(spiderPrepared)return run();
+    if(spiderRequest?.key===key)return {ok:false,pending:true};
+    const request={key};spiderRequest=request;notify('战衣正在准备，完成后穿上；你也可以继续步行。');
+    ready.then(()=>{if(spiderRequest!==request)return;spiderRequest=null;if(!disposed&&!suspended&&!inputBlocked()){run();updateUI();invalidate();}});
+    return {ok:false,pending:true};
+  }
+  function ensureSpider(){try{return models.ensureMode('spider');}catch{notify('战衣暂未准备成功，可继续步行或稍后重试。');return false;}}
+  function interact(){
+    if(!interaction)return;
+    const hit=interaction.nearest();
+    if(hit?.item.mode==='spider'&&!spiderPrepared)return waitForSpider(()=>{
+      const current=interaction.nearest();
+      // Never claim a different suit or teleport back after the player left.
+      if(active&&current?.item.id===hit.item.id&&ensureSpider())return interaction.mount(current);
+    },`suit:${hit.item.id}`);
+    if(hit?.item.mode==='spider'&&!ensureSpider())return {ok:false,reason:'战衣暂未准备成功'};
+    return interaction.interact();
+  }
   function clampLookPitch(value){return Math.max(motion.state.mode==='walk'?WALK_MIN_PITCH:-.35,Math.min(.85,value));}
   function recenter(preserveVehicleCamera=false,smooth=false){mouseLook=null;yawOffset=0;pitch=view==='first'?.04:motion.state.mode==='spider'?.18:motion.state.mode==='hoverboard'?.12:motion.state.mode==='roadster'?.15:.25;distance=undefined;manualPitch=false;lookHold=0;spiderCamera.reset(motion.state);if(smooth)vehicleCamera.recenter(motion.state);else if(!preserveVehicleCamera)vehicleCamera.reset(motion.state,motion.state.yaw);}
   function setImmersive(value){immersive=!!value;document.body.classList.toggle('spider-immersive',active&&motion.state.mode==='spider'&&immersive);document.body.classList.toggle('drive-immersive',active&&['roadster','hoverboard'].includes(motion.state.mode)&&driveImmersive);window.dispatchEvent(new Event('resize'));}
@@ -126,7 +157,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     const hud=$('player-hud');
     if(hud)Object.assign(hud.dataset,{
       pointerLockSupported:String(pointerLock.supported),pointerLocked:String(pointerLock.locked),
-      mode:s.mode,view,inspect:String(suitView),suspended:String(suspended),
+      mode:s.mode,view,inspect:String(suitView),suspended:String(suspended),spiderPreparation:preparationState,
     });
     updateElement('web-target-status',{hidden:!active||!spider});
     updateElement('web-speed-shade',{hidden:!active||!spider});
@@ -191,6 +222,9 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   }
   function enter(mode){
     if(suspended)return {ok:false,reason:'活动已暂停'};
+    if(mode==='spider'&&!spiderPrepared)return waitForSpider(()=>enter(mode),'mode:spider');
+    if(mode==='spider'&&!ensureSpider())return {ok:false,reason:'战衣暂未准备成功'};
+    spiderRequest=null;
     if(!active){
       onEnter();
       if(!initialized){
@@ -217,6 +251,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     return result;
   }
   function exit(){
+    spiderRequest=null;preferencesUI?.close();
     if(!active)return;
     active=false;pointerLock.release();suitView=false;clearInput();setImmersive(immersive);motion.suspend?.();motion.state.speed=0;models.group.visible=false;
     controls.enabled=true;camera.near=savedNear;camera.fov=savedFov;camera.updateProjectionMatrix();
@@ -236,7 +271,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(e.code==='KeyL'){if(!e.repeat){pointerLock.toggle();updateUI();}return;}
     if(e.code==='KeyV'){if(!e.repeat)setView(view==='third'?'first':'third');return;}
     if(e.code==='KeyG'&&motion.state.mode==='spider'){if(!e.repeat){pulses.set('point',.12);}return;}
-    if(e.code==='KeyF'){if(!e.repeat){if(interaction&&(motion.state.mode!=='spider'||motion.state.grounded)){interaction.interact();updateUI();}else if(motion.state.mode==='spider'){pulses.set('zip',.12);}else toggleFlight();}return;}
+    if(e.code==='KeyF'){if(!e.repeat){if(interaction&&(motion.state.mode!=='spider'||motion.state.grounded)){interact();updateUI();}else if(motion.state.mode==='spider'){pulses.set('zip',.12);}else toggleFlight();}return;}
     if(e.code==='KeyC'){recenter(false,true);return;}
     if(e.code==='Space'){cruise=false;liftTarget=null;landing=false;if(motion.state.mode==='spider'){if(!e.repeat)queueJump();return;}}
     if(e.code==='KeyQ'||e.code==='KeyE'){
@@ -262,11 +297,12 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
       return;
     }
     if(drag&&drag.id!==e.pointerId)return;
+    measureLookViewport();
     canvas.setPointerCapture(e.pointerId);
     drag={id:e.pointerId,x:e.clientX,y:e.clientY};lookHold=1.5;
   });
-  function applyLook(deltaX,deltaY){
-    const dx=deltaX*.0032*lookSensitivity,dy=deltaY*.0025*lookSensitivity;
+  function applyLook(deltaX,deltaY,touch=false){
+    const {x:dx,y:dy}=controlLookDelta(deltaX,deltaY,{touch,...lookViewport,preferences:preferences.value});
     if(!Number.isFinite(dx)||!Number.isFinite(dy)||(!dx&&!dy))return;
     if(suitView){suitAngle-=dx;suitPitch=Math.max(-.35,Math.min(.85,suitPitch+dy));}
     else{
@@ -297,8 +333,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     pointer.x=e.clientX;pointer.y=e.clientY;
     if(!Number.isFinite(dx)||!Number.isFinite(dy)||(!dx&&!dy))return;
     if(mouse)mouseLook.looking=true;
-    const touchGain=mouse?1:1.5;
-    applyLook(dx*touchGain,dy*touchGain);
+    applyLook(dx,dy,!mouse);
   });
   const releasePointer=e=>{if(e.pointerType!=='mouse'&&drag&&drag.id!==e.pointerId)return;drag=null;mouseLook=null;held.delete('mouse-swing');};
   on(canvas,'pointerup',e=>{if(e.pointerType==='mouse')held.delete('mouse-swing');else releasePointer(e);});
@@ -308,9 +343,9 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   on(canvas,'wheel',e=>{if(!active)return;e.preventDefault();if(suitView){suitDistance=Math.max(1.8,Math.min(6,suitDistance*Math.exp(e.deltaY*.001)));return;}const base=motion.state.mode==='helicopter'?18:motion.state.mode==='roadster'?9.4:motion.state.mode==='hoverboard'?8.8:motion.state.mode==='spider'?6.6:motion.state.mode==='scooter'?8.8:6.4;distance=Math.max(2,Math.min(35,(distance??base)*Math.exp(e.deltaY*.001)));},{passive:false});
   on(canvas,'contextmenu',e=>{if(active)e.preventDefault();});
   on($('player-mouse-toggle'),'click',()=>{pointerLock.toggle();updateUI();});
-  on($('look-sensitivity'),'input',e=>{const value=Number(e.target.value);if(Number.isFinite(value)){lookSensitivity=Math.max(.45,Math.min(1.8,value));updateElement('look-sensitivity-value',{textContent:`${lookSensitivity.toFixed(2)}×`});}});
+  on($('look-sensitivity'),'input',e=>{const value=Number(e.target.value);if(Number.isFinite(value))preferences.set({sensitivity:value});});
   document.querySelectorAll('[data-player-mode]').forEach(b=>on(b,'click',()=>enter(b.dataset.playerMode)));
-  on($('transport-interact'),'click',()=>{if(active){interaction?.interact();canvas.focus({preventScroll:true});updateUI();}});
+  on($('transport-interact'),'click',()=>{if(active){interact();canvas.focus({preventScroll:true});updateUI();}});
   on($('resume-exploration'),'click',()=>enter(motion.state.mode));
   document.querySelectorAll('[data-player-camera]').forEach(b=>on(b,'click',()=>setView(b.dataset.playerCamera)));
   document.querySelectorAll('[data-player-input]').forEach(b=>{
@@ -330,9 +365,9 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   on($('web-controls'),'click',()=>{const open=$('player-hud').classList.toggle('controls-open');$('web-controls').setAttribute('aria-expanded',String(open));});
   on($('web-suit'),'click',()=>{const next=!suitView;clearInput();suitView=next;setView('third');suitAngle=motion.state.yaw+Math.PI+.28;suitPitch=.03;suitDistance=3.15;spiderCamera.reset(motion.state,suitView?suitAngle:motion.state.yaw);updateUI();cameraFrame(0,true);});
   on($('web-audio'),'click',async()=>{await webAudio.setEnabled(!webAudio.enabled);updateUI();});
-  on($('web-comfort'),'click',()=>{comfortableCamera=!comfortableCamera;updateUI();invalidate();});
+  on($('web-comfort'),'click',()=>{preferences.set({comfortableCamera:!comfortableCamera});updateUI();invalidate();});
   on($('drive-immersive'),'click',()=>{driveImmersive=!driveImmersive;setImmersive(immersive);updateUI();});
-  on($('drive-comfort'),'click',()=>{comfortableCamera=!comfortableCamera;updateUI();});
+  on($('drive-comfort'),'click',()=>{preferences.set({comfortableCamera:!comfortableCamera});updateUI();});
   on($('drive-controls'),'click',()=>{const open=$('player-hud').classList.toggle('controls-open');$('drive-controls').setAttribute('aria-expanded',String(open));});
   const takeoff=$('player-takeoff');let suppressJetKeyboardClick=false;
   on(takeoff,'pointerdown',e=>{
@@ -363,6 +398,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   function setSuspended(value){
     const next=!!value;if(next===suspended)return;
     suspended=next;
+    if(suspended)preferencesUI?.close();
     // Keep the exact physical pose/velocity while paused. Internal action
     // buffers are discarded on resume, before the next physics step.
     clearInput();suppressJetKeyboardClick=false;
@@ -413,6 +449,9 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   }
   function restoreActivityPose(saved){
     if(suspended||!saved||!modeNames[saved.mode]||!['first','third'].includes(saved.view))return false;
+    // Do not claim inventory or partially mutate the physical mode while an
+    // asynchronous skin preparation still prevents a synchronous restore.
+    if(saved.mode==='spider'&&!spiderPrepared)return false;
     if(!['x','y','z','yaw'].every(k=>Number.isFinite(saved.state?.[k]))||Math.abs(saved.state.x)>6000||Math.abs(saved.state.z)>6000||saved.state.y< -10||saved.state.y>1000)return false;
     // A restored scene vehicle must still refer to the claimed world item.
     // Reject incompatible snapshots without losing the current inventory lease.
@@ -439,18 +478,28 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     updateUI();invalidate();return true;
   }
   mobileControls=createMobileControls({document,window,movementSurface:canvas,canUse:()=>active&&!disposed&&!inputBlocked(),
+    joystickScale:preferences.value.joystickScale,
     onAxes:axes=>{mobileAxes=axes;},
     onHold:(name,down)=>{if(down){stopSuitView();if(name==='up'&&motion.state.mode==='roadster'&&!armRoadsterJet())return;mobileHeld.add(name);if(['up','down','brake'].includes(name)){liftTarget=null;landing=false;cruise=false;}}else mobileHeld.delete(name);},
     onAction:name=>{
-      if(name==='interact'){interaction?.interact();updateUI();}
+      if(name==='interact'){interact();updateUI();}
       else if(name==='view')setView(view==='third'?'first':'third');
       else if(name==='recenter'){recenter(false,true);updateUI();}
       else if(name==='jump'&&motion.state.mode==='spider')queueJump();
       else if(['zip','point'].includes(name)&&motion.state.mode==='spider')pulses.set(name,.12);
     },
-    onReset:()=>{mobileHeld.clear();mobileAxes={forward:0,sideways:0};pulses.clear();if(!suspended)motion.clearActionInputs?.();drag=null;mouseLook=null;},
+    onReset:()=>{spiderRequest=null;mobileHeld.clear();mobileAxes={forward:0,sideways:0};pulses.clear();if(!suspended)motion.clearActionInputs?.();releaseLookContact();},
     onChange:()=>{updateUI();invalidate();},
   });
-  return {get active(){return active;},get suspended(){return suspended;},state:motion.state,enter,enterAt,exit,tick,setSuspended,captureActivityPose,restoreActivityPose,
-    dispose(){exit();disposed=true;mobileControls.dispose();pointerLock.dispose();listeners.forEach(remove=>remove());worldTransport?.dispose();models.dispose();webAudio.dispose();disposeReferences();disposeHoverboardReferences();}};
+  preferencesUI=createControlPreferencesUI({document,host:$('player-hud'),preferences,canOpen:()=>active&&!disposed&&!suspended,
+    onBoundary:()=>{clearInput();pointerLock.release();},
+    onClose:()=>{if(active&&!disposed&&!suspended)canvas.focus({preventScroll:true});},
+  });
+  applyPreferences(preferences.value);
+  async function restorePreparedActivityPose(saved){
+    if(saved?.mode==='spider')await ready;
+    return !disposed&&restoreActivityPose(saved);
+  }
+  return {get active(){return active;},get suspended(){return suspended;},state:motion.state,enter,enterAt,exit,tick,setSuspended,captureActivityPose,restoreActivityPose,restorePreparedActivityPose,
+    dispose(){exit();disposed=true;preferencesUI.dispose();mobileControls.dispose();pointerLock.dispose();listeners.forEach(remove=>remove());worldTransport?.dispose();models.dispose();webAudio.dispose();disposeReferences();disposeHoverboardReferences();}};
 }

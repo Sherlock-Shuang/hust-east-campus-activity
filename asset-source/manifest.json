@@ -621,16 +621,16 @@
     "/works/library/activity-adapter.js": {
       "chunks": [
         {
-          "url": "/_activity_assets/1eb6aefefe1bbe0ef9f41059fc98febe453bc7eed3d2b1033f3d14f843efd6dc.bin",
+          "url": "/_activity_assets/335bce84ba0974a7cf6fba37a55e71125d5c0735074fefe677073d8390c430e5.bin",
           "encoding": "gzip",
-          "bytes": 3160,
-          "storedBytes": 1471,
-          "sha256": "0dcbc52ac1ea641b4d9af87d5152ee4a1ea67aad26b7520a41baafdd0ed35b42"
+          "bytes": 4062,
+          "storedBytes": 1784,
+          "sha256": "68ce82a630319fdcbf7e29a2441627c441711fca63fb5a885d90215848af9276"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 3160,
-      "sha256": "0dcbc52ac1ea641b4d9af87d5152ee4a1ea67aad26b7520a41baafdd0ed35b42"
+      "bytes": 4062,
+      "sha256": "68ce82a630319fdcbf7e29a2441627c441711fca63fb5a885d90215848af9276"
     },
     "/works/library/api/games": {
       "chunks": [
@@ -1489,16 +1489,16 @@
     "/works/wanyan/activity-adapter.js": {
       "chunks": [
         {
-          "url": "/_activity_assets/1eb6aefefe1bbe0ef9f41059fc98febe453bc7eed3d2b1033f3d14f843efd6dc.bin",
+          "url": "/_activity_assets/335bce84ba0974a7cf6fba37a55e71125d5c0735074fefe677073d8390c430e5.bin",
           "encoding": "gzip",
-          "bytes": 3160,
-          "storedBytes": 1471,
-          "sha256": "0dcbc52ac1ea641b4d9af87d5152ee4a1ea67aad26b7520a41baafdd0ed35b42"
+          "bytes": 4062,
+          "storedBytes": 1784,
+          "sha256": "68ce82a630319fdcbf7e29a2441627c441711fca63fb5a885d90215848af9276"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 3160,
-      "sha256": "0dcbc52ac1ea641b4d9af87d5152ee4a1ea67aad26b7520a41baafdd0ed35b42"
+      "bytes": 4062,
+      "sha256": "68ce82a630319fdcbf7e29a2441627c441711fca63fb5a885d90215848af9276"
     },
     "/works/wanyan/Build/wanyan.data": {
       "chunks": [
@@ -1839,16 +1839,16 @@
     "/works/wanyan/wanyan-touch.mjs": {
       "chunks": [
         {
-          "url": "/_activity_assets/b1edf86a110cf8475ac9f4520df0ce8c420bfd78d80cd27bc4036bf7359a21fa.bin",
+          "url": "/_activity_assets/278efe75e823d1d5525fe79f4d7e373d9ce6898119de9660d9805e3b23b13dc6.bin",
           "encoding": "gzip",
-          "bytes": 4571,
-          "storedBytes": 1991,
-          "sha256": "3b6b617fdce6a8f78123982fccab7b1502041099e17c17ca73a299c4bcee5154"
+          "bytes": 5147,
+          "storedBytes": 2137,
+          "sha256": "8a9f1a0fd281c25bf5a8904093dbbd8b46c43c1aab3777e5ef07c7035a237ede"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 4571,
-      "sha256": "3b6b617fdce6a8f78123982fccab7b1502041099e17c17ca73a299c4bcee5154"
+      "bytes": 5147,
+      "sha256": "8a9f1a0fd281c25bf5a8904093dbbd8b46c43c1aab3777e5ef07c7035a237ede"
     },
     "/works/wanyan/wanyan-touch-gamepad.mjs": {
       "mime": "text/javascript; charset=utf-8",

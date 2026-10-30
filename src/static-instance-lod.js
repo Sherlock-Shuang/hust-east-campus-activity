@@ -39,3 +39,29 @@ export function createStaticXZIndex(positions,cellSize=64){
     out.sort((a,b)=>a-b);return out;
   }};
 }
+
+/** Stateful distance bands without drawing two LODs at once. A small spatial
+ * dead band prevents a tree switching meshes every time a camera bobs across a
+ * threshold. A changed quality scale starts from its exact budget immediately;
+ * reset() also makes export/inspection independent from previous camera state. */
+export function createDistanceLodSelection(count,thresholds,{hysteresis=.1}={}){
+  const levels=new Int8Array(count);levels.fill(-1);
+  const fraction=Number.isFinite(hysteresis)?Math.max(0,Math.min(.25,hysteresis)):.1;
+  let lastScale=null,exact=[],outward=[],inward=[];
+  function reset(){levels.fill(-1);}
+  function setScale(scale=1){
+    const value=Number.isFinite(scale)&&scale>0?scale:1;
+    if(lastScale===value)return false;
+    lastScale=value;exact=thresholds.map(d=>(d*value)**2);outward=thresholds.map(d=>(d*value*(1+fraction))**2);inward=thresholds.map(d=>(d*value*(1-fraction))**2);reset();return true;
+  }
+  function levelAt(index,distanceSq){
+    let level=levels[index];
+    if(level<0||level===undefined){level=0;while(level<exact.length&&distanceSq>exact[level])level++;}
+    else{
+      while(level<outward.length&&distanceSq>outward[level])level++;
+      while(level>0&&distanceSq<inward[level-1])level--;
+    }
+    levels[index]=level;return level;
+  }
+  setScale(1);return{setScale,levelAt,reset};
+}

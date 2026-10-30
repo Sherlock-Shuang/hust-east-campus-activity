@@ -9,7 +9,7 @@ import {
 import { createGeoScene,setCartographicLinesVisible } from "./geo-scene.js";
 import { createWaterDetails } from "./water-details.js";
 import { applyRiverTerrain } from "./river-terrain.js";
-import { createCampus3D } from "./campus-3d.js";
+import { createCampus3D, createCampus3DAsync } from "./campus-3d.js";
 import {mergeCampusExtension} from './campus-data-merge.js';
 import {campusLandmarkArrival} from './campus-landmark-arrival.js';
 import { createCommuteExperience } from "./commute-experience.js";
@@ -26,6 +26,9 @@ import { mountPerformanceUI,readQualityPreference,getQualityStorage } from './pe
 import {preloadSpiderGeometry} from './spider-model.js';
 import './mobile-controls.css';
 import './performance-ui.css';
+import {createFrameMetrics} from './frame-metrics.js';
+import {createGraphicsRecovery} from './graphics-recovery.js';
+import {mountRuntimeDiagnostics} from './runtime-diagnostics.js';
 // Rendering no longer depends on the removed sidebar controls.
 const layerSettings = { symbolic: true, building: true, road: true, water: true };
 const $ = (id) => document.getElementById(id),
@@ -33,7 +36,12 @@ const $ = (id) => document.getElementById(id),
   container = $("viewport");
 // Prepare the authored skin off the UI thread while map data and static campus
 // geometry load. No extra multi-megabyte model download or first-pickup build.
+const startupStarted=performance.now(),startupTimings={};
+const frameMetrics=createFrameMetrics();
+const yieldBrowserTask=()=>new Promise(resolve=>setTimeout(resolve,0));
 const spiderGeometryReady=preloadSpiderGeometry();
+canvas.dataset.spiderPreparation='preparing';
+spiderGeometryReady.then(ready=>{canvas.dataset.spiderPreparation=ready?'prepared':'on-demand';});
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
@@ -130,7 +138,33 @@ let fc,
   animation = null,
   needsRender = true,
   viewMode = "oblique";
-let liveControl, liveFrozen = false;
+let liveControl, liveFrozen = false, graphicsSuspended=false,datasetLoading=false;
+const recoveryPanel=document.createElement('div');recoveryPanel.className='graphics-recovery';recoveryPanel.hidden=true;recoveryPanel.setAttribute('role','status');
+const recoveryText=document.createElement('p'),recoveryButton=document.createElement('button');recoveryButton.textContent='重新载入校园';recoveryButton.type='button';recoveryPanel.append(recoveryText,recoveryButton);container.append(recoveryPanel);
+const RECOVERY_POSE_KEY='campus-graphics-recovery-pose-v1';
+let recoveryPose=null;
+function suspendCampus(){const frozen=liveFrozen||graphicsSuspended||datasetLoading;commute?.setSuspended(frozen);controls.enabled=!frozen&&!commute?.player.active;needsRender=true;}
+recoveryButton.addEventListener('click',()=>{
+  try{if(recoveryPose)sessionStorage.setItem(RECOVERY_POSE_KEY,JSON.stringify({createdAt:Date.now(),pose:recoveryPose}));}catch{}
+  location.reload();
+});
+const graphicsRecovery=createGraphicsRecovery({canvas,
+  onLost(){recoveryPose=commute?.player?.captureActivityPose?.();graphicsSuspended=true;suspendCampus();frameMetrics.reset();},
+  onRestored(){
+    scene.environment=daylight.rebuildEnvironment();
+    appliedBudget=null;applyPerformanceBudget();renderer.resetState();resize();lastShadowAt=-Infinity;previous=performance.now();lastFrameRendered=false;
+    graphicsSuspended=false;suspendCampus();frameMetrics.reset();
+  },
+  onStatus(status){canvas.dataset.graphicsState=status;canvas.dataset.graphicsLosses=String(graphicsRecovery.lossCount);recoveryPanel.hidden=status==='ready';recoveryButton.hidden=status!=='reload-available';recoveryText.textContent=status==='reload-available'?'画面恢复暂未完成，可重新载入并保留活动身份与当前位置。':'正在恢复校园画面…';},
+});
+canvas.dataset.graphicsState='ready';
+const buildId=typeof __CAMPUS_BUILD__==='string'?__CAMPUS_BUILD__:'local';canvas.dataset.buildId=buildId;
+const diagnostics=mountRuntimeDiagnostics({document,window,canvas,renderer,getReport:()=>({
+  buildId,frame:frameMetrics.snapshot(),startup:{...startupTimings},quality:{...qualityBudget},
+  resourceObjects:{geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures},
+  graphicsLosses:graphicsRecovery.lossCount,graphicsState:canvas.dataset.graphicsState,
+  note:'Frame intervals and CPU samples; resource counts are not GPU memory bytes. Physical-device results apply only to the recorded device.',
+})});
 let pendingLandmark=new URLSearchParams(location.search).get('place');
 const qualityUI=mountPerformanceUI({document,storage:getQualityStorage(),mode:qualityBudget.mode,onChange(mode){performanceQuality.setMode(mode);applyPerformanceBudget();canvas.focus({preventScroll:true});}});
 function applyPerformanceBudget(){
@@ -580,6 +614,9 @@ function normalizeImport(data) {
   return data;
 }
 async function loadDataset(data, manifest = {}) {
+  if(datasetLoading)throw new Error('地图正在加载，请完成后再导入。');
+  datasetLoading=true;$("load-screen").hidden=false;suspendCampus();
+  try{
   fc = normalizeImport(data);
   sourceManifest = manifest;
   const focus = fc.features.find((f) =>
@@ -613,9 +650,17 @@ async function loadDataset(data, manifest = {}) {
   waterDetails?.dispose();
   riverTerrain?.dispose();
   model?.dispose();
+  const geometryStarted=performance.now();
+  $('load-screen').querySelector('small').textContent='准备地面与道路数据…';
+  await yieldBrowserTask();
   model = createGeoScene(THREE, scene, fc, frame, geoToLocal);
+  startupTimings.sourceSceneMs=performance.now()-geometryStarted;
+  await yieldBrowserTask();
   campusSports=createCampusSports(THREE,model,{surfaces});model.sportsInfrastructure=campusSports.infrastructure;scene.add(campusSports.group);
-  campus = createCampus3D(THREE, model, { frame, geoToLocal });
+  const campusStarted=performance.now();
+  campus = await createCampus3DAsync(THREE, model, { frame, geoToLocal },{yieldTask:yieldBrowserTask,onProgress:({stage})=>{$('load-screen').querySelector('small').textContent=stage;}});
+  startupTimings.campusBuildMs=performance.now()-campusStarted;
+  await yieldBrowserTask();
   scene.add(campus.group);
   riverTerrain=applyRiverTerrain(THREE,{model,datum,surfaces});
   scene.add(riverTerrain.group);
@@ -630,7 +675,9 @@ async function loadDataset(data, manifest = {}) {
   clearMeasurements();
   createLabels();
   homeView();
-  canvas.dataset.spiderPreparation=await spiderGeometryReady?'prepared':'fallback';
+  $('load-screen').querySelector('small').textContent='准备步行与交通…';
+  await yieldBrowserTask();
+  const playerStarted=performance.now();
   try {
     commute = createCommuteExperience({
       THREE, scene, camera, controls, canvas, model, fc, frame, geoToLocal,
@@ -650,17 +697,27 @@ async function loadDataset(data, manifest = {}) {
     const selector = document.querySelector('.transport-selector');
     if (selector) selector.hidden = false;
     commute.player.enter('walk');
+    try{
+      const saved=JSON.parse(sessionStorage.getItem(RECOVERY_POSE_KEY)||'null');
+      if(saved&&Date.now()-saved.createdAt<300000&&Date.now()>=saved.createdAt){
+        if(await commute.player.restorePreparedActivityPose(saved.pose))sessionStorage.removeItem(RECOVERY_POSE_KEY);
+      }else sessionStorage.removeItem(RECOVERY_POSE_KEY);
+    }catch{}
     commute.setPerformanceBudget?.({trafficHz:qualityBudget.trafficHz,detailDistanceScale:qualityBudget.detailDistanceScale});
   } catch (error) {
     const selector = document.querySelector('.transport-selector') || $("commute-panel");
     if (selector) selector.hidden = true;
     console.warn("This dataset has no supported commute route:", error);
   }
+  startupTimings.playerBuildMs=performance.now()-playerStarted;
+  startupTimings.interactiveMs=performance.now()-startupStarted;
+  canvas.dataset.startupTimings=JSON.stringify(startupTimings);
   $("load-screen").hidden = true;
   liveControl?.sync();
   if (model.warnings.length)
     console.warn("Data layer warnings:", model.warnings);
   if(campus.warnings?.length)console.warn("Reconstruction warnings:",campus.warnings);
+  }finally{datasetLoading=false;$("load-screen").hidden=true;suspendCampus();}
 }
 function exteriorView(name) {
   const r = model?.buildings.find(r => r.feature.properties.name?.includes(name));
@@ -960,15 +1017,17 @@ let frameWindow=0,frameSamples=0,renderWork=0,tickWork=0,sceneWork=0,drawWork=0;
 let drawCalls=0,triangles=0,lastFrameCpu=0,lastFrameRendered=false,wasHidden=false,lastLabelAt=-Infinity;
 function render(now) {
   requestAnimationFrame(render);
-  const frameStart=performance.now(),elapsed=Math.max(0,now-previous);
+  const frameStart=performance.now(),elapsed=Math.max(0,now-previous),frozen=liveFrozen||graphicsSuspended||datasetLoading;
+  const continuousFrame=lastFrameRendered&&!wasHidden&&!frozen;
   const dt = wasHidden?0:Math.min(elapsed/1000,0.1);
   previous = now;
-  performanceQuality.update({elapsedMs:elapsed,cpuMs:lastFrameCpu,visible:!document.hidden,active:!liveFrozen,rendered:lastFrameRendered&&!wasHidden});
+  performanceQuality.update({elapsedMs:elapsed,cpuMs:lastFrameCpu,visible:!document.hidden,active:!frozen,rendered:lastFrameRendered&&!wasHidden});
   if(document.hidden){wasHidden=true;lastFrameRendered=false;frameWindow=frameSamples=renderWork=tickWork=sceneWork=drawWork=0;return;}
   if(wasHidden){needsRender=true;lastShadowAt=-Infinity;}wasHidden=false;
+  if(graphicsSuspended){lastFrameRendered=false;return;}
   if(!$('load-screen').hidden){lastFrameRendered=false;return;}
   applyPerformanceBudget();lastFrameRendered=false;
-  if (animation && !liveFrozen) {
+  if (animation && !frozen) {
     needsRender = true;
     animation.time += dt;
     const t = Math.min(1, animation.time / 0.65),
@@ -978,15 +1037,15 @@ function render(now) {
     if (t >= 1) animation = null;
   }
   const tickStart=performance.now();
-  if(pendingLandmark&&!liveFrozen&&commute?.player){
+  if(pendingLandmark&&!frozen&&commute?.player){
     const pose=campusLandmarkArrival(campus,pendingLandmark);pendingLandmark=null;
     if(pose){const arrived=commute.player.enterAt(pose);if(!arrived?.ok)toast('该导览位置暂不可达，请从校园步行前往');}
   }
-  if (!liveFrozen && commute?.tick(dt)) needsRender = true;
-  if(!liveFrozen&&!document.hidden&&layerSettings.symbolic&&commute?.running&&campus?.tick?.(dt,camera))needsRender=true;
+  if (!frozen && commute?.tick(dt)) needsRender = true;
+  if(!frozen&&!document.hidden&&layerSettings.symbolic&&commute?.running&&campus?.tick?.(dt,camera))needsRender=true;
   tickWork+=performance.now()-tickStart;
-  if (waterDetails?.update(dt,{paused:liveFrozen || (commute ? !commute.running : false),enabled:layerSettings.symbolic && layerSettings.water && !document.hidden && !reducedMotion.matches})) needsRender=true;
-  if (!liveFrozen && !commute?.player.active) {
+  if (waterDetails?.update(dt,{paused:frozen || (commute ? !commute.running : false),enabled:layerSettings.symbolic && layerSettings.water && !document.hidden && !reducedMotion.matches})) needsRender=true;
+  if (!frozen && !commute?.player.active) {
     controls.update();
     if(camera.position.y<.6){camera.position.y=.6;camera.lookAt(controls.target);}
   }
@@ -1005,7 +1064,7 @@ function render(now) {
     scene.fog.near=480+overviewLift*.9;scene.fog.far=2900+overviewLift*1.3;
     campus?.update?.(camera, { viewportHeight,detailDistanceScale:qualityBudget.detailDistanceScale });
     if(now-lastLabelAt>=100){updateLabels();lastLabelAt=now;}
-    if(!liveFrozen)waterDetails?.renderReflection(renderer,scene,camera,now);
+    if(!frozen)waterDetails?.renderReflection(renderer,scene,camera,now);
     sceneWork+=performance.now()-sceneStart;
     const drawStart=performance.now();
     if(renderer.shadowMap.enabled&&(renderer.shadowMap.needsUpdate||now-lastShadowAt>=qualityBudget.shadowIntervalMs)){
@@ -1019,9 +1078,10 @@ function render(now) {
     needsRender = false;
   }
   lastFrameCpu=performance.now()-frameStart;
+  frameMetrics.sample({frameMs:elapsed,cpuMs:lastFrameCpu,drawCalls,triangles,active:continuousFrame&&lastFrameRendered&&!document.hidden});
   if(!document.hidden){
     frameWindow+=elapsed;frameSamples++;renderWork+=performance.now()-frameStart;
-    if(frameWindow>=1200){canvas.dataset.frameRate=(frameSamples*1000/frameWindow).toFixed(1);canvas.dataset.frameCpuMs=(renderWork/frameSamples).toFixed(1);canvas.dataset.tickMs=(tickWork/frameSamples).toFixed(1);canvas.dataset.sceneMs=(sceneWork/frameSamples).toFixed(1);canvas.dataset.drawMs=(drawWork/frameSamples).toFixed(1);canvas.dataset.drawCalls=String(drawCalls);canvas.dataset.triangles=String(triangles);canvas.dataset.renderPixelRatio=String(renderPixelRatio);canvas.dataset.gpuGeometries=String(renderer.info.memory.geometries);canvas.dataset.gpuTextures=String(renderer.info.memory.textures);frameWindow=frameSamples=renderWork=tickWork=sceneWork=drawWork=0;}
+    if(frameWindow>=1200){const distribution=frameMetrics.snapshot();canvas.dataset.frameP50Ms=distribution.p50Ms.toFixed(2);canvas.dataset.frameP95Ms=distribution.p95Ms.toFixed(2);canvas.dataset.frameP99Ms=distribution.p99Ms.toFixed(2);canvas.dataset.frameLong100=String(distribution.longFrames100);canvas.dataset.frameSamples=String(distribution.sampleCount);canvas.dataset.frameWindowMs=distribution.windowMs.toFixed(1);canvas.dataset.frameRate=(frameSamples*1000/frameWindow).toFixed(1);canvas.dataset.frameCpuMs=(renderWork/frameSamples).toFixed(1);canvas.dataset.tickMs=(tickWork/frameSamples).toFixed(1);canvas.dataset.sceneMs=(sceneWork/frameSamples).toFixed(1);canvas.dataset.drawMs=(drawWork/frameSamples).toFixed(1);canvas.dataset.drawCalls=String(drawCalls);canvas.dataset.triangles=String(triangles);canvas.dataset.renderPixelRatio=String(renderPixelRatio);canvas.dataset.gpuGeometries=String(renderer.info.memory.geometries);canvas.dataset.gpuTextures=String(renderer.info.memory.textures);frameWindow=frameSamples=renderWork=tickWork=sceneWork=drawWork=0;}
   }else{frameWindow=frameSamples=renderWork=tickWork=sceneWork=drawWork=0;}
 }
 camera.position.set(500, 1600, 900);
@@ -1029,7 +1089,7 @@ liveControl = createLiveExperience({THREE,scene,camera,canvas,container,
   getPlayer:()=>commute?.player,
   getInteriors:()=>campus?.optoEntries||[],
   getWallText:()=>campus?.group.visible&&campus.layers.get('building')?.visible?campus.aiMuralPlan:[],
-  setSuspended(value){liveFrozen=value;commute?.setSuspended(value);controls.enabled=!value&&!commute?.player.active;needsRender=true;},
+  setSuspended(value){liveFrozen=value;suspendCampus();},
   invalidate:()=>{needsRender=true;},notify:toast,
 });
 requestAnimationFrame(render);

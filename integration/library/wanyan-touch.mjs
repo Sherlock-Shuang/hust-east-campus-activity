@@ -34,9 +34,16 @@ function updateSkill(){
  // the existing action buffering, costs, cooldowns and input rejection.
 }
 updateSkill();
-window.campusWanyanTouchReady=()=>window.setTimeout(()=>pad.announce(),250);
+let disposed=false,announceTimer=0,unsubscribeDispose=()=>{};
+const announceReady=()=>{
+ if(disposed)return;
+ window.clearTimeout(announceTimer);
+ announceTimer=window.setTimeout(()=>{announceTimer=0;if(!disposed)pad.announce();},250);
+};
+window.campusWanyanTouchReady=announceReady;
 // Read-only DOM diagnostics from the actual Unity bridge, sampled at 5 Hz.
 const diagnostics=window.setInterval(()=>{
+ if(disposed)return;
  updateSkill();
  const s=window.bookrealmNativeControls;if(!s||!canvas)return;
  canvas.dataset.touchInput=pad.available?'gamepad':'keyboard';
@@ -44,4 +51,12 @@ const diagnostics=window.setInterval(()=>{
  canvas.dataset.nativeReady=String(s.ready);canvas.dataset.nativePhase=phase();
  canvas.dataset.nativeLocked=String(s.locked);canvas.dataset.nativeAttacking=String(s.attacking);
 },200);
-window.addEventListener('pagehide',()=>{window.clearInterval(diagnostics);touch.destroy();keys.release();pad.destroy();},{once:true});
+function dispose(){
+ if(disposed)return;disposed=true;
+ window.clearTimeout(announceTimer);announceTimer=0;window.clearInterval(diagnostics);
+ touch.destroy();keys.release();pad.destroy();unsubscribeDispose();
+ window.removeEventListener('pagehide',dispose);
+ if(window.campusWanyanTouchReady===announceReady)delete window.campusWanyanTouchReady;
+}
+window.addEventListener('pagehide',dispose,{once:true});
+unsubscribeDispose=window.campusWorkAdapter?.onDispose?.(dispose)||(()=>{});

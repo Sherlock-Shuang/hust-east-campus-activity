@@ -115,6 +115,8 @@ test('instances, LOD, material ownership and repeatable disposal stay bounded',(
   assert.deepEqual(hall.colliders,plan.colliders);const box=new THREE.Box3().setFromObject(hall.group);assert.ok(box.min.y>=-.021);assert.ok(box.max.y<12);
   hall.update({position:{x:0,z:100}});assert.ok(hall.group.children.some(o=>!o.visible&&o.name==='c118-seat-foot-brackets'));
   hall.update(null);assert.ok(hall.group.children.filter(o=>o.name==='c118-seat-foot-brackets').every(o=>o.visible));
-  let dg=0,dm=0,dt=0;geometries.forEach(g=>g.addEventListener('dispose',()=>dg++));materials.forEach(m=>m.addEventListener('dispose',()=>dm++));textures.forEach(t=>t.addEventListener('dispose',()=>dt++));assert.equal(textures.size,3);
-  hall.dispose();hall.dispose();assert.equal(hall.group.children.length,0);assert.equal(dg,geometries.size);assert.equal(dm,materials.size);assert.equal(dt,textures.size);assert.equal(JSON.stringify(hall.plan),original);
+  let dg=0,dm=0,dt=0;const instanceDisposals=[];hall.group.traverse(o=>{if(o.isInstancedMesh){const state={count:0};instanceDisposals.push(state);o.addEventListener('dispose',()=>state.count++);}});
+  geometries.forEach(g=>g.addEventListener('dispose',()=>dg++));materials.forEach(m=>m.addEventListener('dispose',()=>dm++));textures.forEach(t=>t.addEventListener('dispose',()=>dt++));assert.equal(textures.size,3);
+  const scene=new THREE.Scene();scene.add(hall.group);
+  hall.dispose();hall.dispose();assert.equal(hall.group.children.length,0);assert.equal(hall.group.parent,null);assert.equal(scene.children.length,0);assert.ok(instanceDisposals.length>0);assert.ok(instanceDisposals.every(state=>state.count===1),'each instance buffer owner is released exactly once');assert.equal(dg,geometries.size);assert.equal(dm,materials.size);assert.equal(dt,textures.size);assert.equal(JSON.stringify(hall.plan),original);
 });

@@ -172,3 +172,36 @@ test('old production rows project a fourth linked point for snapshots, SSE, stat
   assert.equal(linked().enabled,false);assert.equal((await event()).status,409,'deleting the master cannot leave the dependency open');
   await f.restart();assert.deepEqual((await (await f.request('/api/live/state',{},1)).json()).state,current);
 });
+
+test('SSE public-state bursts coalesce without caching identity, admin authentication or fresh snapshots',async t=>{
+  const f=await fixture(t),live=await f.enableAll();
+  const db=f.dbs[0],prepare=db.prepare.bind(db);let stateReads=0;
+  db.prepare=sql=>{if(sql==='SELECT revision,payload FROM activity_state WHERE key=?')stateReads++;return prepare(sql);};
+  const readers=await Promise.all(Array.from({length:40},()=>f.stream(0)));
+  const snapshots=await Promise.all(readers.map(async reader=>{
+    const packet=new TextDecoder().decode((await reader.read()).value);return JSON.parse(/^data: (.+)$/m.exec(packet)[1]);
+  }));
+  assert.ok(stateReads<=2,`40 concurrent streams used ${stateReads} state reads`);
+  assert.ok(snapshots.every(s=>s.state.revision===live.revision));
+  const before=stateReads;await f.request('/api/live/state');assert.equal(stateReads,before+1,'public GET always reads the committed database');
+  const saved=await f.save({...live,paused:true});
+  assert.equal((await (await f.request('/api/live/state')).json()).state.revision,saved.revision);
+  await db.prepare('DELETE FROM activity_admin_sessions').run();
+  assert.equal((await f.request('/api/admin/audience',{headers:{Cookie:f.admin.cookie}})).status,401,'cached public state cannot keep a deleted admin session alive');
+  const viewer=await f.join('缓存不包含身份','cache-tab');
+  await db.prepare('DELETE FROM activity_audiences WHERE id=?').bind(viewer.audience.id).run();
+  assert.equal((await (await f.request('/api/audience/me',{headers:{Cookie:viewer.cookie}})).json()).audience,null);
+  await Promise.all(readers.map(reader=>reader.cancel()));
+});
+
+test('public stream caches cannot cross database environments even when origins and cookie names match',async t=>{
+  const a=await fixture(t),b=await fixture(t);let state=(await (await a.request('/api/live/state')).json()).state;
+  state=await a.save({...state,paused:true});
+  const readers=await Promise.all([a.stream(),b.stream()]);
+  const snapshots=await Promise.all(readers.map(async reader=>{
+    const packet=new TextDecoder().decode((await reader.read()).value);return JSON.parse(/^data: (.+)$/m.exec(packet)[1]).state;
+  }));
+  assert.equal(snapshots[0].revision,state.revision);assert.equal(snapshots[0].paused,true);
+  assert.equal(snapshots[1].revision,0);assert.equal(snapshots[1].paused,false);
+  await Promise.all(readers.map(reader=>reader.cancel()));
+});

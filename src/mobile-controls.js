@@ -1,6 +1,6 @@
 // Touch inputs feed the same movement/actions as the keyboard. Every contact
 // owns its input until that exact pointer releases; no gesture latches a web.
-export function createMobileControls({document,window,movementSurface,canUse=()=>true,onAction=()=>{},onHold=()=>{},onAxes=()=>{},onReset=()=>{},onChange=()=>{}}={}){
+export function createMobileControls({document,window,movementSurface,canUse=()=>true,onAction=()=>{},onHold=()=>{},onAxes=()=>{},onReset=()=>{},onChange=()=>{},joystickScale=1}={}){
   const $=id=>document?.getElementById?.(id),root=$('mobile-controls'),joystick=$('mobile-joystick'),stick=$('mobile-stick');
   const extra=$('mobile-extra-actions'),orientationHint=$('mobile-orientation-hint');
   const holds=Array.from(root?.querySelectorAll?.('[data-mobile-hold]')||[]),actions=Array.from(root?.querySelectorAll?.('[data-mobile-action]')||[]);
@@ -18,6 +18,12 @@ export function createMobileControls({document,window,movementSurface,canUse=()=
   const allowed=button=>{const modes=button?.dataset?.mobileModes;return (!modes||modes.split(/[\s,]+/).includes(state.mode))&&(!button?.dataset?.mobileExtra||more);};
   const isLandscape=()=>landscape?landscape.matches:(window?.innerWidth??1)>=(window?.innerHeight??0);
   const prevent=e=>{e.preventDefault?.();e.stopPropagation?.();};
+  let stickScale=1;
+  function setJoystickScale(value){
+    const next=Number.isFinite(value)?Math.max(.8,Math.min(1.35,value)):1;
+    if(next===stickScale)return;reset();stickScale=next;
+    root?.style?.setProperty?.('--mobile-joystick-scale',String(next));
+  }
   function pressed(button,value){button?.classList?.toggle('is-pressed',value);if(button?.dataset)button.dataset.pressed=String(value);}
   function capture(button,id){try{button?.setPointerCapture?.(id);}catch{}}
   function releaseCapture(button,id){try{if(button?.hasPointerCapture?.(id))button.releasePointerCapture(id);}catch{}}
@@ -190,6 +196,6 @@ export function createMobileControls({document,window,movementSurface,canUse=()=
     if(!state.canInteract)for(const [id,p]of pointers)if(p.button.dataset.mobileAction==='interact')releasePointer(id);
     render();
   }
-  render();
-  return {update,reset,get enabled(){return enabled;},get axes(){return {...axes};},dispose(){if(disposed)return;reset();disposed=true;listeners.forEach(remove=>remove());if(root)root.hidden=true;if(orientationHint)orientationHint.hidden=true;document?.body?.classList?.remove('touch-controls');}};
+  setJoystickScale(joystickScale);render();
+  return {update,reset,setJoystickScale,get enabled(){return enabled;},get axes(){return {...axes};},dispose(){if(disposed)return;reset();disposed=true;listeners.forEach(remove=>remove());if(root)root.hidden=true;if(orientationHint)orientationHint.hidden=true;document?.body?.classList?.remove('touch-controls');}};
 }

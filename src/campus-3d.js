@@ -69,7 +69,7 @@ export function planCampusRoadEdges(roads) {
 /** A reconstruction layer over the unmodified WGS84 source geometries.
  * Heights, facade divisions and untagged road widths are model estimates, not surveyed data.
  */
-export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
+function* buildCampus3D(THREE, model, { frame, geoToLocal } = {}) {
   if (!model?.records || !frame || typeof geoToLocal !== 'function') throw new TypeError('Source scene records and an explicit projection are required.');
   const architecture=createArchitecturalMaterials(THREE),surfaces=createSurfaceMaterials(THREE);
   let forestLayer=null,optoBuilding=null;const detailDisposers=[];
@@ -239,17 +239,22 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
       const mesh=new THREE.Mesh(geo,solid('#777b72',.94));mesh.name='source-confirmed-sloping-roof';mesh.castShadow=true;mesh.receiveShadow=true;mesh.renderOrder=203;mesh.userData=sourceMeta(r,{roofFormEvidence:p.roofEvidence,roofRiseEstimate:rise});holder.add(mesh);counts.slopingRoofs++;
     }
   }
+  yield {stage:'食堂与商业街'};
   const southPrecinct=createYunyuanSouthPrecinct(THREE,model,{frame,geoToLocal});
   layer('building').add(southPrecinct.group);detailDisposers.push(southPrecinct.dispose);
   const southBuildingIds=new Set(southPrecinct.infrastructure.replacedBuildingIds);
   const southRoadIds=new Set(southPrecinct.infrastructure.replacedRoadIds);
+  yield {stage:'沿街店面'};
   const commercialStreet=createCampusCommercialStreet(THREE,model,{frame,geoToLocal,southPlan:southPrecinct.plan,surfaces});
   layer('building').add(commercialStreet.group);detailDisposers.push(commercialStreet.dispose);
   const commercialBuildingIds=new Set(commercialStreet.infrastructure.replacedBuildingIds);
+  yield {stage:'校园入口'};
   const campusGates=createCampusGates(THREE,model,{frame,geoToLocal});
   layer('building').add(campusGates.group);detailDisposers.push(campusGates.dispose);
   const gateBuildingIds=new Set(campusGates.infrastructure.replacedBuildingIds);
+  let completedBuildings=0;
   for (const r of getReconstructionBuildings(model)) {
+    yield {stage:'建筑与门廊',completed:completedBuildings++};
     if (!r.shapes?.length) continue;
     const p = profileFeature(r), isPart = !!p.isPart || !!r.isPart;
     if(r.derivedBuilding)p.facadeFeatures={...p.facadeFeatures,inferredEntrance:false,airConditioners:false};
@@ -302,6 +307,7 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     const landmark=createCampusLandmarkDetails(THREE,r,p,{frame,geoToLocal});
     if(landmark){holder.add(landmark);record.displayMode='landmark-photo-informed';}
   }
+  yield {stage:'光电楼通道'};
   const optoApproach=createOptoApproach(THREE,model,{frame,geoToLocal,optoBuilding,surfaces});
   layer('road').add(optoApproach.group);detailDisposers.push(optoApproach.dispose);
   const optoRoadIds=new Set(optoApproach.infrastructure.replacedRoadIds);
@@ -372,7 +378,9 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
   for(const edge of roadEdgePlan)instance('estimated-road-edge-stones',box,solid('#b8b9b0',.93),edge.x,edge.y,edge.z,edge.length,edge.height,edge.width,edge.yaw,edge.featureId,null,'road');
   counts.roadEdgeStones=roadEdgePlan.length;
   const pierGeometry = new THREE.CylinderGeometry(1, 1.2, 1, 8); sharedGeometries.add(pierGeometry);
+  let completedRoads=0;
   for (const r of model.roads) {
+    yield {stage:'道路与桥面',completed:completedRoads++};
     const p = getRoadProfile(r.feature), holder = new THREE.Group(); holder.name = r.feature.properties?.name || r.id;
     holder.userData = sourceMeta(r, { profile: p }); layer('road').add(holder); const meta = sourceMeta(r, { profile: p });
     counts.roads++; if (p.bridge) counts.bridges++; if (p.estimated) counts.estimatedRoadWidths++;
@@ -430,10 +438,12 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
   }
   // Source planting footprints are reconstructed as separate canopy, shrub and
   // ground-cover layers. Sampling excludes roads, buildings, water and sports.
+  yield {stage:'草坪与广场'};
   const lawnLandmarks=createCampusLawnLandmarks(THREE,model,{frame,geoToLocal,surfaces});
   const einsteinSquare=createEinsteinSquare(THREE,model,{frame,geoToLocal});
   layer('environment').add(einsteinSquare.group);detailDisposers.push(einsteinSquare.dispose);
   const southAccessPolygons=southPrecinct.plan.walkSurfaces.map(s=>[s.polygon.map(p=>[p.x,p.z])]);
+  yield {stage:'林荫与植被'};
   forestLayer=createCampusLandcover(THREE,model,{frame,geoToLocal,surfaces,photoOpenLawns:lawnLandmarks.plan.lawns,hardscapeExclusions:[{id:'einstein-square',polygons:einsteinSquare.plan.polygons},{id:'south-canteen-access',polygons:southAccessPolygons},{id:'east-cbd-patio',polygons:commercialStreet.plan.hardscapeExclusions},{id:'opto-access',polygons:optoApproach.forestExclusions},{id:'campus-gates',polygons:campusGates.forestExclusions}]});
   layer('environment').add(forestLayer.group);
   counts.trees=forestLayer.counts.trees;
@@ -441,6 +451,7 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
   counts.vegetationSourceFeatures=forestLayer.counts.sourceFeatures;
   counts.landcoverPatches=forestLayer.counts.coverages;
   layer('environment').userData={source:'OSM woodland/tree_row/grass/meadow/scrub/garden/flowerbed footprints',individualPositions:'procedural within explicit source planting coverage, not surveyed',height:'6–17 m tree / 0.45–1.3 m shrub display estimate',excluded:'source buildings, roads, parking, water and sports; lawns remain open',photoEvidence:forestLayer.plan.evidence};
+  yield {stage:'韵苑前场'};
   const yunyuanForecourt=createYunyuanForecourt(THREE,model,{surfaces,existingTrees:forestLayer.plan.trees});
   layer('environment').add(yunyuanForecourt.group);detailDisposers.push(yunyuanForecourt.dispose);
   model.photoForecourtReservations=['sculptures','parkingSigns','noticeboards','shrubs','trees'].flatMap(k=>yunyuanForecourt.plan[k]);
@@ -448,6 +459,7 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
   const lakeFurniture=createLakesideDetails(THREE,model,{frame,geoToLocal,surfaces});
   let eastNineDetail=null;
   group.traverse(object=>{if(object.userData.detailModel==='east-nine-source-footprint'&&object.userData.columnPositions)eastNineDetail=object;});
+  yield {stage:'东九步道与台阶'};
   const eastNineGround=createEastNineGround(THREE,model,{surfaces,entrySurfaces:collectEastNineAccess(eastNineDetail).walkSurfaces});
   model.eastNineGround=eastNineGround;
   layer('environment').add(eastNineGround.group);detailDisposers.push(eastNineGround.dispose);
@@ -475,6 +487,7 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
       barriers:[...(access.barriers||[]),...einsteinSquare.infrastructure.barriers,...(opto.barriers||[]),...south.barriers,...commercial.barriers,...optoApproach.infrastructure.barriers,...campusGates.infrastructure.barriers],
       walkSurfaces:[...(access.walkSurfaces||[]),...einsteinSquare.infrastructure.walkSurfaces,...(opto.walkSurfaces||[]),...south.walkSurfaces,...optoApproach.infrastructure.walkSurfaces,...campusGates.infrastructure.walkSurfaces]};
   }
+  yield {stage:'前场绿化'};
   const forecourt=createEastNineForecourt(THREE,model,{surfaces,existingTrees:forestLayer.plan.trees,heightAt:eastNineGround.heightAt});
   layer('environment').add(forecourt.group);detailDisposers.push(forecourt.dispose);counts.forecourtPlantInstances=forecourt.plan.planting.plants.length;
   layer('environment').add(lakeFurniture.group);detailDisposers.push(lakeFurniture.dispose);counts.lakesideLamps=lakeFurniture.counts.lakesideLamps;
@@ -484,6 +497,7 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
   counts.photoLawnLandmarks=lawnLandmarks.plan.stones.length+lawnLandmarks.plan.canopies.length;
   const facadeLods=[];
   for (const [key, b] of batches) {
+    yield {stage:'整理场景细节'};
     if (!b.matrices.length) continue;
     const mesh = new THREE.InstancedMesh(b.geometry, b.material, b.matrices.length); mesh.name = key; mesh.renderOrder = 202;
     b.matrices.forEach((m, i) => { mesh.setMatrixAt(i, m); if (b.colors[i]) mesh.setColorAt(i, b.colors[i]); });
@@ -542,4 +556,23 @@ export function createCampus3D(THREE, model, { frame, geoToLocal } = {}) {
     yunyuanSouthPlan:southPrecinct.plan,yunyuanSouthViewpoints:southPrecinct.viewpoints,
     commercialStreetPlan:commercialStreet.plan,commercialStreetViewpoints:commercialStreet.viewpoints,
     einsteinSquarePlan:einsteinSquare.plan, aiMuralPlan:aiMurals.plan, landcoverPlan:forestLayer?.plan, lawnLandmarkPlan:lawnLandmarks.plan, dynamicGroups:forecourt.dynamicGroup?[forecourt.dynamicGroup]:[], tick, update, setVisible, setLayerVisible, setDetailedRoadIds, dispose };
+}
+
+// Synchronous construction is retained for export, tests and offline authoring.
+// The browser drives the identical generator in small main-thread tasks, so
+// collision data and the final model are identical across both entry points.
+export function createCampus3D(THREE,model,options={}) {
+  const iterator=buildCampus3D(THREE,model,options);
+  let step;do{step=iterator.next();}while(!step.done);return step.value;
+}
+
+export async function createCampus3DAsync(THREE,model,options={}, {
+  budgetMs=8,now=()=>performance.now(),yieldTask=()=>new Promise(resolve=>setTimeout(resolve,0)),onProgress=()=>{},
+}={}) {
+  const iterator=buildCampus3D(THREE,model,options);
+  let sliceStart=now(),step;
+  while(!(step=iterator.next()).done){
+    if(now()-sliceStart>=budgetMs){onProgress(step.value);await yieldTask();sliceStart=now();}
+  }
+  onProgress({stage:'校园准备完成',done:true});return step.value;
 }

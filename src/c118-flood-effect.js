@@ -5,6 +5,8 @@
 const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
 const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
 const pulse=(x,width)=>Math.exp(-(x*x)/(width*width));
+const meshBudgets=[[32,48,16,8,128],[48,72,28,12,320],[80,120,44,20,640]];
+const safeLevel=level=>Math.max(0,Math.min(2,Math.floor(Number.isFinite(level)?level:2)));
 
 // One spectrum feeds CPU height queries and generated GLSL. Each component is
 // [amplitude, x frequency, z frequency, time frequency, phase] in local metres.
@@ -90,14 +92,15 @@ float noise21(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(
 float foamNoise(vec2 p){return .55*noise21(p)+.3*noise21(p*2.13)+.15*noise21(p*4.09);}
 `;
 
-export function createC118FloodEffect(THREE,{plan}){
+export function createC118FloodEffect(THREE,{plan,level=2}){
   const c=configuration(plan),group=new THREE.Group();group.name='c118-tsunami';group.visible=false;
-  const geometries=[],materials=[];let disposed=false,rippleScale=1,lastElapsed=-1;
-  const ownGeometry=g=>(geometries.push(g),g),ownMaterial=m=>(materials.push(m),m);
+  const geometries=new Set(),materials=[];let disposed=false,rippleScale=1,lastElapsed=-1,qualityLevel=safeLevel(level);
+  const [columns,rows,jetColumns,jetRows,particles]=meshBudgets[qualityLevel];
+  const ownGeometry=g=>(geometries.add(g),g),ownMaterial=m=>(materials.push(m),m);
   const uniforms={uTime:{value:0},uFloor:{value:c.floorY},uPeak:{value:c.peak},uRipple:{value:1},
     uRoom:{value:new THREE.Vector4(c.width/2,c.depth/2,c.floorY,c.floorY+plan.config.height)},
     uDoors:{value:c.doors.map(d=>new THREE.Vector4(d.x,d.z,d.y,d.delay))}};
-  const geometry=ownGeometry(new THREE.PlaneGeometry(c.width-.06,c.depth-.06,80,120));geometry.rotateX(-Math.PI/2);
+  const geometry=ownGeometry(new THREE.PlaneGeometry(c.width-.06,c.depth-.06,columns,rows));geometry.rotateX(-Math.PI/2);
   const waterMaterial=ownMaterial(new THREE.ShaderMaterial({uniforms,transparent:true,depthWrite:false,side:THREE.DoubleSide,
     vertexShader:waterField+/* glsl */`
       varying vec3 vWorld;varying vec3 vNormal;varying float vCrest;
@@ -128,8 +131,8 @@ export function createC118FloodEffect(THREE,{plan}){
 
   // Broad, tapered fluid tongues originate exactly in the four real door gaps.
   // Each front rolls upward then curls forward; only its root fits the doorway.
-  const jetGeometry=ownGeometry(new THREE.PlaneGeometry(1,1,44,20));
-  const jetUniforms=[];
+  const jetGeometry=ownGeometry(new THREE.PlaneGeometry(1,1,jetColumns,jetRows));
+  const jetUniforms=[],jets=[];
   for(const door of c.doors){
     const u={uTime:uniforms.uTime,uOrigin:{value:new THREE.Vector3(door.x,door.y,door.z)},uSide:{value:door.side},
       uDoorWidth:{value:door.width},uDelay:{value:door.delay},uFloor:uniforms.uFloor,uPeak:uniforms.uPeak,uRipple:uniforms.uRipple,uDoors:uniforms.uDoors};jetUniforms.push(u);
@@ -163,7 +166,7 @@ export function createC118FloodEffect(THREE,{plan}){
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`}));
-    const jet=new THREE.Mesh(jetGeometry,material);jet.name=`c118-door-surge-${door.side}-${door.delay}`;jet.frustumCulled=false;jet.renderOrder=20;group.add(jet);
+    const jet=new THREE.Mesh(jetGeometry,material);jet.name=`c118-door-surge-${door.side}-${door.delay}`;jet.frustumCulled=false;jet.renderOrder=20;group.add(jet);jets.push(jet);
   }
 
   // Ballistic spray is evaluated from immutable seeds and elapsed time, so
@@ -172,6 +175,7 @@ export function createC118FloodEffect(THREE,{plan}){
   let random=17481;const rand=()=>{random=(Math.imul(random,1664525)+1013904223)>>>0;return random/4294967296;};
   for(let i=0;i<count;i++){seeds.set([rand(),rand(),rand(),i%4],i*4);}
   const sprayGeometry=ownGeometry(new THREE.BufferGeometry());sprayGeometry.setAttribute('position',new THREE.BufferAttribute(positions,3));sprayGeometry.setAttribute('aSeed',new THREE.BufferAttribute(seeds,4));
+  sprayGeometry.setDrawRange(0,particles);
   const sprayMaterial=ownMaterial(new THREE.ShaderMaterial({uniforms,transparent:true,depthWrite:false,
     vertexShader:/* glsl */`
       uniform float uTime,uFloor,uPeak;uniform vec4 uDoors[4];uniform vec4 uRoom;attribute vec4 aSeed;varying float vAlpha;
@@ -199,9 +203,25 @@ export function createC118FloodEffect(THREE,{plan}){
         #include <colorspace_fragment>
       }`}));
   const spray=new THREE.Points(sprayGeometry,sprayMaterial);spray.name='c118-door-spray';spray.frustumCulled=false;spray.renderOrder=30;group.add(spray);
-  group.userData={type:'authored-tsunami',peakWaterLevel:c.peak,doors:c.doors.map(d=>({...d})),additionalDrawCalls:6};
+  group.userData={type:'authored-tsunami',peakWaterLevel:c.peak,doors:c.doors.map(d=>({...d})),additionalDrawCalls:6,qualityLevel};
+  function setPerformanceBudget({level=2}={}){
+    if(disposed)return;
+    const next=safeLevel(level);
+    if(next===qualityLevel)return;
+    qualityLevel=next;
+    const [columns,rows,jetColumns,jetRows,particles]=meshBudgets[next];
+    // Only one set is resident; changing quality replaces two immutable meshes,
+    // not the shader, shared clock or CPU collision/water sampler.
+    const oldSurface=water.geometry,oldJet=jets[0].geometry;
+    water.geometry=ownGeometry(new THREE.PlaneGeometry(c.width-.06,c.depth-.06,columns,rows).rotateX(-Math.PI/2));
+    const nextJet=ownGeometry(new THREE.PlaneGeometry(1,1,jetColumns,jetRows));
+    for(const jet of jets)jet.geometry=nextJet;
+    geometries.delete(oldSurface);geometries.delete(oldJet);oldSurface.dispose();oldJet.dispose();
+    sprayGeometry.setDrawRange(0,particles);group.userData.qualityLevel=next;
+  }
   return {
     group,
+    setPerformanceBudget,
     update({elapsed,active=true,reducedMotion=false}){
       if(disposed)return;lastElapsed=Number.isFinite(elapsed)?elapsed:-1;
       group.visible=Boolean(active)&&lastElapsed>=1.5;

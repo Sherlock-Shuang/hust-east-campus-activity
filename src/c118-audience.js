@@ -9,7 +9,7 @@ import {createC118Walkers,sampleC118AudiencePose} from './c118-audience-motion.j
 export function createC118Audience(THREE,{plan}){
   const group=new THREE.Group();group.name='c118-seated-audience';
   const geometries=new Set(),materials=new Set(),batches=[],seatIndex=new Map();
-  let disposed=false,hiddenSeat=null,lastTick=null,lastArgs=null;
+  let disposed=false,hiddenSeat=null,lastTick=null,lastArgs=null,animationHz=25;
   const palettes={coat:['#344655','#a3b0aa','#9b705e','#d7d0ba','#655f6d','#466e70','#8a984c','#a79489','#34433f','#b18c68'],
     pants:['#353c44','#4b5559','#5c5a50','#293443','#6f7166'],skin:['#c89573','#dfb394','#b78363','#e3bea3','#cba487'],
     hair:['#242521','#352c26','#191e20','#493a30'],shoes:['#333936','#676b68','#bdbdb1']};
@@ -165,9 +165,9 @@ export function createC118Audience(THREE,{plan}){
   function update({time=0,elapsed=null,active=true,reducedMotion=false}={}){
     if(disposed||!active)return false;
     const clock=Number.isFinite(time)?time:0,floodTime=Number.isFinite(elapsed)?elapsed:null;
-    const tick=`${floodTime===null?'dry':'flood'}:${Math.floor((floodTime??clock)*25)}:${!!reducedMotion}`;
+    const tick=`${floodTime===null?'dry':'flood'}:${Math.floor((floodTime??clock)*animationHz)}:${!!reducedMotion}`;
     if(tick===lastTick)return false;lastTick=tick;lastArgs={time:clock,elapsed:floodTime,active:true,reducedMotion};
-    // A 25 Hz pose budget is independent of the renderer's frame rate. Static
+    // A bounded pose budget is independent of the renderer's frame rate. Static
     // sitting instances upload only when someone enters/leaves the water.
     for(const entry of movingBatches){entry.written=0;entry.colorChanged=false;}
     let floatingCount=0,seatedCount=0,swimmingCount=0,divingCount=0,seatingChanged=false;
@@ -193,8 +193,13 @@ export function createC118Audience(THREE,{plan}){
       }
     }
     if(seatingChanged)repackSeated();
-    for(const entry of movingBatches){entry.mesh.count=entry.written;entry.mesh.visible=entry.written>0;entry.mesh.instanceMatrix.needsUpdate=true;
-      if(entry.colorChanged&&entry.mesh.instanceColor)entry.mesh.instanceColor.needsUpdate=true;
+    for(const entry of movingBatches){entry.mesh.count=entry.written;entry.mesh.visible=entry.written>0;
+      // The allocated capacity includes all 217 people; normal dry movement
+      // only uses the 14 aisle walkers. Upload the submitted prefix, not every
+      // unused seat/limb slot. Static buffers are untouched unless seats change.
+      entry.mesh.instanceMatrix.clearUpdateRanges();
+      if(entry.written){entry.mesh.instanceMatrix.addUpdateRange(0,entry.written*16);entry.mesh.instanceMatrix.needsUpdate=true;}
+      if(entry.colorChanged&&entry.mesh.instanceColor){entry.mesh.instanceColor.clearUpdateRanges();entry.mesh.instanceColor.addUpdateRange(0,entry.written*3);entry.mesh.instanceColor.needsUpdate=true;}
     }
     group.userData.walkingCount=walkers.length;group.userData.floatingCount=floatingCount;group.userData.seatedCount=seatedCount;
     group.userData.swimmingCount=swimmingCount;group.userData.divingCount=divingCount;
@@ -203,8 +208,9 @@ export function createC118Audience(THREE,{plan}){
   group.userData={type:'virtual-audience',count:people.length,totalCount:allPeople.length,additionalDrawCalls:batches.length+movingBatches.length,seatIds:people.map(p=>p.id)};
   update({time:0});
   return {group,
+    setPerformanceBudget({audienceHz=25}={}){const next=Math.max(8,Math.min(30,Number.isFinite(audienceHz)?audienceHz:25));if(next!==animationHz){animationHz=next;lastTick=null;}},
     setHiddenSeat(id){if(disposed)return;const next=seatIndex.has(id)?id:null;if(next===hiddenSeat)return;showSeat(hiddenSeat,true);showSeat(next,false);hiddenSeat=next;lastTick=null;if(lastArgs)update(lastArgs);},
     update,
-    dispose(){if(disposed)return;disposed=true;group.removeFromParent();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());group.clear();},
+    dispose(){if(disposed)return;disposed=true;group.removeFromParent();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());group.clear();},
   };
 }

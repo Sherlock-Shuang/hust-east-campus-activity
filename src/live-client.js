@@ -3,7 +3,7 @@ import {createDefaultLiveState} from './live-state.js';
 // Reconnects receive a complete snapshot; the browser never depends on having
 // witnessed the original announcement or the moment a portal was opened.
 export function createLiveClient({onState=()=>{},onConnection=()=>{},fetchImpl=fetch,EventSourceImpl=globalThis.EventSource,clock=()=>Date.now(),monotonic=()=>performance.now()}={}) {
-  let state=createDefaultLiveState(),serverAnchor=clock(),timeAnchor=monotonic(),lastSync=0,syncing=false,source,disposed=false,connected,retry;
+  let state=createDefaultLiveState(),serverAnchor=clock(),timeAnchor=monotonic(),lastSync=0,syncing=false,source,disposed=false,connected,retry,inflight;
   const listeners=[];
   function status(value){if(!disposed&&connected!==value){connected=value;onConnection(value);}}
   function accept(payload,roundTrip){
@@ -14,15 +14,15 @@ export function createLiveClient({onState=()=>{},onConnection=()=>{},fetchImpl=f
     return true;
   }
   async function synchronize(){
-    if(syncing)return;syncing=true;
-    const started=monotonic(),abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),8000);
+    if(syncing||disposed)return;syncing=true;
+    const started=monotonic(),abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),8000);inflight=abort;
     try{
       const response=await fetchImpl('/api/live/state',{cache:'no-store',signal:abort.signal});
       if(!response.ok)throw new Error('活动服务尚未连接');
       const payload=await response.json();
       if(!payload?.state||!Number.isFinite(payload.serverTime))throw new Error('活动状态无效');
       if(!disposed)accept(payload,monotonic()-started);
-    }finally{clearTimeout(timeout);syncing=false;}
+    }finally{clearTimeout(timeout);if(inflight===abort)inflight=null;syncing=false;}
   }
   async function connect(){
     try {
@@ -39,5 +39,5 @@ export function createLiveClient({onState=()=>{},onConnection=()=>{},fetchImpl=f
   if(globalThis.document){document.addEventListener('visibilitychange',resume);listeners.push(()=>document.removeEventListener('visibilitychange',resume));}
   connect();
   return {get state(){return state;},get connected(){return !!connected;},now:()=>serverAnchor+monotonic()-timeAnchor,
-    dispose(){disposed=true;clearTimeout(retry);source?.close();listeners.forEach(remove=>remove());}};
+    dispose(){disposed=true;inflight?.abort();inflight=null;clearTimeout(retry);source?.close();listeners.forEach(remove=>remove());}};
 }

@@ -102,6 +102,17 @@ export function createMorningEnvironment(THREE,renderer) {
     const p=(y*width+x)*4;data.set([...rgb.map(clamp),255],p);
   }
   const texture=new THREE.DataTexture(data,width,height,THREE.RGBAFormat);texture.mapping=THREE.EquirectangularReflectionMapping;texture.colorSpace=THREE.SRGBColorSpace;texture.magFilter=THREE.LinearFilter;texture.minFilter=THREE.LinearFilter;texture.needsUpdate=true;
-  const generator=new THREE.PMREMGenerator(renderer),target=generator.fromEquirectangular(texture);generator.dispose();
-  return {background:texture,environment:target.texture,dispose(){target.dispose();texture.dispose();}};
+  let target=null,disposed=false;
+  function rebuildEnvironment(){
+    if(disposed)throw new Error('Cannot rebuild a disposed daylight environment.');
+    // PMREM pixels exist only in a GPU render target. Three.js can re-upload
+    // the source DataTexture after context loss, but cannot reconstruct this
+    // prefiltered target unless we explicitly render it again.
+    const generator=new THREE.PMREMGenerator(renderer);let next;
+    try{next=generator.fromEquirectangular(texture);}finally{generator.dispose();}
+    const previous=target;target=next;previous?.dispose();return target.texture;
+  }
+  try{rebuildEnvironment();}catch(error){texture.dispose();throw error;}
+  return {background:texture,get environment(){return target.texture;},rebuildEnvironment,
+    dispose(){if(disposed)return;disposed=true;target.dispose();texture.dispose();}};
 }

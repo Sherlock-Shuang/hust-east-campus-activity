@@ -1,0 +1,36 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {CONTROL_PREFERENCES_KEY,createControlPreferences,normalizeControlPreferences,controlLookDelta} from '../src/control-preferences.js';
+
+test('control preferences survive reload, clamp invalid settings and exclude unknown fields',()=>{
+  const entries=new Map(),events=[],storage={getItem:key=>entries.get(key),setItem:(key,value)=>entries.set(key,value)};
+  const p=createControlPreferences({storage,onChange:value=>events.push(value)});
+  p.set({sensitivity:1.3,invertY:true,joystickScale:1.2,comfortableCamera:true,unrelated:'not persisted'});
+  const restored=createControlPreferences({storage});assert.deepEqual(restored.value,p.value);
+  assert.deepEqual(Object.keys(JSON.parse(entries.get(CONTROL_PREFERENCES_KEY))),['sensitivity','invertY','joystickScale','comfortableCamera']);
+  p.set({sensitivity:999,joystickScale:-1,invertY:'yes'});assert.equal(p.value.sensitivity,1.8);assert.equal(p.value.joystickScale,.8);assert.equal(p.value.invertY,false);
+  p.reset();assert.deepEqual(p.value,{sensitivity:1,invertY:false,joystickScale:1,comfortableCamera:false});assert.equal(events.length,3);
+});
+
+test('corrupt, blocked or quota-limited storage does not prevent a playable preference state',()=>{
+  for(const storage of[{getItem:()=>'{broken'}, {getItem:()=>{throw Error('denied');},setItem:()=>{throw Error('quota');}},undefined]){
+    const p=createControlPreferences({storage,defaults:{comfortableCamera:true}});assert.equal(p.value.comfortableCamera,true);
+    assert.doesNotThrow(()=>p.set({sensitivity:1.2}));assert.equal(p.value.sensitivity,1.2);
+  }
+  assert.equal(normalizeControlPreferences({sensitivity:NaN}).sensitivity,1);
+});
+
+test('equal touch viewport fractions yield equal angles at phone, tablet and portrait sizes',()=>{
+  const angles=[[844,390],[667,375],[1024,768],[390,844]].map(([width,height])=>controlLookDelta(width*.12,height*.08,{touch:true,width,height}));
+  for(const angle of angles){assert.ok(Math.abs(angle.x-angles[0].x)<1e-10);assert.ok(Math.abs(angle.y-angles[0].y)<1e-10);}
+  const mouse=controlLookDelta(40,20),touch=controlLookDelta(40,20,{touch:true,width:844,height:390});
+  assert.equal(mouse.x,.128);assert.equal(mouse.y,.05);assert.ok(Math.abs(touch.x/mouse.x-1.5)<1e-10);assert.ok(Math.abs(touch.y/mouse.y-1.5)<1e-10);
+});
+
+test('invert and sensitivity apply exactly once and invalid look events remain inert',()=>{
+  const base=controlLookDelta(30,20,{touch:true});
+  const inverted=controlLookDelta(30,20,{touch:true,preferences:{sensitivity:1.5,invertY:true}});
+  assert.equal(inverted.x,base.x*1.5);assert.ok(Math.abs(inverted.y+base.y*1.5)<1e-10);
+  assert.deepEqual(controlLookDelta(Infinity,2),{x:0,y:0});
+  assert.deepEqual(controlLookDelta(30,20,{touch:true,width:0,height:NaN}),base);
+});

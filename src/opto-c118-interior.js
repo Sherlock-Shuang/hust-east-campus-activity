@@ -337,5 +337,5 @@ export function createOptoC118Interior(THREE,options={}) {
   return {group,plan,videoScreen,colliders:plan.colliders,walkSurfaces:plan.walkSurfaces,
     infrastructure:{barriers:plan.colliders,walkSurfaces:plan.walkSurfaces},
     spawn:plan.spawn,exit:plan.exit,exits:plan.exits,bounds:plan.bounds,viewpoints:plan.viewpoints,update,
-    dispose(){if(disposed)return;disposed=true;geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.clear();}};
+    dispose(){if(disposed)return;disposed=true;group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.removeFromParent();group.clear();}};
 }

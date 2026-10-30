@@ -1,3 +1,4 @@
+import {getBuildingSpatialIndex} from './building-spatial-index.js';
 /** Metre-scale, fixed-step superhero traversal. Gravity, a unilateral rope
  * constraint and tangential momentum are simulated; pumping/reeling and jump
  * impulses are explicit gameplay assists, not a commercial-game reproduction.
@@ -25,21 +26,23 @@ function segmentEntersBuilding(a,b,building){
 
 export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],guideAt}={}){
   if(!state||typeof groundAt!=='function')throw new TypeError('Swing motion needs shared player state and ground sampling.');
-  const buildings=compileBuildings(world.buildings),bounds=world.bounds;
+  const buildingIndex=getBuildingSpatialIndex(world.buildings),buildings=compileBuildings(buildingIndex.records),bounds=world.bounds;
+  const nearby=(p,radius=R)=>buildingIndex.queryPoint(p.x,p.z,radius,buildings);
+  const along=(a,b,radius=0)=>buildingIndex.querySegment(a,b,radius,buildings);
   let candidateClock=0,attachedAge=0,releaseDelay=0,jumpHeld=false,swingHeld=false,swingNeedsRelease=false,swingRequest=null,swingRequestTime=0,lastSafe=null,landingCooldown=0,ropeRate=0,jumpBuffer=0,coyote=0,wallAge=0,wallBudget=1.1,wallGrace=0,chainHeld=false;
   let zipHeld=false,zipBuffer=0,zipAge=0,zipImpulse=0,zipBoostTime=0,zipDirection=null;
   let pointHeld=false,pointBuffer=0,pointPath=null,pointDistance=0,pointSpeed=0,pointPerchTime=0,pointBoostTime=0,pointAimYaw=null,pointFeedback='',pointFeedbackTime=0;
   let trickAge=0;
   const hand=p=>({x:p.x,y:p.y+HAND,z:p.z});
-  const lineClear=(a,b)=>!buildings.some(building=>segmentEntersBuilding(a,b,building));
+  const lineClear=(a,b)=>!along(a,b).some(building=>segmentEntersBuilding(a,b,building));
   function clearBody(p){if(bounds&&(p.x-R<bounds.minX||p.x+R>bounds.maxX||p.z-R<bounds.minZ||p.z+R>bounds.maxZ))return false;
-    return !world.barrierAt?.(p,R,0,HEIGHT)&&!buildings.some(b=>p.y<b.height-.012&&p.y+HEIGHT>b.minHeight+.012&&overlap(p,b));
+    return !world.barrierAt?.(p,R,0,HEIGHT)&&!nearby(p).some(b=>p.y<b.height-.012&&p.y+HEIGHT>b.minHeight+.012&&overlap(p,b));
   }
-  function roofAt(x,z,y){let roof=null;for(const b of buildings)if(b.height+.016<=y+.2&&inside({x,z},b)&&boundaryDistance({x,z},b)>.015&&(!roof||b.height>roof.height))roof=b;return roof;}
+  function roofAt(x,z,y){let roof=null;for(const b of buildingIndex.queryPoint(x,z,0,buildings))if(b.height+.016<=y+.2&&inside({x,z},b)&&boundaryDistance({x,z},b)>.015&&(!roof||b.height>roof.height))roof=b;return roof;}
   function supportAt(p){const ground=groundAt(p.x,p.z,R,p.y),roof=roofAt(p.x,p.z,p.y);if(roof&&roof.height+.016>ground.height)return{height:roof.height+.016,allowed:true,roof:roof.index};return{height:ground.height,allowed:ground.allowed!==false,roof:null};}
   function actorHit(p,old=null){const actors=typeof traffic==='function'?traffic():traffic;if(!Array.isArray(actors))return null;for(const a of actors){if(a.active===false||!finite(a.x)||!finite(a.z)||p.y>=(a.y??BASE)+1.9||p.y+HEIGHT<=(a.y??BASE)||Math.hypot(a.x-p.x,a.z-p.z)>2.4)continue;const kind=a.type??a.kind,rad=kind==='walk'?.27:.43,half=kind==='walk'?0:.48,yaw=a.yaw??0,dx=Math.sin(yaw)*half,dz=Math.cos(yaw)*half,front={x:a.x-dx,z:a.z-dz},rear={x:a.x+dx,z:a.z+dz},d=pointSegment(p,front,rear);const oldVertical=old&&old.y<(a.y??BASE)+1.9&&old.y+HEIGHT>(a.y??BASE);if(d<R+rad+.08&&(!oldVertical||d<pointSegment(old,front,rear)-1e-8))return a;}return null;}
   function clearSweep(from,to){if(world.barrierSweep?.(from,to,R,0,HEIGHT))return false;const dx=to.x-from.x,dz=to.z-from.z;
-    for(const b of buildings){if(Math.min(from.y,to.y)>=b.height-.012||Math.max(from.y,to.y)+HEIGHT<=b.minHeight+.012||Math.min(from.x,to.x)-R>b.maxX||Math.max(from.x,to.x)+R<b.minX||Math.min(from.z,to.z)-R>b.maxZ||Math.max(from.z,to.z)+R<b.minZ)continue;
+    for(const b of along(from,to,R)){if(Math.min(from.y,to.y)>=b.height-.012||Math.max(from.y,to.y)+HEIGHT<=b.minHeight+.012||Math.min(from.x,to.x)-R>b.maxX||Math.max(from.x,to.x)+R<b.minX||Math.min(from.z,to.z)-R>b.maxZ||Math.max(from.z,to.z)+R<b.minZ)continue;
       for(const e of b.edges){const ex=e.b.x-e.a.x,ez=e.b.z-e.a.z,den=cross(dx,dz,ex,ez),ax=e.a.x-from.x,az=e.a.z-from.z;
         if(Math.abs(den)>1e-10){const t=cross(ax,az,ex,ez)/den,u=cross(ax,az,dx,dz)/den;if(t>=0&&t<=1&&u>=0&&u<=1)return false;}
         if(Math.min(pointSegment(from,e.a,e.b),pointSegment(to,e.a,e.b),pointSegment(e.a,from,to),pointSegment(e.b,from,to))<R-1e-8)return false;
@@ -52,7 +55,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
     for(let i=1;i<=count;i++){const t=i/count,p={x:from.x+(to.x-from.x)*t,y:from.y,z:from.z+(to.z-from.z)*t};if(!clearBody(p)||!groundAt(p.x,p.z,R,p.y).allowed||actorHit(p,previous))return false;previous=p;}return!actorHit(to);
   }
   function anchorCandidates(exclude=null,zip=false,heading=state.yaw){const origin=hand(state),fx=-Math.sin(heading),fz=-Math.cos(heading),candidates=[];
-    for(const b of buildings){const bx=clamp(origin.x,b.minX,b.maxX),bz=clamp(origin.z,b.minZ,b.maxZ);if(Math.hypot(origin.x-bx,origin.z-bz)>72||b.height<origin.y-7)continue;
+    for(const b of nearby(origin,72)){const bx=clamp(origin.x,b.minX,b.maxX),bz=clamp(origin.z,b.minZ,b.maxZ);if(Math.hypot(origin.x-bx,origin.z-bz)>72||b.height<origin.y-7)continue;
       for(let edgeIndex=0;edgeIndex<b.edges.length;edgeIndex++){const edge=b.edges[edgeIndex],dx=edge.b.x-edge.a.x,dz=edge.b.z-edge.a.z,l2=dx*dx+dz*dz,projection=clamp(((origin.x+fx*24-edge.a.x)*dx+(origin.z+fz*24-edge.a.z)*dz)/l2,.02,.98);
         for(const t of[.08,projection,.5,.92]){const x=edge.a.x+dx*t,z=edge.a.z+dz*t,horizontal=Math.hypot(x-origin.x,z-origin.z),ahead=(x-origin.x)*fx+(z-origin.z)*fz;if(horizontal<(zip?8:4)||horizontal>(zip?55:72)||ahead<(zip?.3:-.10)*horizontal)continue;
           const y=b.height<=origin.y+42?b.height:Math.min(b.height-.25,origin.y+24),rise=y-origin.y,distance=Math.hypot(horizontal,rise);if(rise<(state.grounded&&state.roofIndex===null?2:-7)||distance>82||rise>42)continue;
@@ -186,7 +189,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
   function trickClear(){
     for(const t of[0,.22]){const p={x:state.x+state.vx*t,y:state.y+state.verticalSpeed*t-.5*G*t*t,z:state.z+state.vz*t},support=supportAt(p);
       if(p.y<support.height+(t?1.8:2.4)||bounds&&(p.x-1.05<bounds.minX||p.x+1.05>bounds.maxX||p.z-1.05<bounds.minZ||p.z+1.05>bounds.maxZ))return false;
-      if(world.barrierAt?.(p,1.05,-.15,2.2)||buildings.some(b=>p.y-.15<b.height&&p.y+2.2>b.minHeight&&overlap(p,b,1.05)))return false;
+      if(world.barrierAt?.(p,1.05,-.15,2.2)||nearby(p,1.05).some(b=>p.y-.15<b.height&&p.y+2.2>b.minHeight&&overlap(p,b,1.05)))return false;
     }return true;
   }
   function updateTrick(dt,input){
@@ -228,7 +231,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
   function suspend(){detach();stopZip();stopPoint();stopTrick(true);clearActionInputs();state.vx=0;state.vz=0;state.verticalSpeed=0;state.speed=0;candidateClock=0;releaseDelay=0;coyote=0;wallGrace=0;state.wallContact=null;zipBoostTime=0;pointBoostTime=0;pointFeedback='';pointFeedbackTime=0;state.diving=false;state.diveBlend=0;state.zipCandidateAnchors=[];state.zipAvailable=false;state.zipReady=false;state.candidatePoint=null;state.pointReady=false;}
   function respawn(reason){detach();stopZip();stopPoint();stopTrick(true);pointBoostTime=0;zipBoostTime=0;pointFeedback='';pointFeedbackTime=0;state.diving=false;state.diveBlend=0;state.zipCandidateAnchors=[];state.zipAvailable=false;state.zipReady=false;state.zipUnavailableReason='请先起跳';state.candidatePoint=null;state.pointReady=false;if(lastSafe)Object.assign(state,lastSafe);Object.assign(state,{vx:0,vz:0,verticalSpeed:0,speed:0,grounded:true,airTime:0,pitch:0,lean:0,blockedReason:reason});landingCooldown=.8;candidateClock=0;}
   function contactNormal(p){let best=null;
-    for(const b of buildings){if(p.y>=b.height+.02||p.y+HEIGHT<=b.minHeight||!overlap(p,b,R+.35))continue;
+    for(const b of nearby(p,R+.35)){if(p.y>=b.height+.02||p.y+HEIGHT<=b.minHeight||!overlap(p,b,R+.35))continue;
       for(const e of b.edges){const dx=e.b.x-e.a.x,dz=e.b.z-e.a.z,l2=dx*dx+dz*dz,t=clamp(((p.x-e.a.x)*dx+(p.z-e.a.z)*dz)/l2,0,1),qx=e.a.x+t*dx,qz=e.a.z+t*dz,d=Math.hypot(p.x-qx,p.z-qz);if(d>R+.4||best&&d>=best.distance)continue;const nx=(p.x-qx)/(d||1),nz=(p.z-qz)/(d||1);best={nx,nz,buildingIndex:b.index,distance:d};}
     }return best;
   }
@@ -253,7 +256,7 @@ export function createWebSwingMotion({state,world={},groundAt,traffic=()=>[],gui
       const support=supportAt({...target,y:Math.max(p.y,target.y)});
       if(support.allowed&&target.y<=support.height&&p.y>=support.height-.25&&state.verticalSpeed<=0){target.y=support.height;state.landingImpact=Math.max(state.landingImpact,-state.verticalSpeed);state.verticalSpeed=0;roofIndex=support.roof;}
       const barrierContact=world.barrierVertical?.(p,target,R,0,HEIGHT);if(barrierContact?.reason){target.y=barrierContact.y;state.verticalSpeed=0;state.blockedReason=barrierContact.reason;}
-      for(const b of buildings)if(overlap(target,b)&&p.y+HEIGHT<=b.minHeight+.025&&target.y+HEIGHT>b.minHeight){target.y=b.minHeight-HEIGHT-.016;state.verticalSpeed=0;state.blockedReason='上方建筑净空不足';}
+      for(const b of nearby(target))if(overlap(target,b)&&p.y+HEIGHT<=b.minHeight+.025&&target.y+HEIGHT>b.minHeight){target.y=b.minHeight-HEIGHT-.016;state.verticalSpeed=0;state.blockedReason='上方建筑净空不足';}
       if(!clearBody(target)){
         const barrier=world.barrierAt?.(target,R,0,HEIGHT),contact=barrier?null:contactNormal(p),incoming=Math.hypot(state.vx,state.vz);
         if(contact){const normalMove=(target.x-p.x)*contact.nx+(target.z-p.z)*contact.nz,slide={x:target.x-Math.min(0,normalMove)*contact.nx,y:target.y,z:target.z-Math.min(0,normalMove)*contact.nz};

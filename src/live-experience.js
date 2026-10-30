@@ -1,3 +1,4 @@
+import {preflightExperience} from './experience-preflight.js';
 import {createLiveClient} from './live-client.js';
 import {mountAnnouncementNotice} from './live-announcement.js';
 import {projectWallTextRects,avoidWallText} from './activity-label-layout.js';
@@ -74,7 +75,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   function closePortal(reason,{restoreInterior=true}={}){
     if(!opened)return;
     const buildingReturn=restoreInterior&&opened.kind==='building-interior'?interiorReturnSnapshot(returnPose,opened):null;
-    attemptEvent('returned');clearTimeout(loadingTimer);
+    attemptEvent('returned');opened.loadController?.abort();clearTimeout(loadingTimer);
     try{sessionStorage.removeItem('campus-return-pose');}catch{}
     frame?.contentWindow?.postMessage({type:'campus:dispose',attemptId:opened.attemptId},frameOrigin);
     $('.live-portal-frame').replaceChildren();portalView.hidden=true;frame=null;frameOrigin=null;opened=null;
@@ -92,7 +93,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     if(!player?.active||Math.hypot(player.state.x-current.x,player.state.z-current.z)>current.radius||player.state.y>12)return notify('请先靠近这个入口');
     const url=new URL(current.url,location.href);
     if(!['http:','https:'].includes(url.protocol))return;
-    const attemptId=crypto.randomUUID();opened={...current,attemptId,openingStarted:false,registeredAttempt:false,ready:false};frameOrigin=url.origin;rememberPose();updateFrozen();
+    const attemptId=crypto.randomUUID();opened={...current,attemptId,openingStarted:false,registeredAttempt:false,ready:false,loadController:new AbortController()};frameOrigin=url.origin;rememberPose();updateFrozen();
     $('.live-portal-bar > span').textContent=current.label;portalView.hidden=false;prompt.hidden=true;loading('正在连接作品，首次进入需要加载模型与游戏资源…');
     try{
       await record('visit',{pointId:current.id,position:position()},{required:true});visited.add(current.id);
@@ -105,7 +106,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
         record('returned',{pointId:current.id,workId:current.workId||current.id,attemptId});return;
       }
       opened.registeredAttempt=true;
-      if(url.origin===location.origin){const response=await fetch(url,{method:'HEAD',cache:'no-store'});if(!response.ok)throw new Error(`作品服务暂不可用（${response.status}）`);}
+      if(url.origin===location.origin)await preflightExperience(url,{signal:opened.loadController.signal});
     }catch(error){if(opened?.attemptId===attemptId){opened.failed=true;attemptEvent('open_failed');loading(error.message,'error');}return;}
     if(opened?.attemptId!==attemptId)return;
     // The host may close admission while the entry requests are in flight.
@@ -119,7 +120,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-pointer-lock'+projectLinks);
     // Keep the host's announcement/pause layer above every experience.
     frame.setAttribute('allow','fullscreen \'none\'');frame.src=url.href;
-    frame.addEventListener('load',()=>{bridge();if(!ACTIVITY_WORKS.some(w=>w.id===opened?.workId))loading('页面已载入，等待作品确认就绪；此时尚未计为已打开。');});
+    frame.addEventListener('load',()=>{if(disposed||opened?.attemptId!==attemptId)return;bridge();if(!ACTIVITY_WORKS.some(w=>w.id===opened?.workId))loading('页面已载入，等待作品确认就绪；此时尚未计为已打开。');});
     frame.addEventListener('error',()=>{if(opened?.attemptId!==attemptId)return;opened.failed=true;clearTimeout(loadingTimer);attemptEvent('open_failed');loading('作品加载失败，请重试或返回校园。','error');});
     $('.live-portal-frame').replaceChildren(frame);portalView.hidden=false;prompt.hidden=true;
     loadingTimer=setTimeout(()=>{if(opened?.attemptId===attemptId&&!opened.ready)loading('资源仍在加载。可继续等待，或返回后重试；尚未计为已打开。');},90000);
@@ -136,7 +137,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     url.searchParams.set('campusParentOrigin',location.origin);url.searchParams.set('campusAttempt',attemptId);
     frame=document.createElement('iframe');frame.title=current.label;frame.referrerPolicy='same-origin';
     frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-pointer-lock');frame.setAttribute('allow',"fullscreen 'none'");frame.src=url.href;
-    frame.addEventListener('load',bridge);
+    frame.addEventListener('load',()=>{if(!disposed&&opened?.attemptId===attemptId)bridge();});
     frame.addEventListener('error',()=>{if(opened?.attemptId!==attemptId)return;opened.failed=true;loading('报告厅加载失败，可以重试或返回校园。','error');});
     $('.live-portal-frame').replaceChildren(frame);$('.live-portal-bar button').focus();
     loadingTimer=setTimeout(()=>{if(opened?.attemptId===attemptId&&!opened.ready)loading('报告厅仍在加载，可返回校园后重试。');},30000);

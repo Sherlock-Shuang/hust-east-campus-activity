@@ -1,3 +1,4 @@
+import {getBuildingSpatialIndex} from './building-spatial-index.js';
 // Metre-scale camera poses. The player and its vehicle face local -Z. Stateless
 // poses and stateful rigs both keep their final rendered result collision safe.
 const CAMERA = {
@@ -176,7 +177,7 @@ export function calculatePlayerCamera(state, { view = 'third', yawOffset = 0, pi
     // Velocity look-ahead must not put the sight-line origin inside a
     // facade or a raised deck before the regular trailing-camera ray is tested.
     let targetHit = groundHit(bodyTarget, target, groundAt);
-    for (const building of world?.buildings || []) targetHit = Math.min(targetHit, buildingHit(bodyTarget, target, building));
+    for (const building of getBuildingSpatialIndex(world?.buildings).querySegment(bodyTarget,target)) targetHit = Math.min(targetHit, buildingHit(bodyTarget, target, building));
     const targetDistance = Math.hypot(target.x - bodyTarget.x, target.y - bodyTarget.y, target.z - bodyTarget.z);
     if (targetHit < 1) target = mix(bodyTarget, target, Math.max(0, targetHit - CLEARANCE / Math.max(.001, targetDistance)));
   }
@@ -187,7 +188,7 @@ export function calculatePlayerCamera(state, { view = 'third', yawOffset = 0, pi
   };
   desired.y = Math.max(desired.y, groundHeight(groundAt, desired) + CLEARANCE);
   let hit = groundHit(target, desired, groundAt);
-  for (const building of world?.buildings || []) hit = Math.min(hit, buildingHit(target, desired, building));
+  for (const building of getBuildingSpatialIndex(world?.buildings).querySegment(target,desired)) hit = Math.min(hit, buildingHit(target, desired, building));
   const length = Math.hypot(desired.x - target.x, desired.y - target.y, desired.z - target.z);
   const fraction = hit < 1 ? Math.max(0, hit - CLEARANCE / Math.max(.001, length)) : 1;
   const result = { position: mix(target, desired, fraction), target };
@@ -200,7 +201,7 @@ export function constrainPlayerCamera(state, pose, {world, groundAt} = {}) {
   const origin={x:state.x,y:state.y+1.05,z:state.z};
   function clip(start,end){
     let hit=groundHit(start,end,groundAt);
-    for(const b of world?.buildings||[])hit=Math.min(hit,buildingHit(start,end,b));
+    for(const b of getBuildingSpatialIndex(world?.buildings).querySegment(start,end))hit=Math.min(hit,buildingHit(start,end,b));
     const length=Math.hypot(end.x-start.x,end.y-start.y,end.z-start.z);
     return hit<1?mix(start,end,Math.max(0,hit-CLEARANCE/Math.max(.001,length))):{...end};
   }
@@ -297,7 +298,7 @@ function clipCameraSegment(start, end, {world, groundAt}, radius = 0) {
     const a = {x:start.x+offset.x,y:start.y+offset.y,z:start.z+offset.z};
     const b = {x:end.x+offset.x,y:end.y+offset.y,z:end.z+offset.z};
     hit = Math.min(hit, groundHit(a,b,groundAt));
-    for (const building of world?.buildings || []) hit = Math.min(hit, buildingHit(a,b,building));
+    for (const building of getBuildingSpatialIndex(world?.buildings).querySegment(a,b)) hit = Math.min(hit, buildingHit(a,b,building));
   }
   const length = Math.hypot(dx,end.y-start.y,dz);
   return hit < 1 ? mix(start,end,Math.max(0,hit-CLEARANCE/Math.max(.001,length))) : {...end};

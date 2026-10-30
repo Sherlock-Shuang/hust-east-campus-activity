@@ -115,3 +115,14 @@ test('inactive player rigs skip world updates while mode switches and parked clo
     assert.ok(Math.abs(world.x-4)<1e-8&&Math.abs(world.z-8.12)<1e-8,'parked template clones are standard groups with working world transforms');
   }finally{rig.dispose();}
 });
+
+
+test('walking and parked vehicle templates do not build Spider, first Spider mode builds it once and disposal remains exact',()=>{
+  const rig=createPlayerModels(THREE);assert.equal(rig.spiderReady,false);assert.equal(rig.group.getObjectByName('spider-character'),undefined);
+  for(const mode of ['walk','scooter','roadster','hoverboard','helicopter','boat']){rig.update({mode},0);assert.equal(rig.spiderReady,false);assert.ok(rig.group.getObjectByName(`player-${mode}`));}
+  rig.ensureMode('spider');assert.equal(rig.spiderReady,true);const character=rig.group.getObjectByName('spider-character');assert.ok(character);
+  rig.update({mode:'spider',grounded:true},0);rig.update({mode:'walk'},0);rig.ensureMode('spider');assert.equal(rig.group.getObjectByName('spider-character'),character);
+  const resources=new Set(),counts=new Map();rig.group.traverse(o=>{if(o.geometry)resources.add(o.geometry);if(o.material)resources.add(o.material);});
+  for(const r of resources)r.addEventListener('dispose',()=>counts.set(r,(counts.get(r)||0)+1));
+  rig.dispose();rig.dispose();assert.equal(rig.ensureMode('spider'),false);for(const r of resources)assert.equal(counts.get(r),1);
+});

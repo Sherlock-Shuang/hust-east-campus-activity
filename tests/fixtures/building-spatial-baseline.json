@@ -1,0 +1,13 @@
+{
+  "sourceCommit": "f2962058cc5d05711b43b966ecf8486f37d2ef4c",
+  "description": "Original full-list collision/anchor/camera replay; numbers rounded to 1e-8, no visual/GPU assertion.",
+  "motion": {
+    "walk": "a1b2fe04af2b147b3b09ef1a1411366dff7e4876006e2344f3ff6039748909b7",
+    "scooter": "d82d6caccb4ded96ccc380fccd99de9ac780a3039e03630c2fb722b7c7bc76e9",
+    "roadster": "2412ef26d0d6832b56db41d01949ad1e97d12f008833d1703853aa2c23d624dd",
+    "hoverboard": "398da599033ab82022d4f45661bcc96d20803ad37f6c5714f663f36dd31033f7",
+    "helicopter": "a281b08765427a8b2125f780daf42d0999dfc73a7efc7b91d08baa4019e714fe",
+    "spider": "d653215a9d35f77bd6da0d285869cbd8fb89d68157269c52a509a3456f3adb71"
+  },
+  "camera": "479cb8bce4aac337694b5b8435fb9fa59fb3a51687c066f2c111fcd4a61d3fbb"
+}
