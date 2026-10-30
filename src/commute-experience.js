@@ -2,6 +2,7 @@ import { createCommuteRoute, COMMUTE_DORMS } from './commute-route.js';
 import { createCommuteSimulation } from './commute-simulation.js';
 import { createCommuteScene } from './commute-scene.js';
 import { createTrafficVisualCadence } from './traffic-visual-cadence.js';
+import { createNpcTransport } from './npc-transport.js';
 import { mountPhotoReferences } from './photo-references.js';
 import { EXPANDED_PHOTO_REFERENCES } from './photo-expanded-references.js';
 import { createPlayerExperience, getCampusPlayerSpawn } from './player-experience.js';
@@ -21,6 +22,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
     vehicleLanes: 3, signals: true,
   });
   let visual = createCommuteScene(THREE, scene, route, simulation,{model});
+  let npcTransport = createNpcTransport({THREE,scene,model,route});
   onRouteChange(route);
   let player, suspended = false, running = true, visible = true, timeScale = 1, followId = null,
     lastFollow = null, followStartedAt = 0, followWaitedAt = 0, uiElapsed = 0, disposed = false, observationProgress = 0, observationMode = 'route';
@@ -186,7 +188,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
   function startFollow() {
     observationMode='route';
     stopFollow(); prepareView();
-    visible = true; updateElement('show-commute', { checked: true }); visual.setVisible(true);
+    visible = true; updateElement('show-commute', { checked: true }); visual.setVisible(true);npcTransport.setVisible(true);
     running = true;
     // Start with an actual commuter, so the camera waits and queues with traffic.
     const rider = simulation.agents.filter(a => a.type === 'scooter'&&a.direction!==-1)
@@ -219,8 +221,9 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
     // Build the next source route before disposing a playable existing scene.
     let next;try{next=createCommuteRoute(fc,{frame,geoToLocal,dormId:$('route-dorm')?.value ?? route.options.dormId,startAccess:$('route-access')?.value ?? route.options.startAccess,destination:$('route-destination')?.value ?? route.options.destination});}catch(error){notify(error.message);updateRouteLabels();return;}
     const settings={...simulation.state.settings,startMinutes:simulation.state.clockMinutes,seed:943108};
-    stopFollow();player.dispose();visual.dispose();route=next;
+    stopFollow();player.dispose();visual.dispose();npcTransport.dispose();route=next;
     simulation=createCommuteSimulation(route,settings);visual=createCommuteScene(THREE,scene,route,simulation,{model});visual.setDetailDistanceScale(detailDistanceScale);visualCadence.invalidate();onRouteChange(route);player=createPlayer();
+    npcTransport=createNpcTransport({THREE,scene,model,route});npcTransport.setDetailDistanceScale(detailDistanceScale);npcTransport.setVisible(visible);
     observationProgress=0;observationMode='route';previousCamera.set(Infinity,Infinity,Infinity);
     updateElement('route-position-slider', { value: 0 });updateElement('route-position', { textContent: route.start.name });
     updateRouteLabels();visual.setVisible(visible);updateUI();routeView();
@@ -248,6 +251,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
   on($('commute-signals'), 'change', e => { simulation.setSignals(e.target.checked); changedScenario(); });
   on($('show-commute'), 'change', e => {
     visible = e.target.checked; visual.setVisible(visible && ($('symbolic')?.checked ?? true));
+    npcTransport.setVisible(visible && ($('symbolic')?.checked ?? true));
     if (!visible) stopFollow(); invalidate();
   });
   document.querySelectorAll('[data-time]').forEach(button => on(button, 'click', () => {
@@ -263,27 +267,30 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
   player = createPlayer();
   updateUI(); visual.update(camera);
   return {
-    get route(){return route;},get simulation(){return simulation;},get visual(){return visual;},get player(){return player;}, junctionView, spawnView, routeView, stopFollow,
+    get route(){return route;},get simulation(){return simulation;},get visual(){return visual;},get player(){return player;},get npcTransport(){return npcTransport;}, junctionView, spawnView, routeView, stopFollow,
     get running() { return running; },
     get suspended() { return suspended; },
     setPerformanceBudget({trafficHz=60,detailDistanceScale:scale=1}={}) {
       visualCadence.setHz(trafficHz);
-      if(scale!==detailDistanceScale){detailDistanceScale=scale;visual.setDetailDistanceScale(scale);visualCadence.invalidate();}
+      if(scale!==detailDistanceScale){detailDistanceScale=scale;visual.setDetailDistanceScale(scale);npcTransport.setDetailDistanceScale(scale);visualCadence.invalidate();}
     },
     setSuspended(value) { suspended=!!value;player.setSuspended(suspended);invalidate(); },
-    setVisible(threeD) { visual.setVisible(visible && threeD); visual.staticGroup.visible=threeD; if (!threeD) stopFollow(); },
+    setVisible(threeD) { visual.setVisible(visible && threeD);npcTransport.setVisible(visible && threeD); visual.staticGroup.visible=threeD; if (!threeD) stopFollow(); },
     tick(dt) {
       if (disposed || suspended || !($('symbolic')?.checked ?? true) || document.hidden) return false;
       const playerChanged = player.tick(dt);
+      // Smooth sparse vehicle motion is independent of the dense commuter
+      // instance-upload cadence. The same suspension/visibility gates apply.
+      const npcChanged = npcTransport.tick(running ? dt*timeScale : 0,camera);
       simulation.setPlayerObstacle(player.active && player.state.mode!=='boat' ? player.state : null);
       if(player.active){observationProgress=player.state.progress;observationMode='route';}
       if (!visible) {
         const moved=camera.position.distanceToSquared(previousCamera)>.0001 || camera.quaternion.angleTo(previousDirection)>.001;
         if(moved){visual.updateStatic(camera);previousCamera.copy(camera.position);previousDirection.copy(camera.quaternion);}
-        return moved || playerChanged;
+        return moved || playerChanged || npcChanged;
       }
       visualCadence.advance(dt);
-      let changed = playerChanged;
+      let changed = playerChanged || npcChanged;
       if (running) { simulation.step(dt * timeScale); changed = true; }
       if (followId !== null) {
         const rider = simulation.getAgent(followId);
@@ -320,6 +327,6 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
       }
       return changed;
     },
-    dispose() { disposed = true; stopFollow(); player.dispose(); listeners.forEach(remove => remove()); visual.dispose();$('route-dorm')?.replaceChildren(); updateElement('commute-panel', { hidden: true }); },
+    dispose() { disposed = true; stopFollow(); player.dispose(); listeners.forEach(remove => remove()); visual.dispose();npcTransport.dispose();$('route-dorm')?.replaceChildren(); updateElement('commute-panel', { hidden: true }); },
   };
 }
