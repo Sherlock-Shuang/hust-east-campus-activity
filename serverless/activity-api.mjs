@@ -1,6 +1,7 @@
 // Standalone Vercel API; SQLite protocol matches the existing activity backend.
 // Only persistence transport, trusted edge-IP header and bounded SSE lifecycle differ.
 import {createDefaultLiveState,validateLiveState} from '../src/live-state.js';
+import {reconcileC118Flood} from '../src/c118-flood-state.js';
 import {ACTIVITY_WORKS,activityPortals} from '../src/activity-catalog.js';
 import {createAudienceRecord,touchAudience,applyAudienceEvent,summarizeAudience,audienceDetail,aggregateAudiences,normalizeNickname,validId,PRESENCE_TTL} from '../server/audience-store.mjs';
 
@@ -175,7 +176,14 @@ export async function handleActivityAPI(request,env){
       await requireAdmin(request,env,true);const input=await body(request);let next;
       try{next=validateLiveState(input.state);}catch(e){throw error(400,e.message);}
       if(!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<0)throw error(400,'请提供当前状态版本');
-      await stateRow(env);next.revision=input.expectedRevision+1;
+      const current=await stateRow(env);
+      if(current.revision!==input.expectedRevision)return json({error:'状态已被其他管理员修改，请载入最新状态',...await snapshot(env)},409);
+      const previous=JSON.parse(current.payload);
+      // Preserve the current performance when an older console omits the field.
+      // All timeline stamps originate here, and the SQL CAS below guards this read.
+      if(!Object.hasOwn(input.state,'c118Flood'))next.c118Flood=previous.c118Flood;
+      next.c118Flood=reconcileC118Flood(previous,next,Date.now());
+      next.revision=input.expectedRevision+1;
       const saved=await env.DB.prepare('UPDATE activity_state SET revision=?,payload=? WHERE key=? AND revision=?').bind(next.revision,JSON.stringify(next),'current',input.expectedRevision).run();
       if(!changes(saved))return json({error:'状态已被其他管理员修改，请载入最新状态',...await snapshot(env)},409);
       return json({state:next,serverTime:Date.now(),...await counts(env)});

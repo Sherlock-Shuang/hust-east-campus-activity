@@ -8,7 +8,7 @@
     if(!['http:','https:'].includes(own.protocol)||(supplied&&supplied!==parentOrigin)||(configured&&configured!==parentOrigin))return;
   } catch { return; }
   if((attemptId&&!/^[a-zA-Z0-9_-]{1,128}$/.test(attemptId))||(workId&&!/^[a-zA-Z0-9_-]{1,128}$/.test(workId)))return;
-  let current={paused:false,disposed:false,announcement:null,serverTime:Date.now()};
+  let current={paused:false,disposed:false,announcement:null,c118Flood:null,serverTime:Date.now()};
   const listeners=new Set(),sent=new Set();
   function send(type,extra={}){
     if(current.disposed||window.parent===window)return false;
@@ -38,7 +38,7 @@
     if(event.data.type==='campus:dispose'){
       current={...current,paused:true,disposed:true};window.removeEventListener('message',message);
     }else if(event.data.type==='campus:activity'&&typeof event.data.paused==='boolean'){
-      current={paused:event.data.paused,disposed:false,announcement:event.data.announcement||null,serverTime:Number.isFinite(event.data.serverTime)?event.data.serverTime:Date.now()};
+      current={paused:event.data.paused,disposed:false,announcement:event.data.announcement||null,c118Flood:workId==='opto-c118'?event.data.c118Flood??null:null,serverTime:Number.isFinite(event.data.serverTime)?event.data.serverTime:Date.now()};
     }else return;
     notify();
   }

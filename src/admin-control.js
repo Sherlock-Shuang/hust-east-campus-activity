@@ -4,6 +4,7 @@ import { createLiveMapFrame, getLiveLocationPresets } from './live-locations.js'
 import { ACTIVITY_PHASES, ACTIVITY_WORKS, activityPortals, getTasayPortal, isTasayLinkedPortal, SHE_LOVE_POINT_ID } from './activity-catalog.js';
 import { readAdminCoordinates, bindAdminCoordinateInputs } from './admin-coordinates.js';
 import { activitySelectionSignature, selectActivitiesNow } from './activity-launch.js';
+import { getC118FloodElapsed } from './c118-flood-state.js';
 
 const $ = id => document.getElementById(id);
 let csrfToken = '', snapshot = null, busy = false, loggedIn = false, serverOffset = 0;
@@ -52,7 +53,16 @@ function connection(online) {
 function setBusy(value) {
   busy = value;
   document.querySelectorAll('#dashboard button, #dashboard input, #dashboard textarea, #dashboard select').forEach(el => { el.disabled = value; });
-  renderSkyQr();renderActivityChoices();syncLinkedPortalControls();
+  renderSkyQr();renderC118Flood();renderActivityChoices();syncLinkedPortalControls();
+}
+function renderC118Flood(){
+  const ready=loggedIn&&skyQrReady&&Boolean(snapshot),event=ready?snapshot.state.c118Flood:null;
+  const elapsed=event?getC118FloodElapsed(event,now()):null;
+  const label=!ready?'等待同步':!event?'报告厅正常':event.pausedAt!==null?'演出已暂停':elapsed<0?`${Math.ceil(-elapsed)} 秒后涌入`:elapsed<18?'海浪正在涌入':'报告厅已淹没';
+  $('c118-flood-status').textContent=label;
+  $('c118-flood-status').dataset.status=event?'active':'off';
+  $('trigger-c118-flood').disabled=busy||!ready||Boolean(event);
+  $('reset-c118-flood').disabled=busy||!ready||!event;
 }
 function renderSkyQr() {
   const ready = loggedIn && skyQrReady && Boolean(snapshot);
@@ -83,14 +93,14 @@ async function request(path, options = {}) {
 }
 function showLogin(message = '') {
   loggedIn = false; csrfToken = ''; $('dashboard').hidden = true; $('login-screen').hidden = false;
-  skyQrReady = false; renderSkyQr();
+  skyQrReady = false; renderSkyQr();renderC118Flood();
   launchDirty=false;launchBase='';launchSelection.clear();delete $('activity-choices').dataset.signature;
   audienceData=null;selectedAudienceId=null;selectedAudience=null;detailRequest++;$('audience-list').replaceChildren();$('audience-detail').replaceChildren();delete $('audience-list').dataset.signature;delete $('audience-detail').dataset.signature;
   $('login-error').textContent = message;
 }
 function showDashboard() {
   loggedIn = true; $('login-screen').hidden = true; $('dashboard').hidden = false;
-  skyQrReady = false; renderSkyQr();
+  skyQrReady = false; renderSkyQr();renderC118Flood();
   $('admin-password').value = '';
 }
 function applySnapshot(data) {
@@ -129,7 +139,7 @@ async function mutate(change, message) {
 function renderState() {
   if (!snapshot) return;
   const state = snapshot.state;
-  renderSkyQr();
+  renderSkyQr();renderC118Flood();
   syncPhase();
   document.querySelector('.session-bar').dataset.paused = String(state.paused);
   $('session-title').textContent = state.paused ? '全场已暂停' : `当前阶段 · ${state.phase?.label||'自由探索'}`;
@@ -584,6 +594,17 @@ $('toggle-pause').addEventListener('click', () => {
 });
 $('show-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = true; }, '二维码已在校园天空显示。'));
 $('hide-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = false; }, '天空二维码已收起。'));
+$('trigger-c118-flood').addEventListener('click',()=>mutate(state=>{
+  if(state.c118Flood)throw new Error('C118演出已开启，请先恢复报告厅再触发。');
+  state.c118Flood={id:id('flood'),startAt:Math.floor(now()),pausedAt:null,pausedMs:0};
+},'C118海啸已排期，报告厅内玩家将同步看到海水涌入；若全场暂停，将在恢复后开始。'));
+$('reset-c118-flood').addEventListener('click',()=>{
+  const expectedId=snapshot?.state.c118Flood?.id;
+  mutate(state=>{
+    if(state.c118Flood&&state.c118Flood.id!==expectedId)throw new Error('C118演出已被其他管理员更新，请核对后再恢复。');
+    state.c118Flood=null;
+  },'C118已恢复，报告厅内玩家将统一退出海啸效果。');
+});
 $('save-pause-message').addEventListener('click', () => {
   const applyMessageEdit = capturePauseMessageEdit();
   mutate(state => applyMessageEdit(state), '暂停提示已保存。').then(ok => { if (ok) syncPauseMessage(true); });

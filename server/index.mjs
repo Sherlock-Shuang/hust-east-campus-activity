@@ -5,6 +5,7 @@ import {randomBytes, createHash, timingSafeEqual} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createDefaultLiveState, validateLiveState} from '../src/live-state.js';
+import {reconcileC118Flood} from '../src/c118-flood-state.js';
 import {createAudienceStore,createAudienceData,validateAudienceData,summarizeAudience} from './audience-store.mjs';
 import {createWorkRouter} from '../integration/work-router.mjs';
 import {ACTIVITY_WORKS,activityPortals} from '../src/activity-catalog.js';
@@ -161,6 +162,8 @@ export async function createLiveServer(options={}) {
       // Serialize the revision check and durable write; concurrent edits never silently overwrite.
       const operation=queue.then(async()=>{
         if(body.expectedRevision!==state.revision){json(res,409,{error:'状态已被其他管理员修改，请载入最新状态',...snapshot()});return;}
+        if(!Object.hasOwn(body.state,'c118Flood'))next.c118Flood=state.c118Flood;
+        next.c118Flood=reconcileC118Flood(state,next,now());
         next.revision=state.revision+1;
         try{await persist(next);}catch{throw httpError(503,'活动状态保存失败，修改尚未生效');}
         state=next;const result=snapshot();broadcast('snapshot',result);json(res,200,result);
