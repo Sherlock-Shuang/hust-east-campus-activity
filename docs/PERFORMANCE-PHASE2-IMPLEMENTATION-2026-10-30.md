@@ -149,4 +149,4 @@ node scripts/soak-activity-local.mjs --seconds 1800 --audiences 100 --heartbeat-
 
 生产代码提交 `fdcdbed1b1c9bd78c16b2cab59fc1be6e3e0818b` 已经Vercel Ready，正式域名真实Chrome核对11项全部通过：校园buildId匹配、完整细节ready、管理员登录页与匿名统计401、5项版本化资源200/206/304/immutable、真实图书馆、Unity游戏运行、恋人界面及adapterVersion2。零pageerror。检查未登录、未改主持状态、未创建观众、未请求模型。
 
-收尾时主分支新增 `2fffcff` 的安卓横屏、双指输入和兼容启动改动，已经保留并合入；它也关闭手机MSAA和非必要倒影。最终合并后 Node24 全量 **821/821** 通过，`build:vercel` 及93资源校验重新通过。入口现为 `index.html → campus-entry.js → survey.js`。前述短/长性能测量针对该并行提交之前的性能版本，不把它们改称安卓真机或最终兼容改动的半小时测量。
+收尾时主分支新增 `2fffcff` 的安卓横屏、双指输入和兼容启动改动，已经保留并合入；它也关闭手机MSAA和非必要倒影。最终合并后 Node24 部署工作区全量 **821/821**、主目录全量 **1,016/1,016** 通过，两处构建均通过，`build:vercel` 的93资源校验重新通过。入口现为 `index.html → campus-entry.js → survey.js`。前述短/长性能测量针对该并行提交之前的性能版本，不把它们改称安卓真机或最终兼容改动的半小时测量。
