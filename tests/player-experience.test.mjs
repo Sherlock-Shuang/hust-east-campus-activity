@@ -867,7 +867,7 @@ test('touch look has 1.5 times mouse sensitivity while ordinary mouse gain stays
   const mouse=f.experience.captureActivityPose();
   assert.ok(Math.abs(mouse.yawOffset-original.yawOffset+.128)<1e-9);assert.ok(Math.abs(mouse.pitch-original.pitch-.05)<1e-9);
   f.experience.restoreActivityPose(original);
-  assert.equal(sceneTouchDown(f,20,{clientX:600,clientY:160}).propagationStopped,undefined);
+  assert.equal(sceneTouchDown(f,20,{clientX:600,clientY:160}).propagationStopped,true);
   touch(f.canvas,'pointermove',20,{clientX:640,clientY:180});
   const finger=f.experience.captureActivityPose();
   assert.ok(Math.abs((finger.yawOffset-original.yawOffset)/(mouse.yawOffset-original.yawOffset)-1.5)<1e-9);
@@ -879,7 +879,7 @@ test('right-side touch drags can look overhead in first person and mobile recent
   const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enterAt({x:24,z:-35,yaw:0});f.tick(.5);
   const start={x:f.experience.state.x,z:f.experience.state.z};
   for(const pointerId of [21,22]){
-    assert.equal(sceneTouchDown(f,pointerId,{clientX:600,clientY:360}).propagationStopped,undefined);
+    assert.equal(sceneTouchDown(f,pointerId,{clientX:600,clientY:360}).propagationStopped,true);
     touch(f.canvas,'pointermove',pointerId,{clientX:600,clientY:0});
     touch(f.canvas,'pointerup',pointerId);f.tick(.5);
   }
@@ -897,7 +897,7 @@ test('default walking third-person touch look reaches the sky and mobile recente
   assert.equal(f.experience.captureActivityPose().view,'third');
   const start={x:f.experience.state.x,z:f.experience.state.z};
   for(const pointerId of [21,22]){
-    assert.equal(sceneTouchDown(f,pointerId,{clientX:600,clientY:360}).propagationStopped,undefined);
+    assert.equal(sceneTouchDown(f,pointerId,{clientX:600,clientY:360}).propagationStopped,true);
     touch(f.canvas,'pointermove',pointerId,{clientX:600,clientY:0});touch(f.canvas,'pointerup',pointerId);f.tick(.6);
   }
   assert.equal(f.experience.captureActivityPose().pitch,-1.5);
@@ -1098,4 +1098,18 @@ test('control settings persist changes and continue or Escape restores canvas fo
   const done=dialog.children.at(-1).children.find(e=>e.textContent==='继续探索');done.emit('click');assert.equal(dialog.open,false);assert.equal(focused,1);assert.notEqual(f.doc.pointerLockElement,f.canvas);
   dialog.emit('close');assert.equal(focused,1,'native close arriving after the button must not repeat restoration');
   button.emit('click');dialog.emit('cancel');dialog.close();dialog.emit('close');assert.equal(focused,2);assert.notEqual(f.doc.pointerLockElement,f.canvas);
+});
+
+test('look survives missing pointer capture, releases outside the canvas and accepts the next finger',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('walk');
+  f.canvas.setPointerCapture=()=>{throw Error('WebView capture not available');};
+  const initial=f.experience.captureActivityPose();
+  sceneTouchDown(f,51,{clientX:600,clientY:160});touch(f.win,'pointermove',51,{clientX:720,clientY:180});f.tick(.2);
+  const first=f.experience.captureActivityPose();assert.notEqual(first.yawOffset,initial.yawOffset);
+  touch(f.win,'pointerup',51);touch(f.win,'pointermove',51,{clientX:900,clientY:180});assert.equal(f.experience.captureActivityPose().yawOffset,first.yawOffset);
+  sceneTouchDown(f,52,{clientX:610,clientY:160});touch(f.win,'pointermove',52,{clientX:710,clientY:160});f.tick(.2);assert.notEqual(f.experience.captureActivityPose().yawOffset,first.yawOffset);
+  touch(f.win,'pointercancel',52);
+  // Embedding hosts may send directly to canvas without the document adapter.
+  touch(f.canvas,'pointerdown',53,{clientX:600,clientY:160});touch(f.canvas,'pointermove',53,{clientX:680,clientY:160});touch(f.win,'pointerup',53);
+  const third=f.experience.captureActivityPose();touch(f.canvas,'pointerdown',54,{clientX:620,clientY:160});touch(f.canvas,'pointermove',54,{clientX:690,clientY:160});assert.notEqual(f.experience.captureActivityPose().yawOffset,third.yawOffset);
 });

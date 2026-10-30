@@ -7,6 +7,7 @@ class Element {
   addEventListener(type,fn){if(!this.handlers.has(type))this.handlers.set(type,new Set());this.handlers.get(type).add(fn);}
   removeEventListener(type,fn){this.handlers.get(type)?.delete(fn);}
   emit(type,overrides={}){const e={type,target:this,pointerId:1,pointerType:'touch',clientX:60,clientY:60,detail:1,code:'',repeat:false,preventDefault(){this.defaultPrevented=true;},stopPropagation(){this.propagationStopped=true;},...overrides};for(const fn of this.handlers.get(type)||[])fn(e);return e;}
+  contains(target){return target===this||this.children.some(child=>child.contains(target));}
   setAttribute(k,v){this.attrs[k]=String(v);}
   setPointerCapture(id){this.captures.add(id);}
   hasPointerCapture(id){return this.captures.has(id);}
@@ -27,8 +28,8 @@ function fixture({coarse=true,landscape=true}={}){
   doc.body=new Element();doc.hidden=false;doc.getElementById=id=>ids.get(id)||null;doc.documentElement={};
   const mqCoarse=Object.assign(new Element(),{matches:coarse}),mqLandscape=Object.assign(new Element(),{matches:landscape});
   win.matchMedia=q=>q.includes('coarse')?mqCoarse:mqLandscape;win.screen={orientation:new Element()};win.visualViewport=new Element();win.innerWidth=844;win.innerHeight=390;
-  const events={axes:[],holds:[],actions:[],resets:0,changes:0};let permitted=true;
-  const controls=createMobileControls({document:doc,window:win,movementSurface:canvas,canUse:()=>permitted,onAxes:v=>events.axes.push(v),onHold:(name,value)=>events.holds.push([name,value]),onAction:name=>events.actions.push(name),onReset:()=>events.resets++,onChange:()=>events.changes++});
+  const events={axes:[],look:[],holds:[],actions:[],resets:0,changes:0};let permitted=true;
+  const controls=createMobileControls({document:doc,window:win,movementSurface:canvas,canUse:()=>permitted,onAxes:v=>events.axes.push(v),onLook:(x,y)=>events.look.push([x,y]),onHold:(name,value)=>events.holds.push([name,value]),onAction:name=>events.actions.push(name),onReset:()=>events.resets++,onChange:()=>events.changes++});
   controls.update({active:true,mode:'spider',canInteract:true,interactionLabel:'穿上战衣'});
   return{controls,doc,win,canvas,root,joy,holds,actions,events,mqCoarse,mqLandscape,el:id=>ids.get(id),permit:v=>permitted=v};
 }
@@ -69,11 +70,11 @@ test('a bare left-scene touch creates a neutral floating origin wherever the fin
     assert.equal(f.joy.classList.contains('is-pressed'),false);assert.equal(f.joy.style.left,'');assert.equal(f.joy.style.top,'');
   }f.controls.dispose();
 });
-test('floating movement ignores UI, right-side camera touches, mouse input and unusable scene states',()=>{
+test('floating movement ignores UI, mouse input and unusable scene states',()=>{
   const f=fixture();
   for(const overrides of[
     {target:f.actions.view},{target:f.holds.swing},{target:new Element()},
-    {target:f.canvas,clientX:600},{target:f.canvas,pointerType:'mouse'},
+    {target:f.canvas,pointerType:'mouse'},
     {target:f.canvas,clientX:-5},{target:f.canvas,clientY:420}
   ]){
     const e=down(f.doc,10,{clientX:180,clientY:200,...overrides});assert.equal(e.defaultPrevented,undefined);assert.equal(e.propagationStopped,undefined);assert.equal(f.joy.captures.size,0);
@@ -169,4 +170,56 @@ test('focusing an editable field releases movement before the phone keyboard can
   f.doc.emit('focusin',{target:{closest:()=>({tagName:'INPUT'})}});
   assert.deepEqual(f.controls.axes,{forward:0,sideways:0});assert.deepEqual(f.events.holds.at(-1),['swing',false]);
   f.win.emit('pointermove',{pointerId:10,clientY:-200});assert.deepEqual(f.controls.axes,{forward:0,sideways:0});f.controls.dispose();
+});
+
+test('movement and look own separate fingers even when pointer capture is rejected by a WebView',()=>{
+  const f=fixture();f.canvas.setPointerCapture=f.joy.setPointerCapture=()=>{throw Error('capture unavailable');};
+  down(f.doc,1,{target:f.canvas,clientX:130,clientY:220});
+  down(f.doc,2,{target:f.canvas,clientX:650,clientY:180});
+  assert.equal(f.controls.looking,true);
+  f.win.emit('pointermove',{pointerId:1,clientX:130,clientY:140});
+  f.win.emit('pointermove',{pointerId:2,clientX:710,clientY:150});
+  assert.equal(f.controls.axes.forward,1);assert.deepEqual(f.events.look,[[60,-30]]);
+  // Crossing sides never transfers ownership to the joystick.
+  f.canvas.emit('pointermove',{pointerId:2,clientX:200,clientY:160});
+  f.win.emit('pointermove',{pointerId:2,clientX:200,clientY:160});
+  assert.deepEqual(f.events.look.at(-1),[-510,10]);assert.equal(f.events.look.length,2,'bubbling move is applied once');
+  f.win.emit('pointerup',{pointerId:2});assert.equal(f.controls.looking,false);assert.equal(f.controls.axes.forward,1);
+  down(f.doc,3,{target:f.canvas,clientX:620,clientY:200});f.win.emit('pointermove',{pointerId:3,clientX:650,clientY:220});
+  assert.deepEqual(f.events.look.at(-1),[30,20]);f.win.emit('pointerup',{pointerId:1});assert.deepEqual(f.controls.axes,{forward:0,sideways:0});assert.equal(f.controls.looking,true);
+  f.win.emit('pointercancel',{pointerId:3});assert.equal(f.controls.looking,false);f.controls.dispose();
+});
+test('look contact cannot be stolen and cancellation or a viewport boundary allows a fresh gesture',()=>{
+  const f=fixture();down(f.doc,1,{target:f.canvas,clientX:600,clientY:100});down(f.doc,2,{target:f.canvas,clientX:700,clientY:200});
+  f.win.emit('pointermove',{pointerId:2,clientX:730,clientY:230});f.canvas.emit('lostpointercapture',{pointerId:2});assert.deepEqual(f.events.look,[]);assert.equal(f.controls.looking,true);
+  f.win.emit('pointermove',{pointerId:1,clientX:620,clientY:130});assert.deepEqual(f.events.look,[[20,30]]);
+  f.win.emit('resize');assert.equal(f.controls.looking,false);f.win.emit('pointermove',{pointerId:1,clientX:650,clientY:150});assert.equal(f.events.look.length,1);
+  down(f.doc,3,{target:f.canvas,clientX:620,clientY:150});f.win.emit('pointermove',{pointerId:3,clientX:660,clientY:150});assert.deepEqual(f.events.look.at(-1),[40,0]);f.controls.dispose();
+});
+test('native long press and selection are blocked only on active game surfaces',()=>{
+  const f=fixture();
+  for(const type of ['contextmenu','selectstart','dragstart','touchstart']){
+    assert.equal(f.doc.emit(type,{target:f.canvas}).defaultPrevented,true,type);
+    assert.equal(f.doc.emit(type,{target:f.joy}).defaultPrevented,true,type);
+    assert.equal(f.doc.emit(type,{target:f.actions.view}).defaultPrevented,true,type);
+    assert.equal(f.doc.emit(type,{target:new Element()}).defaultPrevented,undefined,'forms and other screens keep native behavior');
+  }
+  f.controls.update({suspended:true});assert.equal(f.doc.emit('contextmenu',{target:f.canvas}).defaultPrevented,undefined);f.controls.dispose();
+});
+
+test('rotating into landscape clears old fingers and new landscape contacts move and turn independently',()=>{
+  const f=fixture({landscape:false});
+  f.canvas.getBoundingClientRect=()=>({left:0,top:0,width:390,height:844});
+  down(f.doc,1,{target:f.canvas,clientX:80,clientY:550});down(f.doc,2,{target:f.canvas,clientX:290,clientY:300});
+  f.win.emit('pointermove',{pointerId:1,clientX:80,clientY:470});f.win.emit('pointermove',{pointerId:2,clientX:330,clientY:300});
+  assert.equal(f.controls.axes.forward,1);assert.equal(f.controls.looking,true);
+  f.canvas.getBoundingClientRect=()=>({left:28,top:0,width:788,height:390});
+  f.mqLandscape.matches=true;f.mqLandscape.emit('change');
+  assert.equal(f.controls.looking,false);assert.deepEqual(f.controls.axes,{forward:0,sideways:0});assert.equal(f.el('mobile-orientation-hint').hidden,true);
+  const before=f.events.look.length;
+  f.win.emit('pointermove',{pointerId:2,clientX:700,clientY:150});assert.equal(f.events.look.length,before);
+  down(f.doc,3,{target:f.canvas,clientX:190,clientY:260});down(f.doc,4,{target:f.canvas,clientX:650,clientY:170});
+  f.win.emit('pointermove',{pointerId:3,clientX:190,clientY:180});f.win.emit('pointermove',{pointerId:4,clientX:700,clientY:160});
+  assert.equal(f.controls.axes.forward,1);assert.deepEqual(f.events.look.at(-1),[50,-10]);
+  f.win.emit('pointerup',{pointerId:3});assert.equal(f.controls.looking,true);f.controls.dispose();
 });
