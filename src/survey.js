@@ -1,3 +1,4 @@
+import {createLibraryGroupQr} from './library-group-qr.js';
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import {
@@ -136,6 +137,7 @@ let fc,
   campusSports,
   waterDetails,
   riverTerrain,
+  libraryGroupQr,
   commute,
   selected,
   selectedBox,
@@ -663,6 +665,7 @@ async function loadDataset(data, manifest = {}) {
   commute?.dispose();
   commute = null;
   campusBuildAbort?.abort();campusBuildAbort=new AbortController();
+  libraryGroupQr?.dispose();libraryGroupQr=null;
   campus?.dispose();
   campusSports?.dispose();
   waterDetails?.dispose();
@@ -689,6 +692,7 @@ async function loadDataset(data, manifest = {}) {
   });
   await yieldBrowserTask();
   scene.add(campus.group);
+  libraryGroupQr=createLibraryGroupQr({THREE,scene,model,invalidate:()=>{needsRender=true;}});
   riverTerrain=applyRiverTerrain(THREE,{model,datum,surfaces});
   scene.add(riverTerrain.group);
   waterDetails=createWaterDetails(THREE,{records:model.water,reflection:renderProfile.reflection});
@@ -1095,6 +1099,7 @@ function render(now) {
     const overviewLift=Math.max(0,camera.position.y-120);
     if(scene.fog.name!=='campus-tsunami-immersion'){scene.fog.near=480+overviewLift*.9;scene.fog.far=2900+overviewLift*1.3;}
     campus?.update?.(camera, { viewportHeight,detailDistanceScale:qualityBudget.detailDistanceScale });
+    libraryGroupQr?.update(camera,{visible:layerSettings.symbolic&&layerSettings.building&&!liveControl?.portalOpen});
     if(now-lastLabelAt>=100){updateLabels();lastLabelAt=now;}
     if(!frozen)waterDetails?.renderReflection(renderer,scene,camera,now);
     lastPasses.reflectionCalls=renderer.info.render.calls;lastPasses.reflectionTriangles=renderer.info.render.triangles;

@@ -144,3 +144,12 @@ body.transport-layout.campus-playing > header,
   .transport-layout #pointer-lock-hint{bottom:15px;}
   .world-interaction{bottom:155px;font-size:12px;}
 }
+
+/* Keycaps give the desktop guide a clear visual rhythm over any facade. */
+.transport-layout #player-help.has-keycaps{white-space:normal;font-size:12px;line-height:1.55;margin-top:10px;text-align:left}
+.control-hint-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:7px}
+.control-hint-row>span{white-space:pre-wrap}
+.control-hint-row kbd{display:inline-flex;align-items:center;justify-content:center;flex:0 0 30px;width:30px;height:30px;box-sizing:border-box;border:1px solid #ffffffd9;border-bottom-width:3px;border-radius:4px;background:#f4f7f2f5;color:#203b33;text-shadow:none;font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:0}
+.transport-layout #player-hud:has(.has-keycaps){width:350px;max-width:calc(100% - 30px);padding:14px 16px;border:1px solid #ffffff50;border-radius:8px;background:#16372fd9;text-shadow:0 1px 3px #10282055}
+.transport-layout #player-hud:has(.has-keycaps) #player-mode-label{font-size:13px;font-weight:600}
+@media(max-height:500px){.control-hint-row kbd{width:26px;height:26px;flex-basis:26px;font-size:9px}.control-hint-row{margin-top:4px}.transport-layout #player-help.has-keycaps{font-size:10px}}
