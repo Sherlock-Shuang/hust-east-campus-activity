@@ -67,7 +67,7 @@ node --env-file=.env.production.local serverless/migrate.mjs
 
 《过拟合恋人》对话需要上述服务端模型配置。本地可用 `TASAY_ENV_FILE` 指向私有配置文件；在线只使用 Vercel 服务端变量。未配置时场景可打开，但模型对话无法完成。代理限制请求频率与场次用量，不把上游凭据交给浏览器。
 
-校园入口为 `index.html → src/survey.js`；作品与默认点位配置在 `src/activity-catalog.js`，采用原校园坐标系。新增作品需配置稳定 ID、真实 URL、说明和就绪方式，并在 `activityPortals()` 中设定位置及触发范围。主持人可调整入口、光柱和阶段，阶段与个人进度独立。外部作品必须按 `public/experiences/activity-bridge.js` 的来源校验接入返回，不可用页面关闭伪造胜利。
+校园入口为 `index.html → src/campus-entry.js → src/survey.js`，启动层提供移动浏览器兼容与失败重试；作品与默认点位配置在 `src/activity-catalog.js`，采用原校园坐标系。新增作品需配置稳定 ID、真实 URL、说明和就绪方式，并在 `activityPortals()` 中设定位置及触发范围。主持人可调整入口、光柱和阶段，阶段与个人进度独立。外部作品必须按 `public/experiences/activity-bridge.js` 的来源校验接入返回，不可用页面关闭伪造胜利。
 
 地图共放置 1 架韵苑草坪直升机、10 件战衣、3 辆特斯拉、5 架电动飞行器与 2 艘东九湖游艇。所有当前显示的电动车均支持骑行／下车，下车留下原车；游艇只在水域航行、靠岸上下船。步行速度 2.2 m/s，Shift 3.8 m/s。摆放与维护见 [场景载具说明](docs/WORLD-TRANSPORT.md)。
 

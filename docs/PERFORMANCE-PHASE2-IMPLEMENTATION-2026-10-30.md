@@ -147,4 +147,6 @@ node scripts/soak-activity-local.mjs --seconds 1800 --audiences 100 --heartbeat-
 
 公网核对发现并修复了路由fragment未同步至实际 `vercel.json` 的问题：新增内容哈希模型原先返回默认重验证策略。现用 `npm run sync:routes` 同步，构建前强制检查，并覆盖未来Vite生成的哈希JS/CSS。原服务配置与所有旧路由保留，增加16条缓存路由；3项部署专项及重新资源构建通过。实际公网缓存验证与作品真实画面记录在 `artifacts/performance-phase2/public-release/`，不以本地HTTP测试冒充CDN结果。
 
-生产代码提交 `fdcdbed1b1c9bd78c16b2cab59fc1be6e3e0818b` 已经Vercel Ready，正式域名真实Chrome核对11项全部通过：校园buildId匹配、完整细节ready、管理员登录页与匿名统计401、5项版本化资源200/206/304/immutable、真实图书馆、Unity游戏运行、恋人界面及adapterVersion2。零pageerror。检查未登录、未改主持状态、未创建观众、未请求模型。此后仅补充验收脚本与文档的发布不改变上述运行代码。
+生产代码提交 `fdcdbed1b1c9bd78c16b2cab59fc1be6e3e0818b` 已经Vercel Ready，正式域名真实Chrome核对11项全部通过：校园buildId匹配、完整细节ready、管理员登录页与匿名统计401、5项版本化资源200/206/304/immutable、真实图书馆、Unity游戏运行、恋人界面及adapterVersion2。零pageerror。检查未登录、未改主持状态、未创建观众、未请求模型。
+
+收尾时主分支新增 `2fffcff` 的安卓横屏、双指输入和兼容启动改动，已经保留并合入；它也关闭手机MSAA和非必要倒影。最终合并后 Node24 全量 **821/821** 通过，`build:vercel` 及93资源校验重新通过。入口现为 `index.html → campus-entry.js → survey.js`。前述短/长性能测量针对该并行提交之前的性能版本，不把它们改称安卓真机或最终兼容改动的半小时测量。
