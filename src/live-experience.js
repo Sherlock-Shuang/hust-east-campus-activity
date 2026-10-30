@@ -191,17 +191,40 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   }
   function rebuild(markers,portals){
     clearBeacons();
-    for(const data of [...markers.map(m=>({...m,kind:'marker'})),...portals.map(p=>({...p,kind:'portal',height:26,color:'#83efd5',beamRadius:1.6}))]){
+    for(const data of [...markers.map(m=>({...m,kind:'marker'})),...portals.map(p=>({...p,kind:'portal',height:120,color:'#28efcf',beamRadius:2.6}))]){
       const group=new THREE.Group(),height=data.height,radius=data.kind==='portal'?data.beamRadius:data.radius;
       group.position.set(data.x,.3,data.z);worldGroup.add(group);
-      const material=new THREE.ShaderMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,uniforms:{color:{value:new THREE.Color(data.color)},intensity:{value:.6}},vertexShader:'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:'varying vec2 vUv; uniform vec3 color;uniform float intensity; void main(){float edge=pow(sin(vUv.x*3.14159265),2.0);float fade=pow(1.0-vUv.y,1.6);gl_FragColor=vec4(color,fade*(0.14+edge*0.5)*intensity);}'});
-      const column=new THREE.Mesh(new THREE.CylinderGeometry(radius*.32,radius,height,24,1,true),material);column.position.y=height/2;group.add(column);
-      const core=new THREE.Mesh(new THREE.CylinderGeometry(.12,.28,height*.88,8,1,true),new THREE.MeshBasicMaterial({color:data.color,transparent:true,opacity:.62,depthWrite:false,blending:THREE.AdditiveBlending}));core.position.y=height*.44;group.add(core);
-      const ring=new THREE.Mesh(new THREE.RingGeometry(radius*.9,radius*1.08,48),new THREE.MeshBasicMaterial({color:data.color,side:THREE.DoubleSide,transparent:true,opacity:.9,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;group.add(ring);
-      const inner=new THREE.Mesh(new THREE.CircleGeometry(radius*.82,32),new THREE.MeshBasicMaterial({color:data.color,transparent:true,opacity:.14,depthWrite:false}));inner.rotation.x=-Math.PI/2;inner.position.y=.015;group.add(inner);
+      // Match the campus logarithmic depth buffer so the glow shares building
+      // occlusion. Unlit layers keep their brightness without extra render passes.
+      const material=new THREE.ShaderMaterial({transparent:true,depthWrite:false,toneMapped:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,
+        uniforms:{color:{value:new THREE.Color(data.color)},intensity:{value:1.3}},
+        vertexShader:`#include <common>
+          #include <logdepthbuf_pars_vertex>
+          varying vec2 vUv;
+          void main(){
+            vUv=uv;
+            gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
+            #include <logdepthbuf_vertex>
+          }`,
+        fragmentShader:`#include <logdepthbuf_pars_fragment>
+          varying vec2 vUv;
+          uniform vec3 color;
+          uniform float intensity;
+          void main(){
+            #include <logdepthbuf_fragment>
+            float edge=pow(sin(vUv.x*3.14159265),2.0);
+            float fade=1.0-smoothstep(0.72,1.0,vUv.y);
+            gl_FragColor=vec4(color,fade*(0.22+edge*0.48)*intensity);
+            #include <colorspace_fragment>
+          }`});
+      const column=new THREE.Mesh(new THREE.CylinderGeometry(radius*.55,radius,height,24,1,true),material);column.position.y=height/2;group.add(column);
+      const coreRadius=Math.max(.22,Math.min(radius*.17,.65));
+      const core=new THREE.Mesh(new THREE.CylinderGeometry(coreRadius*.55,coreRadius,height*.96,8,1,true),new THREE.MeshBasicMaterial({color:new THREE.Color(data.color).lerp(new THREE.Color('#ffffff'),.65),transparent:true,opacity:.92,depthWrite:false,toneMapped:false,blending:THREE.AdditiveBlending}));core.position.y=height*.48;group.add(core);
+      const ring=new THREE.Mesh(new THREE.RingGeometry(radius*.88,radius*1.2,48),new THREE.MeshBasicMaterial({color:data.color,side:THREE.DoubleSide,transparent:true,opacity:1,depthWrite:false,toneMapped:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;group.add(ring);
+      const inner=new THREE.Mesh(new THREE.CircleGeometry(radius*.82,32),new THREE.MeshBasicMaterial({color:data.color,transparent:true,opacity:.26,depthWrite:false,toneMapped:false}));inner.rotation.x=-Math.PI/2;inner.position.y=.015;group.add(inner);
       const label=document.createElement(data.kind==='portal'?'button':'span');label.className=`live-map-label ${data.kind==='portal'?'is-portal':''}`;label.textContent=data.kind==='portal'?`${data.label} · 体验入口`:data.label;label.style.setProperty('--beacon-color',data.color);labels.append(label);
       if(data.kind==='portal')label.addEventListener('click',()=>openPortal(data));
-      items.push({group,material,ring,label,data});
+      items.push({group,material,core,ring,label,data});
     }
     invalidate();
   }
@@ -282,7 +305,14 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
         let labelY=y;
         if(!label.hidden&&textRects.length){const size=item.labelSize??={width:label.offsetWidth,height:label.offsetHeight};labelY=avoidWallText(x,y,size.width,size.height,textRects,height);}
         label.style.left=`${x}px`;label.style.top=`${labelY}px`;
-        if(!client.state.paused&&!reduced?.matches){const phase=client.now()/1300+group.position.x*.01;item.material.uniforms.intensity.value=.8+Math.sin(phase)*.12;const scale=1+Math.sin(phase)*.045;item.ring.scale.setScalar(scale);}
+        // Keep the skyline beacon strong, but soften it inside the approach.
+        // Distance still updates when reduced motion disables the slow pulse.
+        const distance=Math.hypot(camera.position.x-data.x,camera.position.z-data.z);
+        const emphasis=THREE.MathUtils.smoothstep(distance,12,48);
+        const pulse=client.state.paused||reduced?.matches?0:Math.sin(client.now()/1300+group.position.x*.01);
+        item.material.uniforms.intensity.value=(1.3+pulse*.08)*(.18+emphasis*.82);
+        item.core.material.opacity=.48+emphasis*.44;
+        item.ring.scale.setScalar(1+pulse*.045);
       }
       if(client.state.paused||reduced?.matches)return tsunamiChanged;
       if(now-lastPaint>=100){lastPaint=now;return true;}return tsunamiChanged;
