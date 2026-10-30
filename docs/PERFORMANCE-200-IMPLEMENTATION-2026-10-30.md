@@ -55,7 +55,7 @@ JSON 记录先于最终连接清理，终端 completed 行会额外计入 200 �
 - 两处构建通过；部署包仍验证 93 个运行资源、691,609,310 B。本轮未改模型资产或路由缓存策略。
 - 实际 Chrome/原生 EventSource 验证初始仅 1 GET/1 SSE、断流后取得新 revision、离线停止连接与在线恢复、销毁后零连接/登记监听/新增请求；本次断流恢复约 827 ms。后台分支是可注入文档状态，不能冒充真手机待机。
 - 校园生产构建实际冷开、刷新、键盘移动和渲染均通过，截图与报告在 `artifacts/performance-200/campus-browser/`。这次检查与回归进程有重叠，只用于功能验收，不作为启动速度/FPS 的新 A/B 结论。
-- 模型 mock 200 请求对照与取消/超时覆盖见 `artifacts/performance-200/model-pressure/report.json`；未向真实上游发送请求。
+- 模型 mock 200 请求对照见 `artifacts/performance-200/model-pressure/report.json`；取消、超时及释放执行位的覆盖见 `tests/tasay-proxy-pressure.test.mjs`。未向真实上游发送请求。
 
 完整 UI 集成测试沿用已经准备好的作品依赖副本，通过 `TASAY_SOURCE` 指定其中的 package.json/jsdom/TypeScript；这些测试依赖和私人原制作目录不进入发布包。
 
