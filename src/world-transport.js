@@ -89,7 +89,7 @@ export function createWorldTransport({THREE,scene,model,route,groundAt,canPlaceM
       if(Array.isArray(o.material)){const copy=o.clone();copy.applyMatrix4(o.parent.matrixWorld);result.add(copy);return;}
       let geometry=o.geometry.clone().applyMatrix4(o.matrixWorld);if(geometry.index){const expanded=geometry.toNonIndexed();geometry.dispose();geometry=expanded;}
       const signature=Object.keys(geometry.attributes).sort().map(k=>`${k}:${geometry.attributes[k].itemSize}`).join(','),key=`${o.material.uuid}/${signature}`;
-      if(!batches.has(key))batches.set(key,{material:o.material,geometries:[],names:[],castShadow:o.castShadow,receiveShadow:o.receiveShadow,renderOrder:o.renderOrder});const batch=batches.get(key);batch.geometries.push(geometry);batch.names.push(o.name);
+      if(!batches.has(key))batches.set(key,{material:o.material,geometries:[],names:[],castShadow:o.castShadow,receiveShadow:o.receiveShadow,renderOrder:o.renderOrder});const batch=batches.get(key);batch.geometries.push(geometry);batch.names.push(...(o.userData.sourceParts||[o.name]));
     });
     for(const batch of batches.values()){
       const geometry=mergeGeometries(batch.geometries,false);if(!geometry)throw new Error('Static transport parts have incompatible geometry.');mergedGeometries.add(geometry);for(const g of batch.geometries)g.dispose();

@@ -22,6 +22,23 @@ test('resident capacity follows active districts, shrinks after hysteresis, expo
   batch.dispose();batch.update([1]);assert.equal(parent.children.length,0);assert.equal(geometryDisposals,0);assert.equal(materialDisposals,0);geometry.dispose();material.dispose();
 });
 
+test('cached selections skip source scans while residency shrink, eviction and fresh allocations still run',()=>{
+  let now=0,reads=0;
+  const parent=new THREE.Group(),geometry=new THREE.BoxGeometry(),material=new THREE.MeshBasicMaterial(),matrices=Array.from({length:1000},(_,i)=>new THREE.Matrix4().makeTranslation(i,0,0));
+  const batch=createResidentInstanceBatch(THREE,{parent,name:'cached-selection',geometry,material,matrices,ids:matrices.map((_,i)=>`id-${i}`),now:()=>now});
+  const indices=new Proxy([5,7],{get(target,key,receiver){if(/^\d+$/.test(String(key)))reads++;return Reflect.get(target,key,receiver);}});
+  try{
+    batch.update(indices,{reserve:200});assert.equal(batch.stats.residentCapacity,256);reads=0;
+    now=100;batch.update(indices,{reserve:2,selectionUnchanged:true});assert.equal(reads,0);
+    now=1601;batch.update(indices,{reserve:2,selectionUnchanged:true});assert.ok(reads>0,'a resized buffer restores the unchanged selection');
+    assert.equal(batch.stats.residentCapacity,16);assert.deepEqual(batch.mesh.userData.instanceFeatureIds,['id-5','id-7']);assert.equal(batch.mesh.instanceMatrix.array[12],5);
+    reads=0;batch.update(indices,{selectionUnchanged:true});assert.equal(reads,0);
+    batch.update([]);assert.equal(batch.mesh.visible,false);
+    now=3102;batch.update([],{selectionUnchanged:true});assert.equal(batch.mesh,null,'cached empty views still evict after cooldown');
+    batch.update(indices,{selectionUnchanged:true});assert.equal(batch.mesh.instanceMatrix.array[12],5,'released buffers repopulate before drawing');
+  }finally{batch.dispose();geometry.dispose();material.dispose();}
+});
+
 test('frustum clusters conservatively include boundary-crossing spheres and exact selection matches brute force',()=>{
   const items=Array.from({length:2000},(_,i)=>({x:(i%50)*20-500,z:Math.floor(i/50)*20-400,r:i%11===0?45:5}));
   const sphereAt=(p,s)=>{s.center.set(p.x,5,p.z);s.radius=p.r;};

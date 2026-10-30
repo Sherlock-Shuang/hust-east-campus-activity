@@ -21,14 +21,17 @@ export function createResidentInstanceBatch(THREE,{parent,name,geometry,material
     selection=createStaticInstanceSelection(mesh,{matrices,colors,ids});sourceCount=matrices.length;
     stats.residentCapacity=capacity;stats.residentBytes=mesh.instanceMatrix.array.byteLength+(mesh.instanceColor?.array.byteLength||0);stats.allocations++;overcapacitySince=null;
   }
-  return{stats,get mesh(){return mesh;},update(indices,{reserve=indices.length,forceFull=false}={}){
+  return{stats,get mesh(){return mesh;},update(indices,{reserve=indices.length,forceFull=false,selectionUnchanged=false}={}){
     if(disposed)return;stats.sourceInstances=matrices.length;const time=now(),needed=Math.max(indices.length,Math.min(matrices.length,reserve));
     if(indices.length)lastNeeded=time;
     if(!indices.length&&forceFull){release();return;}
-    if(!indices.length&&!forceFull){if(time-lastNeeded>=cooldownMs)release();else if(mesh)selection.update([]);return;}
+    if(!indices.length&&!forceFull){if(time-lastNeeded>=cooldownMs)release();else if(mesh&&!selectionUnchanged)selection.update(indices);return;}
     const target=forceFull?matrices.length:needed;
     if(target<capacity/4){overcapacitySince??=time;}else overcapacitySince=null;
-    if(!mesh||target>capacity||sourceCount!==matrices.length||overcapacitySince!==null&&time-overcapacitySince>=cooldownMs)allocate(target);
-    selection.update(indices);
+    const reallocated=!mesh||target>capacity||sourceCount!==matrices.length||overcapacitySince!==null&&time-overcapacitySince>=cooldownMs;
+    if(reallocated)allocate(target);
+    // A cached camera selection still maintains its residency timers, but only
+    // a fresh allocation needs to copy that unchanged selection again.
+    if(reallocated||!selectionUnchanged)selection.update(indices);
   },release,dispose(){if(disposed)return;release();disposed=true;}};
 }

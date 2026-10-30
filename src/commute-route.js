@@ -1,6 +1,7 @@
 import {getRoadProfile} from './building-profiles.js';
 import {createYunyuanPhotoParking} from './yunyuan-parking.js';
 import {createEastNineParking,EAST_NINE_PARKING_IDS} from './east-nine-parking.js';
+import {createRouteLocator} from './route-locator.js';
 
 const DORM='way/110398529', DORM_23='way/110398543', EAST_NINE='way/1023544717';
 const A_NORTH=[114.4216304,30.5169494];
@@ -68,7 +69,7 @@ export function createCommuteRoute(fc,{frame,geoToLocal,dormId=DORM,startAccess=
   // No canteen/junction waypoint is forced: those points constrained an assumed
   // student itinerary rather than a verified entrance or road restriction.
   const legs=destination==='a-north'?[search(startNode,aNorth,travelMode==='walk'),search(aNorth,endNode,true)]:[search(startNode,endNode,travelMode==='walk')],dismountProgress=travelMode==='walk'?0:legs[0].reduce((s,e)=>s+e.edge.length,0);
-  const path=legs.flat();let points=[{...nodes.get(path[0].from),y:.16}];const segments=[];let length=0;
+  const path=legs.flat();let points=[{...nodes.get(path[0].from),y:.16}];const segments=[];let length=0,locateRoute=null;
   for(const step of path){const a=nodes.get(step.from),b=nodes.get(step.to),s0=length;length+=step.edge.length;const mode=s0>=dismountProgress-.1?'walk':'ride';
     segments.push({startProgress:s0,endProgress:length,s0,s1:length,length:step.edge.length,sourceId:step.edge.sourceId,width:step.edge.width,reserveMotorCenter:step.edge.reserveMotorCenter,cycleBandWidth:step.edge.cycleBandWidth,mode,highway:step.edge.highway,bridge:step.edge.bridge,elevation:step.edge.elevation,surfaceOffset:step.edge.surfaceOffset,from:{x:a.x,z:a.z},to:{x:b.x,z:b.z},sourceInterpolation:!!step.edge.sourceInterpolation});
     points.push({x:b.x,z:b.z,y:Math.max(.28,(step.edge.elevation||0)+.28),longitude:b.longitude,latitude:b.latitude,progress:length,sourceId:step.edge.sourceId,mode});
@@ -160,7 +161,7 @@ export function createCommuteRoute(fc,{frame,geoToLocal,dormId=DORM,startAccess=
   const samples=[...new Set([...sourcePoints.map(p=>p.progress),...ramps.flatMap(r=>[r.startProgress,r.endProgress])])].sort((a,b)=>a-b);
   points=samples.map(s=>({...sourcePose(s),y:surfaceElevation(s)+.16}));
   for(const ramp of ramps){ramp.points=points.filter(p=>p.progress>=ramp.startProgress-.001&&p.progress<=ramp.endProgress+.001);ramp.width=segments.find(s=>ramp.startProgress>=s.startProgress&&ramp.startProgress<=s.endProgress)?.width||6;ramp.evidence='inferred bridge approach, source centreline; not surveyed';}
-  function locate(p){let best={distance:Infinity};for(const seg of segments){const dx=seg.to.x-seg.from.x,dz=seg.to.z-seg.from.z,l2=dx*dx+dz*dz,t=Math.max(0,Math.min(1,((p.x-seg.from.x)*dx+(p.z-seg.from.z)*dz)/l2)),x=seg.from.x+dx*t,z=seg.from.z+dz*t,d=Math.hypot(p.x-x,p.z-z);if(d<best.distance)best={distance:d,x,z,progress:seg.startProgress+t*seg.length,yaw:Math.atan2(-dx,-dz),width:seg.width,sourceId:seg.sourceId};}return best;}
+  function locate(p){return (locateRoute??=createRouteLocator(segments))(p);}
   // Actual shared vertices with an off-route branch can supply a scenario flow.
   // Way IDs changing along a straight road are not independent feeder roads.
   const usedLinks=new Set(path.flatMap(s=>[`${s.from}|${s.to}`,`${s.to}|${s.from}`]));

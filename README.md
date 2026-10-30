@@ -83,3 +83,5 @@ npm run build:vercel
 `tests/` 验证 Node HTTP、认证、同人去重、记录一致性、100 观众连接与事件以及 SSE 轮换；使用临时本地 SQLite，不是 100 台设备同时渲染 3D 的性能测试。实际部署验收记录以 `docs/VERCEL-ACCEPTANCE.md` 为准。`docs/ACTIVITY-RUNBOOK.md` 与 `docs/ACTIVITY-ACCEPTANCE.md` 保留原整合阶段说明，涉及完整工程的重新制作命令仅适用于持有原素材者。
 
 保留了校园地图、碰撞、镜头、步行、电动车、跑车、直升机、滑板及蜘蛛侠玩法。作品按进入时加载，退出销毁 iframe。这里只发布运行所需源码及资源，不包含建模参考图库、原制作目录、私人资料、密钥或观众数据。
+
+本轮行走与高速飞行的帧率、CPU、模型合批及等价性验收见 [移动性能优化记录](docs/MOVEMENT-PERFORMANCE-2026-10-31.md)。

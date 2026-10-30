@@ -580,7 +580,7 @@ function* buildCampus3D(THREE, model, { frame, geoToLocal, progressive=false,ini
     aquaticPlants?.update?.(camera,{viewportHeight});
     if(!decorationActive&&camera)return;
     if(!camera){for(const {b,distant,selection,resident,roadEdges,visible}of facadeLods){visible.length=0;if(!distant)for(let i=0;i<b.matrices.length;i++)if(!roadEdges||!detailedRoadIds.has(b.ids[i]))visible.push(i);if(resident)resident.update(visible,{forceFull:true});else selection.update(visible);}fullDetail=true;return;}
-    if(!batchesChanged&&!fullDetail&&lastDetailScale===detailScale&&lastPosition.distanceToSquared(camera.position)<1&&Math.abs(lastQuaternion.dot(camera.quaternion))>.99997){for(const lod of facadeLods)lod.resident?.update(lod.visible,{reserve:lod.candidates.length});return;}
+    if(!batchesChanged&&!fullDetail&&lastDetailScale===detailScale&&lastPosition.distanceToSquared(camera.position)<1&&Math.abs(lastQuaternion.dot(camera.quaternion))>.99997){for(const lod of facadeLods)lod.resident?.update(lod.visible,{reserve:lod.candidates.length,selectionUnchanged:true});return;}
     fullDetail=false;batchesChanged=false;lastDetailScale=detailScale;lastPosition.copy(camera.position);lastQuaternion.copy(camera.quaternion);camera.updateMatrixWorld();
     facadeMatrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);facadeFrustum.setFromProjectionMatrix(facadeMatrix);
     for(const {mesh,b,positions,maxDistance,distant,spatialCells,selection,resident,roadEdges,candidates,visible}of facadeLods){

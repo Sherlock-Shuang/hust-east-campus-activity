@@ -11,6 +11,7 @@ const MODES=new Set(['walk','scooter','helicopter','roadster','hoverboard','spid
 // Tesla engineering or flight-envelope data. The visual uses cold-gas mist.
 // Hoverboard performance and collision margins are simulation estimates.
 const HOVERBOARD={cruiseSpeed:24,fastSpeed:36,reverseSpeed:7,verticalSpeed:5.8,ceiling:60,footX:.74,footZ:.36};
+const HOVERBOARD_ROTORS=[[-1.13,-.43],[-1.13,.43],[1.13,-.43],[1.13,.43],[-.55,-.73],[-.55,.73],[0,-.73],[0,.73],[.55,-.73],[.55,.73]];
 const ROADSTER={wheelbase:2.65,wheelRadius:.37,halfTrack:.88,groundSpeed:12,boostSpeed:18,reverseSpeed:3,flightSpeed:18,flightBoostSpeed:28,gravity:9.81,liftAcceleration:18,maxAscent:8.4,maxDescent:32,ceiling:80};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const approach=(value,target,amount)=>value<target?Math.min(target,value+amount):Math.max(target,value-amount);
@@ -38,6 +39,14 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   for(let i=1;i<points.length;i++)if(!finite(points[i].progress))points[i].progress=points[i-1].progress+Math.hypot(points[i].x-points[i-1].x,points[i].z-points[i-1].z);
   const buildingIndex=getBuildingSpatialIndex(world.buildings);
   const length=route.length??points.at(-1).progress,buildings=buildingIndex.records,water=polygonRecords(world.water),bounds=world.bounds;
+  const orderedProfile=points.every((p,i)=>!i||p.progress>=points[i-1].progress);
+  const segments=route.segments||[],orderedSegments=segments.every((s,i)=>!i||(s.startProgress??s.s0)>=(segments[i-1].startProgress??segments[i-1].s0)&&(s.endProgress??s.s1)>=(segments[i-1].endProgress??segments[i-1].s1));
+  function segmentAt(progress,tolerance=0){
+    if(!orderedSegments)return segments.find(s=>progress>=(s.startProgress??s.s0)-tolerance&&progress<=(s.endProgress??s.s1)+tolerance);
+    let lo=0,hi=segments.length;
+    while(lo<hi){const mid=(lo+hi)>>1;if(progress>(segments[mid].endProgress??segments[mid].s1)+tolerance)lo=mid+1;else hi=mid;}
+    const s=segments[lo];return s&&progress>=(s.startProgress??s.s0)-tolerance&&progress<=(s.endProgress??s.s1)+tolerance?s:undefined;
+  }
   function buildingsForBodies(bodies){let minX=Infinity,minZ=Infinity,maxX=-Infinity,maxZ=-Infinity;for(const p of bodies){minX=Math.min(minX,p.x-p.radius);minZ=Math.min(minZ,p.z-p.radius);maxX=Math.max(maxX,p.x+p.radius);maxZ=Math.max(maxZ,p.z+p.radius);}return buildingIndex.queryBounds(minX,minZ,maxX,maxZ);}
   const bridgeSurfaceCells=new Map(),bridgeSolidCells=new Map(),walkSurfaceCells=new Map(),barrierCells=new Map(),surfaceCell=24;
   // Photo-aligned stair/arcade models replace a source road's generic flat
@@ -201,11 +210,11 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     if(mode!=='hoverboard')return standardBodySamples(x,z,yaw,mode);
     const pitch=state.mode===mode||pose.mode===mode?pose.pitch:0,lean=state.mode===mode||pose.mode===mode?pose.lean:0,cp=Math.cos(pitch),sp=Math.sin(pitch),cl=Math.cos(lean),sl=Math.sin(lean),cy=Math.cos(yaw),sy=Math.sin(yaw);
     function part(lx,ly,lz,radius,below,above){const xx=lx*cl-ly*sl,yy=lx*sl+ly*cl,ry=yy*cp-lz*sp,rz=yy*sp+lz*cp;return{x:x+xx*cy+rz*sy,z:z-xx*sy+rz*cy,radius,minY:ry-below,maxY:ry+above};}
-    const rim=.29*Math.hypot(sl*cp,sp),rotors=[[-1.13,-.43],[-1.13,.43],[1.13,-.43],[1.13,.43],...[-.55,0,.55].flatMap(lx=>[[lx,-.73],[lx,.73]])];
+    const rim=.29*Math.hypot(sl*cp,sp);
     // Low rotor disks/struts and the standing person's tilted capsule have
     // separate vertical intervals; a narrow canopy is not a 2.4m-high wall
     // across the complete rotor span.
-    return[...rotors.map(([lx,lz])=>part(lx,.23,lz,.29,.10+rim,.17+rim)),part(0,.27,0,.69,.27,.22),
+    return[...HOVERBOARD_ROTORS.map(([lx,lz])=>part(lx,.23,lz,.29,.10+rim,.17+rim)),part(0,.27,0,.69,.27,.22),
       part(0,.66,0,.43,.26,.26),part(0,1.14,0,.32,.30,.30),part(0,1.60,0,.43,.27,.27),part(0,1.99,0,.21,.20,.20),
       // The model counters its upper-body lean while its feet stay planted.
       // Also cover the upright torso/head throughout that compensation.
@@ -218,9 +227,12 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     for(const x of[-HOVERBOARD.footX,HOVERBOARD.footX])for(const z of[-HOVERBOARD.footZ,HOVERBOARD.footZ]){const rx=x*cl,ry=x*sl*cp-z*sp,rz=x*sl*sp+z*cp;floor=Math.max(floor,contactAt(state.x+rx*cy+rz*sy,state.z-rx*sy+rz*cy).height-ry);}return floor;
   }
   const hoverboardTiltSupport=()=>Math.max(0,-Math.min(...bodySamples(state.x,state.z,state.yaw,'hoverboard').map(p=>p.minY)));
-  function sample(s){s=clamp(s,0,length);let i=1;while(i<points.length-1&&points[i].progress<s)i++;const a=points[i-1],b=points[i],t=clamp((s-a.progress)/Math.max(EPS,b.progress-a.progress),0,1);return{x:a.x+(b.x-a.x)*t,y:(a.y??.16)+((b.y??.16)-(a.y??.16))*t-.02,z:a.z+(b.z-a.z)*t,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z)),progress:s};}
+  function sample(s){s=clamp(s,0,length);let i=1;
+    if(orderedProfile){let hi=points.length-1;while(i<hi){const mid=(i+hi)>>1;if(points[mid].progress<s)i=mid+1;else hi=mid;}}
+    else while(i<points.length-1&&points[i].progress<s)i++;
+    const a=points[i-1],b=points[i],t=clamp((s-a.progress)/Math.max(EPS,b.progress-a.progress),0,1);return{x:a.x+(b.x-a.x)*t,y:(a.y??.16)+((b.y??.16)-(a.y??.16))*t-.02,z:a.z+(b.z-a.z)*t,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z)),progress:s};}
   function locate(p){if(typeof route.locate==='function')return route.locate(p);let best={distance:Infinity,progress:0,width:7.2};
-    for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i],dx=b.x-a.x,dz=b.z-a.z,l2=dx*dx+dz*dz,t=l2?clamp(((p.x-a.x)*dx+(p.z-a.z)*dz)/l2,0,1):0,x=a.x+t*dx,z=a.z+t*dz,d=Math.hypot(p.x-x,p.z-z);if(d<best.distance){const progress=a.progress+t*(b.progress-a.progress),segment=route.segments?.find(s=>progress>=(s.startProgress??s.s0)&&progress<=(s.endProgress??s.s1));best={x,z,distance:d,progress,width:segment?.width??7.2};}}
+    for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i],dx=b.x-a.x,dz=b.z-a.z,l2=dx*dx+dz*dz,t=l2?clamp(((p.x-a.x)*dx+(p.z-a.z)*dz)/l2,0,1):0,x=a.x+t*dx,z=a.z+t*dz,d=Math.hypot(p.x-x,p.z-z);if(d<best.distance){const progress=a.progress+t*(b.progress-a.progress),segment=segmentAt(progress);best={x,z,distance:d,progress,width:segment?.width??7.2};}}
     return best;
   }
   function bridgeSupport(x,z,radius,referenceY){
@@ -242,7 +254,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   // Omitting referenceY is a top-down map query. Movement always supplies the
   // feet/wheel height so an overhead viaduct cannot become its support plane.
   function groundAt(x,z,radius=0,referenceY=Infinity){const near=locate({x,z}),profile=sample(near.progress),width=near.width??7.2,raised=profile.y>BASE_Y+.03;
-    const segment=route.segments?.find(s=>near.progress>=(s.startProgress??s.s0)-EPS&&near.progress<=(s.endProgress??s.s1)+EPS);
+    const segment=segmentAt(near.progress,EPS);
     // A bridge can be flush with its banks. Its source topology, not a made-up
     // positive elevation, establishes that a road spans the water beneath it.
     const onRouteBridge=(raised||segment?.bridge)&&profile.y<=referenceY+STEP_UP&&near.distance+radius<=width/2;
@@ -291,10 +303,21 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       return'';
     }
     if(mode==='helicopter'||mode==='roadster'&&!grounded||mode==='hoverboard'&&!grounded){
-      const contacts=mode==='roadster'||mode==='hoverboard'?bodies.map(p=>contactAt(p.x,p.z,0,y)): [ground];
-      if(mode==='hoverboard'?bodies.some(p=>contactAt(p.x,p.z,0,y).height>y+p.minY+.04):contacts.some(g=>g.height>y+.04))return'桥面边界';
-      const waterContact=mode==='roadster'||mode==='hoverboard'?bodies.some(p=>!contactAt(p.x,p.z,p.radius,y).allowed):ground.overWater&&!ground.onBridge;
-      if(waterContact&&y<BASE_Y+2.48)return'水面低空边界';return'';
+      // The board's tilted parts have their own vertical intervals. Its former
+      // generic contacts array was discarded before doing these same queries.
+      if(mode==='hoverboard'){
+        if(bodies.some(p=>contactAt(p.x,p.z,0,y).height>y+p.minY+.04))return'桥面边界';
+      }else{
+        const contacts=mode==='roadster'?bodies.map(p=>contactAt(p.x,p.z,0,y)):[ground];
+        if(contacts.some(g=>g.height>y+.04))return'桥面边界';
+      }
+      // Water can reject horizontal flight only inside the existing low-air
+      // clearance band. Vertical motion still checks every landing footprint.
+      if(y<BASE_Y+2.48){
+        const waterContact=mode==='roadster'||mode==='hoverboard'?bodies.some(p=>!contactAt(p.x,p.z,p.radius,y).allowed):ground.overWater&&!ground.onBridge;
+        if(waterContact)return'水面低空边界';
+      }
+      return'';
     }
     if(bodies.some(p=>!contactAt(p.x,p.z,p.radius,y).allowed))return'水域边界';
     if(previous){const oldGround=contactAt(previous.x,previous.z,0,previous.y),delta=Math.hypot(x-previous.x,z-previous.z);

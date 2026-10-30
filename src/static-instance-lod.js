@@ -1,23 +1,38 @@
 /** Static instance transforms never change: a camera update only selects them.
  * Keep GPU buffers intact when the selection is unchanged, and upload only the
- * active prefix when it is. This avoids sending a campus-sized capacity buffer
+ * changed span when it is. This avoids sending a campus-sized capacity buffer
  * for a handful of nearby windows/trees. Export can still select every source. */
 export function createStaticInstanceSelection(mesh,{matrices,colors,ids}={}) {
-  const selected=new Int32Array(matrices.length);selected.fill(-1);
+  const selected=new Int32Array(mesh.instanceMatrix.count);selected.fill(-1);
+  const selectedIds=[];
   let lastCount=-1;
+  function queueRange(attribute,first,last,components){
+    if(!attribute)return;
+    let start=first*components,end=(last+1)*components;
+    // A second camera update can run before render consumes the first one.
+    // Retain all pending writes, including slots temporarily outside count.
+    const ranges=attribute.updateRanges;
+    for(const range of ranges){start=Math.min(start,range.start);end=Math.max(end,range.start+range.count);}
+    if(ranges.length){ranges[0].start=start;ranges[0].count=end-start;ranges.length=1;}
+    else attribute.addUpdateRange(start,end-start);
+    attribute.needsUpdate=true;
+  }
   function update(indices){
-    const count=indices.length,oldCount=lastCount;let dirty=false;
+    const count=indices.length,oldCount=lastCount;let first=count,last=-1;
     for(let slot=0;slot<count;slot++){
-      const index=indices[slot];if(selected[slot]===index)continue;
+      const index=indices[slot];
+      if(slot>=oldCount||selected[slot]!==index)selectedIds[slot]=ids?.[index]??null;
+      if(selected[slot]===index)continue;
       const source=matrices[index].elements||matrices[index];
       mesh.instanceMatrix.array.set(source,slot*16);
       if(mesh.instanceColor){const c=colors?.[index],offset=slot*3;mesh.instanceColor.array[offset]=c?.r??1;mesh.instanceColor.array[offset+1]=c?.g??1;mesh.instanceColor.array[offset+2]=c?.b??1;}
-      selected[slot]=index;dirty=true;
+      selected[slot]=index;first=Math.min(first,slot);last=slot;
     }
     mesh.count=count;mesh.visible=count>0;lastCount=count;
-    if(dirty||oldCount!==count){mesh.userData.instanceFeatureIds=indices.map(i=>ids?.[i]??null);}
-    if(dirty&&count){
-      for(const [attribute,components]of [[mesh.instanceMatrix,16],[mesh.instanceColor,3]])if(attribute){attribute.clearUpdateRanges();attribute.addUpdateRange(0,count*components);attribute.needsUpdate=true;}
+    const dirty=last>=0;
+    if(dirty||oldCount!==count){selectedIds.length=count;mesh.userData.instanceFeatureIds=selectedIds;}
+    if(dirty){
+      queueRange(mesh.instanceMatrix,first,last,16);queueRange(mesh.instanceColor,first,last,3);
     }
     return dirty||oldCount!==count;
   }
@@ -29,14 +44,21 @@ export function createStaticInstanceSelection(mesh,{matrices,colors,ids}={}) {
 export function createStaticXZIndex(positions,cellSize=64){
   const cells=new Map();
   positions.forEach((p,i)=>{const x=Math.floor(p.x/cellSize),z=Math.floor(p.z/cellSize),key=`${x}/${z}`;if(!cells.has(key))cells.set(key,{x,z,indices:[]});cells.get(key).indices.push(i);});
+  const cached=[];let previousMinX,previousMaxX,previousMinZ,previousMaxZ;
   return {query(position,radius,out=[]){
     out.length=0;
     const minX=Math.floor((position.x-radius)/cellSize),maxX=Math.floor((position.x+radius)/cellSize),minZ=Math.floor((position.z-radius)/cellSize),maxZ=Math.floor((position.z+radius)/cellSize);
-    if((maxX-minX+1)*(maxZ-minZ+1)>cells.size*2){for(const cell of cells.values())if(cell.x>=minX&&cell.x<=maxX&&cell.z>=minZ&&cell.z<=maxZ)out.push(...cell.indices);}
-    else for(let x=minX;x<=maxX;x++)for(let z=minZ;z<=maxZ;z++){const cell=cells.get(`${x}/${z}`);if(cell)out.push(...cell.indices);}
-    // Stable source order keeps uploads still across grid-cell transitions and
-    // preserves the instance-to-source mapping used by object inspection.
-    out.sort((a,b)=>a-b);return out;
+    if(minX!==previousMinX||maxX!==previousMaxX||minZ!==previousMinZ||maxZ!==previousMaxZ){
+      cached.length=0;
+      if((maxX-minX+1)*(maxZ-minZ+1)>cells.size*2){for(const cell of cells.values())if(cell.x>=minX&&cell.x<=maxX&&cell.z>=minZ&&cell.z<=maxZ)cached.push(...cell.indices);}
+      else for(let x=minX;x<=maxX;x++)for(let z=minZ;z<=maxZ;z++){const cell=cells.get(`${x}/${z}`);if(cell)cached.push(...cell.indices);}
+      // Camera movement inside the same cell rectangle has identical broad
+      // phase candidates. Reuse their stable source order until an edge moves.
+      cached.sort((a,b)=>a-b);previousMinX=minX;previousMaxX=maxX;previousMinZ=minZ;previousMaxZ=maxZ;
+    }
+    // Keep caller-owned outputs independent, including callers that filter or
+    // clear their candidate array between queries.
+    for(let i=0;i<cached.length;i++)out.push(cached[i]);return out;
   }};
 }
 

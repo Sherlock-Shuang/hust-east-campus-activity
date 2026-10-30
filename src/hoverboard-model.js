@@ -1,5 +1,6 @@
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {createActorLibrary} from './commute-actors.js';
+import {batchRigidModelBody} from './static-model-batch.js';
 
 // Original visual reconstruction informed by the inspected reporter photograph
 // of Shenqi Ayu's electric flying board. The dimensions, hidden framework and
@@ -127,6 +128,8 @@ export function createHoverboardModel(THREE){
   }
   const glow=new THREE.PointLight('#26c7d7',.22,2.7,2);glow.name='hoverboard-deck-underglow';glow.position.y=.29;group.add(glow);
   group.userData={forward:'-Z',units:'metres',estimatedDimensions:true,width:2.8,length:2,height:2.13,deckHeight:deckY,rotorRadius:.27,rotorCenters:rotorPositions.map(p=>({...p,y:.145})),supportFeet:feet,photograph:'Inspected Jimu News reporter photograph; motor positions / dimensions visually reconstructed'};
+  const bodyBatch=batchRigidModelBody(THREE,group,{name:'hoverboard-rigid-body',ownGeometry});
+  group.userData.rigidBodyBatch={sourceMeshes:bodyBatch.sourceMeshes,batches:bodyBatch.batches,savedDraws:bodyBatch.savedDraws};
   const bodyMatrix=new THREE.Matrix4(),torsoMatrix=new THREE.Matrix4(),balanceRotation=new THREE.Matrix4(),balancePivot=new THREE.Matrix4().makeTranslation(0,.89,.13),inverseBalancePivot=new THREE.Matrix4().makeTranslation(0,-.89,-.13),temp=new THREE.Vector3(),rotation=new THREE.Euler(),quaternion=new THREE.Quaternion();
   let elapsed=0,rotorAngle=0,disposed=false;
   function update(state={},dt=0){
