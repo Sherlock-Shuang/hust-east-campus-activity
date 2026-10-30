@@ -85,8 +85,18 @@ export function createC118Audience(THREE,{plan}){
     if(style==='tied')parts.push(ellipsoid(.039,.097,.034,[.014,1.202,.107],8,5),ellipsoid(.039,.03,.03,[.014,1.285,.094],8,4));
     return merge(parts);
   }
-  function hash(id){let h=2166136261;for(const c of id)h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;return h;}
-  const people=plan.seats.map((s,i)=>{const id=c118SeatId(s),seed=hash(id);seatIndex.set(id,i);
+  function hash(id){let h=2166136261;for(const c of id)h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;h=Math.imul(h^(h>>>16),0x21f0aaad);h=Math.imul(h^(h>>>15),0x735a2d97);return (h^(h>>>15))>>>0;}
+  // Keep the physical seats, but distribute small groups rather than drawing
+  // an audience member in every chair. The room thins naturally toward the back.
+  const occupied=[];
+  for(let row=0;row<plan.config.rows;row++){
+    const seats=plan.seats.filter(s=>s.row===row),progress=row/Math.max(1,plan.config.rows-1);
+    const density=progress<.35?.68-.10*progress/.35:progress<.7?.44-.15*(progress-.35)/.35:.20-.12*(progress-.7)/.3;
+    const count=Math.round(seats.length*density);
+    const score=s=>hash(`group:${row}:${s.block}:${Math.floor(s.column/3)}`)/4294967296+hash(`seat:${c118SeatId(s)}`)/4294967296*.09;
+    occupied.push(...seats.sort((a,b)=>score(a)-score(b)||a.column-b.column).slice(0,count));
+  }
+  const people=occupied.map((s,i)=>{const id=c118SeatId(s),seed=hash(id);seatIndex.set(id,i);
     const matrix=new THREE.Matrix4().compose(new THREE.Vector3(s.x,s.y,s.z-.018),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,((seed%17)-8)*.007,0)),new THREE.Vector3(.94+(seed%9)*.012,.975+((seed>>>5)%6)*.008,1));
     return {id,seed,matrix,hair:seed%5<3?'short':seed%5===3?'long':'tied'};
   });

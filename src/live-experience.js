@@ -7,6 +7,7 @@ import {ACTIVITY_WORKS} from './activity-catalog.js';
 import {mountMobileViewport} from './mobile-viewport.js';
 import {createSkyQrExperience} from './sky-qr.js';
 import {nearbyInterior,crossedInteriorDoor,interiorReturnSnapshot} from './building-interiors.js';
+import {createActivityBridgeMessage} from './activity-bridge-state.js';
 import './live-experience.css';
 
 export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,getInteriors=()=>[],getWallText=()=>[],setSuspended,invalidate,notify}) {
@@ -47,7 +48,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     }
   }
   function bridge(){
-    if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage({type:'campus:activity',attemptId:opened?.attemptId,paused:!!client.state.paused||!!skyQr?.isOpen,announcement:isEventActive(client.state.announcement,client.now())?client.state.announcement:null,c118Flood:opened?.kind==='building-interior'&&opened.id==='opto-c118'?client.state.c118Flood??null:null,c118Screen:opened?.kind==='building-interior'&&opened.id==='opto-c118'?client.state.c118Screen??null:null,serverTime:client.now()},frameOrigin);
+    if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage(createActivityBridgeMessage({opened,state:client.state,serverTime:client.now(),locallyPaused:!!skyQr?.isOpen}),frameOrigin);
   }
   function loading(message,status='loading'){
     const el=$('.live-portal-loading');el.hidden=!message;el.dataset.status=status;el.textContent=message;

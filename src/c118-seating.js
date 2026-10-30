@@ -2,6 +2,11 @@
  * The walker stays in a valid aisle while the camera occupies a chair.
  */
 export const c118SeatId=seat=>`${seat.block}-${seat.row}-${seat.column}`;
+/** Preserve the screen's horizontal framing on narrower displays. */
+export function c118SeatedFov(view,aspect){
+  const viewportAspect=Number.isFinite(aspect)&&aspect>0?aspect:16/9;
+  return Math.min(115,2*Math.atan(Math.tan(view.fov*Math.PI/360)*Math.max(1,(16/9)/viewportAspect))*180/Math.PI);
+}
 const finitePose=p=>p&&['x','y','z'].every(k=>Number.isFinite(p[k]));
 const inside=(p,polygon)=>{let hit=false;for(let i=0,j=polygon.length-1;i<polygon.length;j=i++){
   const a=polygon[i],b=polygon[j];if((a.z>p.z)!==(b.z>p.z)&&p.x<(b.x-a.x)*(p.z-a.z)/(b.z-a.z)+a.x)hit=!hit;
@@ -19,7 +24,9 @@ export function createC118Seating(plan){
   const blockName={left:'左区',centre:'中区',right:'右区'};
   const seats=plan.seats.map(s=>({...s,id:c118SeatId(s),label:`${s.row+1} 排 · ${blockName[s.block]||s.block} ${s.column+1} 座`}));
   const byId=new Map(seats.map(s=>[s.id,s]));
-  const desiredRow=Math.min(plan.config.frontRows-2,Math.max(3,Math.round(plan.config.rows*.25)));
+  // The third row gives the screen a cinema-like share of the view while
+  // retaining a seated eye height and the stage below it.
+  const desiredRow=Math.min(2,plan.config.frontRows-1);
   const recommendedSeat=[...seats].sort((a,b)=>{
     const score=s=>Math.abs(s.row-desiredRow)*2+Math.abs(s.x)+(s.block==='centre'?0:100);
     return score(a)-score(b)||a.column-b.column;
@@ -29,9 +36,9 @@ export function createC118Seating(plan){
   function viewFor(id){
     const s=getSeat(id);if(!s)return null;
     // A seated adult's eyes stay below the room's standing camera and above
-    // the previous terrace's audience. The framing retains the whole stage.
+    // the previous terrace's audience. A tighter lens enlarges the screen without cropping its edges.
     const x=s.x,y=s.y+1.30,z=s.z-.025,dx=target.x-x,dz=target.z-z;
-    return {x,y,z,yaw:Math.atan2(-dx,-dz),pitch:Math.atan2(target.y-y,Math.hypot(dx,dz)),fov:52,seatId:s.id,label:s.label};
+    return {x,y,z,yaw:Math.atan2(-dx,-dz),pitch:Math.atan2(target.y-y,Math.hypot(dx,dz)),fov:38,seatId:s.id,label:s.label};
   }
   function nearest(position,maxDistance=2.4){
     if(!finitePose(position)||!Number.isFinite(maxDistance)||maxDistance<0)return null;

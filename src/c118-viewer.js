@@ -8,7 +8,7 @@ import {normalizeC118Flood,getC118FloodElapsed} from './c118-flood-state.js';
 import {createC118FloodEffect} from './c118-flood-effect.js';
 import {createC118FloodSensory} from './c118-flood-sensory.js';
 import {normalizeC118Screen} from './c118-screen-state.js';
-import {createC118Seating} from './c118-seating.js';
+import {createC118Seating,c118SeatedFov} from './c118-seating.js';
 import {createC118Audience} from './c118-audience.js';
 import './c118-viewer.css';
 
@@ -143,7 +143,7 @@ try{
     if(crossedC118Door(interior.plan,motion.state)){exit();return;}
     eyeY=THREE.MathUtils.damp(eyeY,motion.state.y+1.65,16,dt);
     camera.position.set(seatView?.x??motion.state.x,seatView?.y??eyeY,seatView?.z??motion.state.z);camera.rotation.set(pitch,heading,0);
-    let desiredFov=seatedSeat?Math.min(90,seatView.fov+Math.max(0,1.5-camera.aspect)*30):65;
+    let desiredFov=seatedSeat?c118SeatedFov(seatView,camera.aspect):65;
     if(seatTransition){
       const raw=Math.min(1,Math.max(0,(now-seatTransition.at)/550)),a=raw*raw*(3-2*raw),target=camera.position.clone();
       camera.position.copy(seatTransition.position).lerp(target,a);

@@ -3,6 +3,12 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {createC118ActivitySync} from '../src/c118-activity-sync.js';
+import {createActivityBridgeMessage} from '../src/activity-bridge-state.js';
+import {nearbyInterior,crossedInteriorDoor} from '../src/building-interiors.js';
+import {createGeoScene} from '../src/geo-scene.js';
+import {createLocalFrame,geoToLocal} from '../src/geospatial.js';
+import {createOptoBuilding,OPTO_BUILDING_ID} from '../src/opto-building.js';
+import * as THREE from 'three';
 
 const source=await readFile(new URL('../public/experiences/activity-bridge.js',import.meta.url),'utf8');
 const flood={id:'shared-flood',startAt:103000,pausedAt:null,pausedMs:0};
@@ -24,6 +30,47 @@ function fixture({work='opto-c118',search='?campusAttempt=visit-1',parentOrigin,
     get exits(){return exits;},get blurs(){return blurs;},get messageListeners(){return handlers.get('message')?.size||0;},
     message(data,overrides={}){const event={source:parent,origin:ownOrigin,data:{attemptId:'visit-1',...data},...overrides};for(const fn of [...(handlers.get('message')||[])])fn(event);}};
 }
+
+test('every real campus doorway carries the host flood and playlist through the embedded room bridge',async()=>{
+  const source=JSON.parse(await readFile(new URL('../public/data/opto-southeast.geojson',import.meta.url),'utf8'));
+  const feature=source.features.find(f=>f.id===OPTO_BUILDING_ID);
+  const frame=createLocalFrame({longitude:114.42123985,latitude:30.51575845,coordinateSystem:'EPSG:4326'});
+  const model=createGeoScene(THREE,new THREE.Scene(),{...source,features:[feature]},frame,geoToLocal);
+  const building=createOptoBuilding(THREE,model.buildings[0],{frame,geoToLocal});
+  try{
+    assert.equal(building.entries.length,3);
+    for(const entry of building.entries){
+      const pose=depth=>({x:entry.doorGate.center.x+entry.doorGate.normal.x*depth,y:entry.y,
+        z:entry.doorGate.center.z+entry.doorGate.normal.z*depth,mode:'walk',grounded:true});
+      for(const admitted of [nearbyInterior(building.entries,pose(.3)),crossedInteriorDoor(building.entries,pose(.3),pose(-.3))]){
+        assert.equal(admitted.id,entry.id);assert.notEqual(admitted.id,'opto-c118','the door has its own return identity');
+        const f=fixture(),seen=[];
+        const sync=createC118ActivitySync({embedded:true,bridge:f.bridge,onState:state=>seen.push(structuredClone(state)),monotonic:()=>50,
+          liveClientFactory(){assert.fail('an embedded room must share the campus connection');}});
+        const opened={...admitted,attemptId:'visit-1'};
+        f.message(createActivityBridgeMessage({opened,state:{paused:false,c118Flood:flood,c118Screen:screen},serverTime:107000}));
+        assert.deepEqual(seen.at(-1).c118Flood,flood,entry.id+' receives a running event, including late entrance');
+        assert.deepEqual(seen.at(-1).c118Screen,screen,entry.id+' receives host programme changes');
+        assert.equal(sync.now(),107000);assert.equal(seen.at(-1).paused,false);
+        f.message(createActivityBridgeMessage({opened,state:{paused:true,c118Flood:flood,c118Screen:screen},serverTime:108000}));
+        assert.equal(seen.at(-1).paused,true,'the host still pauses the room');
+        f.message(createActivityBridgeMessage({opened,state:{paused:false,c118Flood:null,c118Screen:screen},serverTime:109000}));
+        assert.equal(seen.at(-1).c118Flood,null,'reset reaches each doorway');sync.dispose();
+      }
+    }
+  }finally{building.dispose();model.dispose();}
+});
+
+test('the parent routes C118 programmes by room identity, without leaking them to unrelated works',()=>{
+  const state={paused:false,c118Flood:flood,c118Screen:screen};
+  for(const opened of [null,{id:'opto-c118',workId:'library',kind:'building-interior'},
+    {id:'anything',workId:'opto-c118',kind:'portal'},{id:'other-room',workId:'other-room',kind:'building-interior'}]){
+    const message=createActivityBridgeMessage({opened,state,serverTime:100000});
+    assert.equal(message.c118Flood,null);assert.equal(message.c118Screen,null);
+  }
+  const message=createActivityBridgeMessage({opened:{workId:'opto-c118',kind:'building-interior'},state,serverTime:100000,locallyPaused:true});
+  assert.equal(message.paused,true);assert.deepEqual(message.c118Flood,flood);
+});
 
 test('C118 bridge carries the shared flood and server clock into its embedded sync without another connection',()=>{
   const f=fixture();let mono=500;const seen=[];
