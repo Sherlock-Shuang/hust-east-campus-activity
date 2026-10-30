@@ -46,13 +46,24 @@ test('host controls one checkbox for the pair and busy refresh never re-enables 
   f.$('close-all-activities').click();await settle();assert.ok(f.state.portals.every(point=>!point.enabled));
 });
 
+function assertLinkedEditorLocked(f,context=''){
+  for(const field of ['portal-work','portal-url','portal-enabled']){
+    const control=f.$(field);assert.ok(control,`${field} exists ${context}`);assert.equal(control.disabled,true,`${field} ${context}`);
+  }
+  // The local control panel no longer renders scheduling fields. Older panels
+  // still render both disabled fields. Either presentation must prevent editing.
+  const schedule=['portal-start','portal-end'].map(field=>f.$(field));
+  assert.ok(schedule.every(control=>control===null)||schedule.every(control=>control?.disabled===true),`linked schedule is unavailable for editing ${context}`);
+}
+
 test('linked editor preserves independent location edits while schedule and admission remain tied to tasay',async t=>{
   const f=await fixture(t);f.choice('point-tasay').click();await f.submit('activity-launch-form');
   f.row().querySelector('[data-action="edit"]').click();
-  for(const field of ['portal-work','portal-url','portal-enabled','portal-start','portal-end'])assert.equal(f.$(field).disabled,true,field);
+  assertLinkedEditorLocked(f);
   assert.equal(f.$('portal-linked-note').hidden,false);assert.equal(f.$('location-x').disabled,false);assert.equal(f.$('portal-radius').disabled,false);
   f.$('location-x').value='852.4';f.$('location-z').value='-64.2';f.$('portal-radius').value='7';await f.submit('portal-form');
   const linked=f.state.portals.find(point=>point.id===SHE_LOVE_POINT_ID);assert.deepEqual([linked.x,linked.z,linked.radius],[852.4,-64.2,7]);assert.equal(linked.enabled,true);
+  const master=getTasayPortal(f.state.portals);assert.deepEqual([linked.enabled,linked.startAt,linked.endAt],[master.enabled,master.startAt,master.endAt]);
   assert.equal(f.choice(SHE_LOVE_POINT_ID).disabled,true);f.row().querySelector('[data-action="edit"]').click();
-  f.$('toggle-pause').click();await settle();for(const field of ['portal-work','portal-url','portal-enabled','portal-start','portal-end'])assert.equal(f.$(field).disabled,true,field+' after save');
+  f.$('toggle-pause').click();await settle();assertLinkedEditorLocked(f,'after save');
 });

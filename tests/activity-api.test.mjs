@@ -5,11 +5,18 @@ import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {createClient} from '@libsql/client';
-import {adaptLibsql,createTursoDatabase} from '../serverless/database.mjs';
-import {createActivityHandler} from '../serverless/handler.mjs';
-import {createNodeActivityHandler} from '../serverless/node-handler.mjs';
-import * as api from '../serverless/activity-api.mjs';
+import {existsSync} from 'node:fs';
+// The local Node host intentionally has no Vercel runtime/libSQL dependency.
+// Keep this deployment contract in the shared source tree without requiring
+// a second backend in that host. Deployment workspaces must run every case.
+if(!existsSync(new URL('../serverless/activity-api.mjs',import.meta.url))){
+  test('Vercel/libSQL contracts require the deployment workspace', {skip:'Run this suite in deployment/performance-200-20261030; the local Node host uses its own backend contracts'}, ()=>{});
+}else{
+const {createClient}=await import('@libsql/client');
+const {adaptLibsql,createTursoDatabase}=await import('../serverless/database.mjs');
+const {createActivityHandler}=await import('../serverless/handler.mjs');
+const {createNodeActivityHandler}=await import('../serverless/node-handler.mjs');
+const api=await import('../serverless/activity-api.mjs');
 const PASSWORD='local-vercel-api-test-only';
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const schema=await readFile(new URL('../serverless/schema.sql',import.meta.url),'utf8');
@@ -248,3 +255,5 @@ test('chat observation route is reachable through serverless rewrite and require
  const response=await fetch(base+'/api/activity?__activity_path=works/she-love-me/analyze',{method:'POST',headers:{Origin:base,'Content-Type':'application/json','x-forwarded-proto':'http'},body:'{}'});
  assert.equal(response.status,401);
 });
+
+}
