@@ -13,7 +13,7 @@ import {createCampusTsunami,mountCampusTsunamiNotice} from './campus-tsunami.js'
 import './live-experience.css';
 import './campus-tsunami.css';
 
-export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,getInteriors=()=>[],getWallText=()=>[],setSuspended,invalidate,notify}) {
+export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,getInteriors=()=>[],getWallText=()=>[],setSuspended,invalidate,notify,tsunamiQuality='desktop',handheld=false}) {
   const disposeMobileViewport=mountMobileViewport();
   const root=document.createElement('div');root.id='live-experience';
   root.innerHTML=`
@@ -36,14 +36,13 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   }});
   const projected=new THREE.Vector3();
   const reduced=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
-  const campusTsunami=createCampusTsunami({THREE,scene});
-  const tsunamiNotice=mountCampusTsunamiNotice({THREE,root,camera,effect:campusTsunami});
-  let lastTsunamiPaint=-Infinity;
+  const campusTsunami=createCampusTsunami({THREE,scene,quality:tsunamiQuality});
+  const tsunamiNotice=mountCampusTsunamiNotice({THREE,root,camera,effect:campusTsunami,scene});
   function updateTsunami(){
     if(!client||disposed)return false;
     const changed=campusTsunami.update({event:client.state.c118Flood,now:client.now(),
       visible:!opened&&!document.hidden&&!!audienceUI?.registered,paused:client.state.paused,reducedMotion:reduced?.matches});
-    tsunamiNotice.update({paused:client.state.paused});
+    tsunamiNotice.update({paused:client.state.paused,reducedMotion:reduced?.matches});
     root.dataset.campusTsunami=campusTsunami.active?campusTsunami.sample.phase:'hidden';
     return changed;
   }
@@ -240,6 +239,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   const timer=setInterval(()=>refresh(),200);
   const visibility=()=>refresh(true);document.addEventListener('visibilitychange',visibility);
   return {
+    setPerformanceBudget({level}){return campusTsunami.setQuality(level===0?'low':handheld?'mobile':'desktop');},
     get frozen(){return lastFrozen;},get portalOpen(){return !!opened;},get state(){return client.state;},
     sync(){refresh(true);setSuspended(lastFrozen);if(restorePending&&audienceUI.registered&&!lastFrozen&&getPlayer()){
       restorePending=false;try{const stored=JSON.parse(sessionStorage.getItem('campus-return-pose'));if(stored?.audienceId===audienceUI.client.identity.id)getPlayer().restoreActivityPose?.(stored.pose);}catch{}
@@ -248,7 +248,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       // The shared catastrophe animates even when the host has no map markers.
       // A hidden/embedded campus submits no wave work while C118 renders itself.
       let tsunamiChanged=false;
-      if((client.state.c118Flood||campusTsunami.active)&&now-lastTsunamiPaint>=33){lastTsunamiPaint=now;tsunamiChanged=updateTsunami();}
+      if(client.state.c118Flood||campusTsunami.active)tsunamiChanged=updateTsunami();
       if(!items.length||document.hidden||opened)return tsunamiChanged;
       if(now-lastUpdate<66)return tsunamiChanged;lastUpdate=now;
       camera.updateMatrixWorld();

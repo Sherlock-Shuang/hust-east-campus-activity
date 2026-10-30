@@ -14,6 +14,13 @@ const clamp=value=>Math.max(0,Math.min(1,value));
 const smooth=value=>{const t=clamp(value);return t*t*(3-2*t);};
 const glslFloat=value=>Number.isInteger(value)?`${value}.`:String(value);
 const spectrum=CAMPUS_FLOOD_WAVES.map(([a,x,z,t,p])=>`${glslFloat(a)}*sin(p.x*${glslFloat(x)}+p.y*${glslFloat(z)}+uTime*${glslFloat(t)}+${glslFloat(p)})`).join('+');
+const phaseVector=CAMPUS_FLOOD_WAVES.map(([,x,z,t,p])=>`p.x*${glslFloat(x)}+p.y*${glslFloat(z)}+uTime*${glslFloat(t)}+${glslFloat(p)}`).join(',');
+const waveCoefficients=component=>CAMPUS_FLOOD_WAVES.map(wave=>glslFloat(component===0?wave[0]:wave[0]*wave[component])).join(',');
+const WATER_QUALITY=Object.freeze({
+  desktop:{segmentsX:180,segmentsZ:160,detail:2},
+  mobile:{segmentsX:128,segmentsZ:112,detail:1},
+  low:{segmentsX:88,segmentsZ:80,detail:0},
+});
 
 function configuration(placement={}){
   const config={...CAMPUS_FLOOD_WATER,...placement};
@@ -52,27 +59,31 @@ const waterField=/* glsl */`
   float waterHeight(vec2 p){float fill=floodFill(p);return -1.+(uLevel+1.)*fill+fill*uRipple*(${spectrum});}
 `;
 
-export function createCampusFloodwater({THREE,placement={}}){
+export function createCampusFloodwater({THREE,placement={},quality='desktop'}){
   const config=configuration(placement),group=new THREE.Group();group.name='campus-floodwater';group.visible=false;
+  const budget=Object.hasOwn(WATER_QUALITY,quality)?WATER_QUALITY[quality]:WATER_QUALITY.desktop;
   group.position.x=config.x;
   let geometry=null,material=null,disposed=false;
   let state={active:false,elapsed:0,front:Infinity,reducedMotion:false};
   const uniforms={uTime:{value:0},uFront:{value:4200},uCenterX:{value:config.x},uHalfWidth:{value:config.width/2},
-    uArcDepth:{value:config.arcDepth},uLevel:{value:config.level},uFillDistance:{value:config.fillDistance},uRipple:{value:1}};
+    uArcDepth:{value:config.arcDepth},uLevel:{value:config.level},uFillDistance:{value:config.fillDistance},uRipple:{value:1},
+    uHazeColor:{value:new THREE.Color('#cbd6d6')},uHazeNear:{value:480},uHazeFar:{value:2900},uHazeDensity:{value:0},uHazeMode:{value:1}};
   function build(){
     if(geometry)return;
-    geometry=new THREE.PlaneGeometry(config.width,config.maxZ-config.minZ,180,160);
+    geometry=new THREE.PlaneGeometry(config.width,config.maxZ-config.minZ,budget.segmentsX,budget.segmentsZ);
     geometry.rotateX(-Math.PI/2);geometry.translate(0,0,(config.maxZ+config.minZ)/2);
-    material=new THREE.ShaderMaterial({uniforms,transparent:true,depthWrite:false,side:THREE.DoubleSide,fog:false,
+    material=new THREE.ShaderMaterial({uniforms,defines:{WATER_DETAIL:budget.detail},transparent:true,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,fog:false,
       vertexShader:/* glsl */`
         #include <common>
         #include <logdepthbuf_pars_vertex>
         ${waterField}
         varying vec3 vWorld;
+        varying float vViewDepth;
         void main(){
           vec3 p=position;vec2 worldXZ=vec2(p.x+uCenterX,p.z);p.y=waterHeight(worldXZ);
           vWorld=(modelMatrix*vec4(p,1.)).xyz;
-          gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);
+          vec4 view=modelViewMatrix*vec4(p,1.);vViewDepth=-view.z;
+          gl_Position=projectionMatrix*view;
           #include <logdepthbuf_vertex>
         }`,
       fragmentShader:/* glsl */`
@@ -80,35 +91,97 @@ export function createCampusFloodwater({THREE,placement={}}){
         #include <logdepthbuf_pars_fragment>
         ${waterField}
         varying vec3 vWorld;
-        float hash21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-        float noise21(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash21(i),hash21(i+vec2(1.,0.)),f.x),mix(hash21(i+vec2(0.,1.)),hash21(i+1.),f.x),f.y);}
+        varying float vViewDepth;
+        uniform vec3 uHazeColor;
+        uniform float uHazeNear,uHazeFar,uHazeDensity,uHazeMode;
+        // Hash arithmetic avoids another sine for every corner of every noise cell.
+        float hash21(vec2 p){vec3 h=fract(vec3(p.xyx)*.1031);h+=dot(h,h.yzx+33.33);return fract((h.x+h.y)*h.z);}
+        // Value and analytical derivatives share the same four lattice samples.
+        vec3 noiseGradient(vec2 p){
+          vec2 cell=floor(p),f=fract(p),u=f*f*(3.-2.*f),du=6.*f*(1.-f);
+          float a=hash21(cell),b=hash21(cell+vec2(1.,0.)),c=hash21(cell+vec2(0.,1.)),d=hash21(cell+1.);
+          return vec3(mix(mix(a,b,u.x),mix(c,d,u.x),u.y),du*vec2(mix(b-a,d-c,u.y),mix(c-a,d-b,u.x)));
+        }
+        vec2 waterGradient(vec2 p,float distance,float fill){
+          vec3 phase=vec3(${phaseVector}),s=sin(phase),c=cos(phase);
+          float swell=dot(vec3(${waveCoefficients(0)}),s);
+          vec2 slope=vec2(dot(vec3(${waveCoefficients(1)}),c),dot(vec3(${waveCoefficients(2)}),c));
+          float t=clamp(distance/uFillDistance,0.,1.),fillDerivative=6.*t*(1.-t)/uFillDistance;
+          vec2 frontGradient=vec2(-2.*uArcDepth*(p.x-uCenterX)/(uHalfWidth*uHalfWidth),1.);
+          return frontGradient*fillDerivative*(uLevel+1.+uRipple*swell)+fill*uRipple*slope;
+        }
         void main(){
           #include <logdepthbuf_fragment>
           float distance=floodDistance(vWorld.xz);if(distance<=0.)discard;
           float fill=floodFill(vWorld.xz);
           vec2 p=vWorld.xz;
-          float e=1.,dx=waterHeight(p+vec2(e,0.))-waterHeight(p-vec2(e,0.));
-          float dz=waterHeight(p+vec2(0.,e))-waterHeight(p-vec2(0.,e));
-          vec2 flow=p*vec2(.13,.22)+vec2(uTime*.19,uTime*.95);
-          float noise=noise21(flow),fine=noise21(flow*3.7+vec2(uTime*.4,0.));
-          vec3 normal=normalize(vec3(-dx+sin(p.x*.31+p.y*.18+uTime*2.4)*.16*uRipple,2.,-dz+sin(p.y*.43-uTime*3.)*.21*uRipple));
+          vec2 slope=waterGradient(p,distance,fill);
+          // Irregular patches advect north in world metres, never in mesh UV rows.
+          mat2 rotation=mat2(.8,.6,-.6,.8);
+          vec2 drift=vec2(uTime*.045,uTime*.55);
+          vec3 broad=noiseGradient(rotation*(p*.012+drift*.27));
+          vec2 flow=rotation*(p*vec2(.035,.053)+drift)+vec2(broad.x,-broad.x)*1.7;
+          vec3 churn=noiseGradient(flow);
+          float footprint=max(length(dFdx(flow)),length(dFdy(flow)));
+          float detailFade=1.-smoothstep(.4,1.6,footprint);
+          vec2 detailSlope=churn.yz*.045*detailFade;
+          float flecks=churn.x;
+          #if WATER_DETAIL > 0
+            vec3 small=noiseGradient(rotation*flow*3.1+vec2(2.7,-uTime*.19));
+            float smallFade=1.-smoothstep(.3,1.1,footprint*3.1);
+            detailSlope+=small.yz*.026*smallFade;
+            flecks=mix(flecks,small.x,.40*smallFade);
+          #endif
+          #if WATER_DETAIL > 1
+            vec3 micro=noiseGradient(flow*7.3+vec2(-uTime*.21,4.3));
+            float microFade=1.-smoothstep(.25,.9,footprint*7.3);
+            detailSlope+=micro.yz*.012*microFade;
+            flecks=mix(flecks,micro.x,.16*microFade);
+          #endif
+          slope+=vec2(.8*detailSlope.x+.6*detailSlope.y,-.6*detailSlope.x+.8*detailSlope.y)*uRipple*fill;
+          vec3 normal=normalize(vec3(-slope.x,1.,-slope.y));
           if(!gl_FrontFacing)normal=-normal;
           vec3 eye=normalize(cameraPosition-vWorld);
-          float fresnel=pow(1.-max(0.,dot(eye,normal)),3.);
-          float streak=pow(.5+.5*sin(p.y*.72+p.x*.18+noise*6.+uTime*4.1),10.);
-          float frontFoam=(1.-smoothstep(15.,240.,distance))*smoothstep(.23,.7,noise);
-          float foam=frontFoam*.88+streak*smoothstep(.33,.72,fine)*.58+smoothstep(.79,.98,noise)*.30;
-          float shine=pow(max(0.,dot(reflect(-normalize(vec3(-.3,.85,.15)),normal),eye)),52.);
-          vec3 color=mix(vec3(.02,.17,.21),vec3(.11,.38,.41),fresnel*.60+noise*.18);
-          color+=vec3(.32,.48,.46)*shine*.55;
-          color=mix(color,vec3(.80,.94,.91),clamp(foam,0.,.95));
-          float alpha=(gl_FrontFacing?.84:.42)*smoothstep(0.,.07,fill);
+          float facing=clamp(dot(eye,normal),0.,1.);
+          float fresnel=.02+.98*pow(1.-facing,5.);
+          // Approximate optical thickness from inundation, without a scene-depth pass.
+          float thickness=max(.15,(uLevel+1.)*fill)/max(.28,facing);
+          vec3 transmission=exp(-vec3(.26,.115,.075)*thickness);
+          vec3 waterColor=vec3(.16,.23,.20)*transmission+vec3(.021,.103,.125)*(1.-transmission);
+          vec3 reflected=reflect(-eye,normal);
+          vec3 sky=mix(uHazeColor*.94,vec3(.19,.32,.43),pow(clamp(reflected.y,0.,1.),.65));
+          vec3 color=mix(waterColor,sky,fresnel*(gl_FrontFacing?.86:.28));
+          vec3 sun=normalize(vec3(650.,520.,420.));
+          float shine=pow(max(0.,dot(normal,normalize(sun+eye))),96.);
+          color+=vec3(1.,.89,.70)*shine*.32*detailFade;
+          // Broken front patches decay into sparse, stretched eddies behind the bore.
+          float head=(1.-smoothstep(75.,420.,distance))*smoothstep(0.,32.,distance);
+          float wake=exp(-max(0.,distance-220.)/1500.);
+          float broken=smoothstep(.48,.76,churn.x*.64+broad.x*.36);
+          float lace=1.-smoothstep(.025,.14,abs(churn.x-.56));
+          float foam=head*broken*.90+wake*lace*smoothstep(.48,.72,broad.x)*.34;
+          foam*=mix(.65,1.14,flecks)*smoothstep(0.,.12,fill);
+          foam=clamp(foam,0.,.91);
+          vec3 foamColor=mix(vec3(.43,.55,.55),vec3(.87,.91,.86),.45+flecks*.45);
+          color=mix(color,foamColor,foam*(gl_FrontFacing?1.:.45));
+          float alpha=mix(gl_FrontFacing?.79:.48,gl_FrontFacing?.95:.76,fill*.75+foam*.25)*smoothstep(0.,.07,fill);
+          float haze=uHazeMode<.5?0.:uHazeMode>1.5?1.-exp(-uHazeDensity*uHazeDensity*vViewDepth*vViewDepth):smoothstep(uHazeNear,uHazeFar,vViewDepth);
+          color=mix(color,uHazeColor,clamp(haze,0.,1.));
           gl_FragColor=vec4(color,alpha);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,
     });
     const mesh=new THREE.Mesh(geometry,material);mesh.name='campus-advancing-floodwater';mesh.frustumCulled=false;mesh.renderOrder=8;group.add(mesh);
+    // Use the scene's live fog range (including overview changes) while preserving
+    // the independent water shader and its existing no-automatic-fog contract.
+    mesh.onBeforeRender=(_renderer,scene)=>{
+      const fog=scene.fog;uniforms.uHazeMode.value=fog?(fog.isFogExp2?2:1):0;
+      if(!fog)return;
+      uniforms.uHazeColor.value.copy(fog.color);
+      if(fog.isFogExp2)uniforms.uHazeDensity.value=fog.density;
+      else{uniforms.uHazeNear.value=fog.near;uniforms.uHazeFar.value=fog.far;}
+    };
   }
   return {
     group,

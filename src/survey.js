@@ -181,6 +181,7 @@ function applyPerformanceBudget(){
   renderer.shadowMap.needsUpdate=true;lastShadowAt=-Infinity;
   waterDetails?.setReflectionBudget({enabled:qualityBudget.reflectionEnabled,intervalMs:qualityBudget.reflectionIntervalMs});
   commute?.setPerformanceBudget?.({trafficHz:qualityBudget.trafficHz,detailDistanceScale:qualityBudget.detailDistanceScale});
+  liveControl?.setPerformanceBudget?.(qualityBudget);
   qualityUI.update(qualityBudget);canvas.dataset.qualityMode=qualityBudget.mode;canvas.dataset.qualityLevel=qualityBudget.name;
   needsRender=true;
 }
@@ -1061,7 +1062,7 @@ function render(now) {
     // A ground-scale fog cutoff hid the far half of the campus in overview.
     // Keep normal street haze while retaining spatial context at aerial scale.
     const overviewLift=Math.max(0,camera.position.y-120);
-    scene.fog.near=480+overviewLift*.9;scene.fog.far=2900+overviewLift*1.3;
+    if(scene.fog.name!=='campus-tsunami-immersion'){scene.fog.near=480+overviewLift*.9;scene.fog.far=2900+overviewLift*1.3;}
     campus?.update?.(camera, { viewportHeight,detailDistanceScale:qualityBudget.detailDistanceScale });
     if(now-lastLabelAt>=100){updateLabels();lastLabelAt=now;}
     if(!frozen)waterDetails?.renderReflection(renderer,scene,camera,now);
@@ -1086,6 +1087,7 @@ function render(now) {
 }
 camera.position.set(500, 1600, 900);
 liveControl = createLiveExperience({THREE,scene,camera,canvas,container,
+  tsunamiQuality:qualityBudget.level===0?'low':renderProfile.handheld?'mobile':'desktop',handheld:renderProfile.handheld,
   getPlayer:()=>commute?.player,
   getInteriors:()=>campus?.optoEntries||[],
   getWallText:()=>campus?.group.visible&&campus.layers.get('building')?.visible?campus.aiMuralPlan:[],
