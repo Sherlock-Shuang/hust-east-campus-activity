@@ -1,3 +1,4 @@
+import {createClientId} from './browser-compat.js';
 import {preflightExperience} from './experience-preflight.js';
 import {createLiveClient} from './live-client.js';
 import {mountAnnouncementNotice} from './live-announcement.js';
@@ -107,7 +108,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     if(!player?.active||Math.hypot(player.state.x-current.x,player.state.z-current.z)>current.radius||player.state.y>12)return notify('请先靠近这个入口');
     const url=new URL(current.url,location.href);
     if(!['http:','https:'].includes(url.protocol))return;
-    const attemptId=crypto.randomUUID();opened={...current,attemptId,openingStarted:false,registeredAttempt:false,ready:false,loadController:new AbortController()};frameOrigin=url.origin;rememberPose();updateFrozen();
+    const attemptId=createClientId();opened={...current,attemptId,openingStarted:false,registeredAttempt:false,ready:false,loadController:new AbortController()};frameOrigin=url.origin;rememberPose();updateFrozen();
     $('.live-portal-bar > span').textContent=current.label;portalView.hidden=false;prompt.hidden=true;loading('正在连接作品，首次进入需要加载模型与游戏资源…');
     try{
       await record('visit',{pointId:current.id,position:position()},{required:true});visited.add(current.id);
@@ -144,7 +145,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     if(client.state.paused||opened||skyQr?.isOpen||!audienceUI.registered)return;
     const player=getPlayer(),current=player?.active&&(crossedFrom?crossedInteriorDoor(getInteriors(),crossedFrom,player.state):nearbyInterior(getInteriors(),player.state));
     if(!current||current.id!==requested.id)return notify('请步行靠近光电楼开启的玻璃门');
-    const attemptId=crypto.randomUUID(),url=new URL(current.url,location.href);
+    const attemptId=createClientId(),url=new URL(current.url,location.href);
     opened={...current,attemptId,openingStarted:false,ready:false};frameOrigin=url.origin;rememberPose();updateFrozen();
     $('.live-portal-bar > span').textContent=current.label;prompt.hidden=true;portalView.hidden=false;
     loading('正在准备 C118 报告厅…');

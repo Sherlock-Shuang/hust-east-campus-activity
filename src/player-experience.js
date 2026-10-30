@@ -112,10 +112,10 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     const spider=motion.state.mode==='spider';
     const cameraState=suitView?{...motion.state,vx:0,vz:0,speed:0,verticalSpeed:0,grounded:true,anchor:null,candidateAnchor:null,lean:0,zipActive:false,diving:false,pointPhase:'idle',pointTarget:null,trickActive:false,trickBlend:0}:motion.state;
     const desired=spider?spiderCamera.update(cameraState,dt,{view,snap,world,groundAt:motion.groundAt,
-      lookLocked:pointerLock.locked||lookHold>0||!!drag||!!mouseLook?.looking||steeringSideways||suitView,comfortable:comfortableCamera,
+      lookLocked:pointerLock.locked||lookHold>0||!!drag||mobileControls?.looking||!!mouseLook?.looking||steeringSideways||suitView,comfortable:comfortableCamera,
       heading:suitView?suitAngle:undefined,
       pitch:suitView?suitPitch:(manualPitch||view==='first'?pitch:undefined),distance:suitView?suitDistance:distance
-    }):vehicleCamera.update(motion.state,dt,{view,snap,world,groundAt:motion.groundAt,lookLocked:motion.state.mode==='walk'||pointerLock.locked||lookHold>0||!!drag||!!mouseLook?.looking,comfortable:comfortableCamera,pitch:manualPitch||view==='first'?pitch:undefined,distance,baseFov:motion.state.mode==='roadster'?58:undefined});
+    }):vehicleCamera.update(motion.state,dt,{view,snap,world,groundAt:motion.groundAt,lookLocked:motion.state.mode==='walk'||pointerLock.locked||lookHold>0||!!drag||mobileControls?.looking||!!mouseLook?.looking,comfortable:comfortableCamera,pitch:manualPitch||view==='first'?pitch:undefined,distance,baseFov:motion.state.mode==='roadster'?58:undefined});
     followPosition.set(desired.position.x,desired.position.y,desired.position.z);
     lookTarget.set(desired.target.x,desired.target.y,desired.target.z);
     camera.position.copy(followPosition);controls.target.copy(lookTarget);camera.lookAt(lookTarget);
@@ -298,7 +298,8 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     }
     if(drag&&drag.id!==e.pointerId)return;
     measureLookViewport();
-    canvas.setPointerCapture(e.pointerId);
+    e.preventDefault?.();
+    try{canvas.setPointerCapture?.(e.pointerId);}catch{}
     drag={id:e.pointerId,x:e.clientX,y:e.clientY};lookHold=1.5;
   });
   function applyLook(deltaX,deltaY,touch=false){
@@ -335,10 +336,10 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(mouse)mouseLook.looking=true;
     applyLook(dx,dy,!mouse);
   });
-  const releasePointer=e=>{if(e.pointerType!=='mouse'&&drag&&drag.id!==e.pointerId)return;drag=null;mouseLook=null;held.delete('mouse-swing');};
+  const releasePointer=e=>{if(e.pointerType!=='mouse'){if(drag?.id===e.pointerId)releaseLookContact();return;}mouseLook=null;held.delete('mouse-swing');};
   on(canvas,'pointerup',e=>{if(e.pointerType==='mouse')held.delete('mouse-swing');else releasePointer(e);});
   on(canvas,'pointercancel',releasePointer);on(canvas,'lostpointercapture',releasePointer);
-  on(window,'pointerup',e=>{if(e.pointerType==='mouse')held.delete('mouse-swing');});
+  on(window,'pointerup',releasePointer);on(window,'pointercancel',releasePointer);
   on(canvas,'pointerleave',e=>{if(e.pointerType==='mouse'&&!pointerLock.locked){mouseLook=null;held.delete('mouse-swing');}});
   on(canvas,'wheel',e=>{if(!active)return;e.preventDefault();if(suitView){suitDistance=Math.max(1.8,Math.min(6,suitDistance*Math.exp(e.deltaY*.001)));return;}const base=motion.state.mode==='helicopter'?18:motion.state.mode==='roadster'?9.4:motion.state.mode==='hoverboard'?8.8:motion.state.mode==='spider'?6.6:motion.state.mode==='scooter'?8.8:6.4;distance=Math.max(2,Math.min(35,(distance??base)*Math.exp(e.deltaY*.001)));},{passive:false});
   on(canvas,'contextmenu',e=>{if(active)e.preventDefault();});
@@ -479,6 +480,8 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   }
   mobileControls=createMobileControls({document,window,movementSurface:canvas,canUse:()=>active&&!disposed&&!inputBlocked(),
     joystickScale:preferences.value.joystickScale,
+    onLookStart:()=>{measureLookViewport();lookHold=1.5;},
+    onLook:(dx,dy)=>applyLook(dx,dy,true),
     onAxes:axes=>{mobileAxes=axes;},
     onHold:(name,down)=>{if(down){stopSuitView();if(name==='up'&&motion.state.mode==='roadster'&&!armRoadsterJet())return;mobileHeld.add(name);if(['up','down','brake'].includes(name)){liftTarget=null;landing=false;cruise=false;}}else mobileHeld.delete(name);},
     onAction:name=>{

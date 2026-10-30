@@ -45,18 +45,18 @@ const yieldBrowserTask=()=>new Promise(resolve=>setTimeout(resolve,0));
 const spiderGeometryReady=preloadSpiderGeometry();
 canvas.dataset.spiderPreparation='preparing';
 spiderGeometryReady.then(ready=>{canvas.dataset.spiderPreparation=ready?'prepared':'on-demand';});
+const renderProfile=createMobileRenderProfile({coarsePointer:window.matchMedia('(any-pointer: coarse)').matches,maxTouchPoints:navigator.maxTouchPoints,width:innerWidth,height:innerHeight,devicePixelRatio});
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  antialias: true,
+  antialias: !renderProfile.handheld,
   logarithmicDepthBuffer: true,
-  powerPreference: "high-performance",
+  powerPreference: renderProfile.handheld?"default":"high-performance",
 });
 const renderCadence=createRenderCadence();
 const gpuTimer=createGpuFrameTimer(renderer,{enabled:new URLSearchParams(location.search).get('diagnostics')==='1'&&new URLSearchParams(location.search).get('gpu')==='1'});
 renderer.info.autoReset=false;
 let lastRenderedAt=NaN,renderCpuAccumulator=0,firstDrawPending=false,lastPasses={};
 let inputObservation=null;
-const renderProfile=createMobileRenderProfile({coarsePointer:window.matchMedia('(any-pointer: coarse)').matches,maxTouchPoints:navigator.maxTouchPoints,width:innerWidth,height:innerHeight,devicePixelRatio});
 const performanceQuality=createPerformanceQuality({deviceRatio:devicePixelRatio,handheld:renderProfile.handheld,hardwareConcurrency:navigator.hardwareConcurrency,deviceMemory:navigator.deviceMemory,mode:readQualityPreference()});
 performanceQuality.setViewport(innerWidth,innerHeight);
 let qualityBudget=performanceQuality.budget, appliedBudget=null, lastShadowAt=-Infinity;
@@ -691,7 +691,7 @@ async function loadDataset(data, manifest = {}) {
   scene.add(campus.group);
   riverTerrain=applyRiverTerrain(THREE,{model,datum,surfaces});
   scene.add(riverTerrain.group);
-  waterDetails=createWaterDetails(THREE,{records:model.water,reflection:true});
+  waterDetails=createWaterDetails(THREE,{records:model.water,reflection:renderProfile.reflection});
   waterDetails.setReflectionBudget({enabled:qualityBudget.reflectionEnabled,intervalMs:qualityBudget.reflectionIntervalMs});
   scene.add(waterDetails.group);
   applyLayers();
@@ -735,6 +735,7 @@ async function loadDataset(data, manifest = {}) {
     const selector = document.querySelector('.transport-selector') || $("commute-panel");
     if (selector) selector.hidden = true;
     console.warn("This dataset has no supported commute route:", error);
+    throw new Error("步行探索未能启动，请以流畅画质重新载入。");
   }
   startupTimings.playerBuildMs=performance.now()-playerStarted;
   startupTimings.worldReadyMs=performance.now()-startupStarted;
@@ -742,6 +743,7 @@ async function loadDataset(data, manifest = {}) {
   startupTimings.interactiveMs=startupTimings.worldReadyMs;
   firstDrawPending=true;
   canvas.dataset.startupTimings=JSON.stringify(startupTimings);
+  window.dispatchEvent(new Event('campus:ready'));
   $("load-screen").hidden = true;
   liveControl?.sync();
   if (model.warnings.length)
@@ -1162,6 +1164,7 @@ try {
 } catch (error) {
   $("load-screen").querySelector("span").textContent = "数据尚未加载";
   $("load-screen").querySelector("small").textContent = error.message;
+  window.dispatchEvent(new CustomEvent('campus:startup-error',{detail:error.message}));
   console.error(error);
 }
 

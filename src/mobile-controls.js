@@ -1,6 +1,6 @@
 // Touch inputs feed the same movement/actions as the keyboard. Every contact
 // owns its input until that exact pointer releases; no gesture latches a web.
-export function createMobileControls({document,window,movementSurface,canUse=()=>true,onAction=()=>{},onHold=()=>{},onAxes=()=>{},onReset=()=>{},onChange=()=>{},joystickScale=1}={}){
+export function createMobileControls({document,window,movementSurface,canUse=()=>true,onAction=()=>{},onHold=()=>{},onAxes=()=>{},onLook=()=>{},onLookStart=()=>{},onReset=()=>{},onChange=()=>{},joystickScale=1}={}){
   const $=id=>document?.getElementById?.(id),root=$('mobile-controls'),joystick=$('mobile-joystick'),stick=$('mobile-stick');
   const extra=$('mobile-extra-actions'),orientationHint=$('mobile-orientation-hint');
   const holds=Array.from(root?.querySelectorAll?.('[data-mobile-hold]')||[]),actions=Array.from(root?.querySelectorAll?.('[data-mobile-action]')||[]);
@@ -8,7 +8,7 @@ export function createMobileControls({document,window,movementSurface,canUse=()=
   const portraitContinue=orientationHint?.querySelector?.('[data-mobile-action="continue-portrait"]');
   if(portraitContinue&&!actions.includes(portraitContinue))actions.push(portraitContinue);
   const listeners=[],pointers=new Map(),holdOwners=new Map(),keyboardOwners=new Map();
-  let disposed=false,resetting=false,joy=null,axes={forward:0,sideways:0},more=false,portraitDismissed=false,pendingFullscreen=false;
+  let disposed=false,resetting=false,joy=null,look=null,axes={forward:0,sideways:0},more=false,portraitDismissed=false,pendingFullscreen=false;
   let state={active:false,suspended:false,mode:'walk',view:'third',canInteract:false,interactionLabel:'',pointReady:false,pointPhase:'idle'};
   const coarse=window?.matchMedia?.('(any-pointer: coarse)'),landscape=window?.matchMedia?.('(orientation: landscape)');
   let enabled=!!coarse?.matches;
@@ -37,12 +37,14 @@ export function createMobileControls({document,window,movementSurface,canUse=()=
     else if(owners?.delete(owner)&&owners.size===0){holdOwners.delete(action);onHold(action,false);}
   }
   function releasePointer(id){
+    if(look?.id===id){look=null;releaseCapture(movementSurface,id);}
     if(joy?.id===id){const old=joy;joy=null;pressed(joystick,false);if(joystick){joystick.style.left='';joystick.style.top='';}if(stick)stick.style.transform='translate(0px, 0px)';setAxes({forward:0,sideways:0});releaseCapture(joystick,old.id);}
     const owned=pointers.get(id);if(!owned)return;
     pointers.delete(id);if(owned.hold)setHold(owned.hold,id,false);pressed(owned.button,false);releaseCapture(owned.button,id);
   }
   function reset(){
     if(disposed||resetting)return;resetting=true;
+    if(look)releasePointer(look.id);
     if(joy)releasePointer(joy.id);
     for(const id of Array.from(pointers.keys()))releasePointer(id);
     for(const [button,owner]of keyboardOwners){setHold(button.dataset.mobileHold,owner,false);pressed(button,false);}keyboardOwners.clear();
@@ -105,14 +107,32 @@ export function createMobileControls({document,window,movementSurface,canUse=()=
   listen(document,'pointerdown',e=>{
     if(e.pointerType!=='touch'&&e.pointerType!=='pen')return;
     enable();
-    // Capture only bare scene touches. Buttons, announcement text, entry
-    // prompts and embedded experiences retain their own input and scrolling.
+    // Assign each bare-scene finger once. A contact cannot switch between
+    // walking and looking when crossing the midpoint or another control.
     if(!usable()||!joystick||e.target!==movementSurface)return;
     const rect=movementSurface.getBoundingClientRect();
-    if(e.clientX<rect.left||e.clientX>rect.left+rect.width*.48||e.clientY<rect.top||e.clientY>rect.top+rect.height)return;
-    // Even a second left-side finger must not become a camera gesture.
-    prevent(e);startJoystick(e);
+    if(e.clientX<rect.left||e.clientX>rect.left+rect.width||e.clientY<rect.top||e.clientY>rect.top+rect.height)return;
+    prevent(e);
+    if(e.clientX<=rect.left+rect.width*.48){startJoystick(e);return;}
+    if(look)return;
+    look={id:e.pointerId,x:e.clientX,y:e.clientY};capture(movementSurface,e.pointerId);onLookStart();
   },{capture:true,passive:false});
+  function moveLook(e){
+    if(!look||look.id!==e.pointerId)return;
+    if(!usable()){reset();return;}prevent(e);
+    const dx=e.clientX-look.x,dy=e.clientY-look.y;look.x=e.clientX;look.y=e.clientY;
+    if(Number.isFinite(dx)&&Number.isFinite(dy)&&(dx||dy))onLook(dx,dy);
+  }
+  listen(movementSurface,'pointermove',moveLook,{passive:false});
+  listen(window,'pointermove',moveLook,{passive:false});
+  for(const type of ['pointerup','pointercancel','lostpointercapture'])listen(movementSurface,type,e=>releasePointer(e.pointerId));
+  const gameTarget=target=>target===movementSurface||target===joystick||!!root?.contains?.(target);
+  // Android's long-press context menu can vibrate before it opens. Block the
+  // native gesture only on game surfaces; forms and embedded games keep theirs.
+  for(const type of ['contextmenu','selectstart','dragstart'])listen(document,type,e=>{
+    if(usable()&&gameTarget(e.target))prevent(e);
+  },{capture:true});
+  listen(document,'touchstart',e=>{if(usable()&&gameTarget(e.target))e.preventDefault?.();},{capture:true,passive:false});
   listen(joystick,'pointerdown',startJoystick,{passive:false});
   listen(joystick,'pointermove',moveJoystick,{passive:false});
   listen(window,'pointermove',moveJoystick,{passive:false});
@@ -197,5 +217,5 @@ export function createMobileControls({document,window,movementSurface,canUse=()=
     render();
   }
   setJoystickScale(joystickScale);render();
-  return {update,reset,setJoystickScale,get enabled(){return enabled;},get axes(){return {...axes};},dispose(){if(disposed)return;reset();disposed=true;listeners.forEach(remove=>remove());if(root)root.hidden=true;if(orientationHint)orientationHint.hidden=true;document?.body?.classList?.remove('touch-controls');}};
+  return {update,reset,setJoystickScale,get enabled(){return enabled;},get looking(){return !!look;},get axes(){return {...axes};},dispose(){if(disposed)return;reset();disposed=true;listeners.forEach(remove=>remove());if(root)root.hidden=true;if(orientationHint)orientationHint.hidden=true;document?.body?.classList?.remove('touch-controls');}};
 }

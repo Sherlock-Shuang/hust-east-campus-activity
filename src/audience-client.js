@@ -1,17 +1,20 @@
+import {createClientId} from './browser-compat.js';
+
 // The cookie is the credential. Storage is only a durable delivery queue, never
 // the host's audience database or permission to select another audience ID.
 export function createAudienceClient({onIdentity=()=>{},onError=()=>{},fetchImpl=fetch}={}){
-  const tabId=crypto.randomUUID(),prefix='campus-event-v1:',memory=new Map();
+  const tabId=createClientId(),prefix='campus-event-v1:',memory=new Map();
   let audience=null,csrfToken='',disposed=false,draining=false,sequence=0,queue=Promise.resolve();
   async function request(path,body,keepalive=false){
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
     try{
       const response=await fetchImpl(path,{method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',keepalive,signal:controller.signal,headers:body?{'Content-Type':'application/json','X-CSRF-Token':csrfToken}:{},...(body?{body:JSON.stringify(body)}:{})});
-      const data=await response.json();if(!response.ok)throw Object.assign(new Error(data.error||'活动记录暂未同步'),{status:response.status});return data;
-    }finally{clearTimeout(timeout);}
+      const data=await response.json().catch(()=>{throw new Error('活动服务暂未连接，请检查网络后重试');});if(!response.ok)throw Object.assign(new Error(data.error||'活动记录暂未同步'),{status:response.status});return data;
+    }catch(error){if(error?.name==='AbortError')throw new Error('活动服务连接超时，请检查网络后再次进入');throw error;}
+    finally{clearTimeout(timeout);}
   }
   function accept(data){audience=data.audience;csrfToken=data.csrfToken||'';if(!disposed)onIdentity(audience);return audience;}
-  const ready=request('/api/audience/me').then(accept).catch(e=>{onError(e.message);onIdentity(null);return null;});
+  const ready=request('/api/audience/me').then(accept).catch(e=>{onIdentity(null);onError(e.message);return null;});
   async function join(nickname){
     // Finish the initial identity lookup before a join can replace its result.
     await ready;
@@ -62,7 +65,7 @@ export function createAudienceClient({onIdentity=()=>{},onError=()=>{},fetchImpl
   }
   async function event(type,data={},options={}){
     if(!audience)throw new Error('请先填写昵称参与活动');
-    const payload={eventId:crypto.randomUUID(),tabId,type,...data};
+    const payload={eventId:createClientId(),tabId,type,...data};
     // Required opening/visit events need exactly the same durable replay as
     // opened/returned: a lost HTTP response does not mean the write failed.
     const entry={audienceId:audience.id,event:payload,sequence:++sequence,queuedAt:Date.now(),status:'pending'};save(entry);
