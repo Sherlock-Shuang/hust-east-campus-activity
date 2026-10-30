@@ -95,129 +95,49 @@ async function fixture(t, {finished = false, phone = false, legacy, blockedStora
 
 const pageRoot = path.resolve(here, '../../public/works/she-love-me');
 const pageHtml = readFileSync(path.join(pageRoot, 'index.html'), 'utf8');
-const pageScript = readFileSync(path.join(pageRoot, 'project.js'), 'utf8');
+const pageScript = readFileSync(path.join(pageRoot, 'project.js'), 'utf8').replace(/^import .*;\n/gm,'');
 const bridgeScript = readFileSync(path.resolve(here, '../../public/experiences/activity-bridge.js'), 'utf8');
-
-function pageFixture(t, {embedded = false, clipboard} = {}) {
-  const dom = new JSDOM(embedded ? '<iframe src="/works/she-love-me/?campusAttempt=guide-test"></iframe>' : pageHtml, {
-    url: 'https://campus.test/works/she-love-me/', runScripts: 'outside-only', pretendToBeVisual: true
-  });
-  t.after(() => dom.window.close());
-  const win = embedded ? dom.window.document.querySelector('iframe').contentWindow : dom.window;
-  if (embedded) { win.document.open(); win.document.write(pageHtml); win.document.close(); }
-  const messages = [];
-  if (embedded) dom.window.postMessage = (message, origin) => messages.push({message, origin});
-  if (clipboard) Object.defineProperty(win.navigator, 'clipboard', {configurable: true, value: clipboard});
-  Object.defineProperty(win, 'localStorage', {get() { throw new Error('Storage unavailable'); }});
-  win.fetch = () => { throw new Error('The guide must not make data requests'); };
-  const bridgeElement = win.document.querySelector('script[data-work="she-love-me"]');
-  assert.ok(bridgeElement);
-  Object.defineProperty(win.document, 'currentScript', {configurable: true, get: () => bridgeElement});
-  win.eval(bridgeScript);
-  win.eval(pageScript);
-  win.document.dispatchEvent(new win.Event('DOMContentLoaded'));
-  return {win, document: win.document, messages,
-    async click(selector) {
-      const target = win.document.querySelector(selector);
-      assert.ok(target, selector);
-      const event = new win.MouseEvent('click', {bubbles: true, cancelable: true});
-      target.dispatchEvent(event);
-      await new Promise(resolve => setImmediate(resolve));
-      return event;
-    },
-    hostMessage(data, origin = 'https://campus.test') {
-      win.dispatchEvent(new win.MessageEvent('message', {source: dom.window, origin, data: {attemptId: 'guide-test', ...data}}));
-    }
-  };
+const engine = await import('../../public/works/she-love-me/analyzer.js');
+const {demos} = await import('../../public/works/she-love-me/demo.js');
+const aiResult={summary:'双方都在延续话题。',observations:[{title:'一起安排活动',detail:'这可以说明对这次活动有兴趣。',evidence:[1,2]}],suggestions:['直接确认见面时间。'],limitations:'抽样不能确定真实心意。'};
+function pageFixture(t, {embedded=false,fetchImpl=async()=>Response.json({analysis:aiResult})}={}) {
+ const dom=new JSDOM(embedded?'<iframe src="/works/she-love-me/?campusAttempt=platform-test"></iframe>':pageHtml,{url:'https://campus.test/works/she-love-me/',runScripts:'outside-only',pretendToBeVisual:true});
+ t.after(()=>dom.window.close());
+ const win=embedded?dom.window.document.querySelector('iframe').contentWindow:dom.window;
+ if(embedded){win.document.open();win.document.write(pageHtml);win.document.close();}
+ const messages=[],requests=[];if(embedded)dom.window.postMessage=(message,origin)=>messages.push({message,origin});
+ Object.defineProperty(win,'localStorage',{get(){throw new Error('Storage unavailable');}});
+ Object.assign(win,engine,{demos});win.matchMedia=()=>({matches:false});win.fetch=async(url,init)=>{requests.push({url,init});return fetchImpl(url,init);};
+ const script=win.document.querySelector('script[data-work="she-love-me"]');Object.defineProperty(win.document,'currentScript',{configurable:true,get:()=>script});win.eval(bridgeScript);win.eval(pageScript);win.document.dispatchEvent(new win.Event('DOMContentLoaded'));
+ return {win,document:win.document,messages,requests,
+ async click(id){const target=win.document.querySelector(id);assert.ok(target,id);const e=new win.MouseEvent('click',{bubbles:true,cancelable:true});target.dispatchEvent(e);await new Promise(r=>setImmediate(r));return e;},
+ consent(){const n=win.document.getElementById('consent');n.checked=true;n.dispatchEvent(new win.Event('change'));},
+ hostMessage(data,origin='https://campus.test'){win.dispatchEvent(new win.MessageEvent('message',{source:dom.window,origin,data:{attemptId:'platform-test',...data}}));}
+ };
 }
-
-test('independent guide is available without story/storage and retains project attribution and selectable instructions', t => {
-  const f = pageFixture(t);
-  assert.equal(f.document.querySelector('h1').textContent, '她不一样');
-  assert.match(f.document.body.textContent, /爱因斯坦广场/);
-  assert.doesNotMatch(f.document.body.textContent, /通关|解锁|过拟合恋人/);
-  assert.equal(f.document.querySelector('input[type=file], form'), null);
-  const instruction = f.document.getElementById('ai-instruction');
-  assert.equal(instruction.readOnly, true);
-  assert.match(instruction.value, /符合项目支持格式的 JSON 或 Markdown/);
-  assert.match(instruction.value, /不要自动读取微信、QQ/);
-  assert.match(f.document.body.textContent, /运行在电脑上的 AI 编程助手中/);
-  assert.equal(f.document.querySelector('link[rel=stylesheet]').getAttribute('href'), './project.css');
-  assert.equal(f.document.querySelectorAll('script').length, 2);
-  for (const link of f.document.querySelectorAll('a[target="_blank"]')) {
-    assert.equal(link.rel, 'noopener noreferrer');
-    assert.ok(link.href.startsWith('https://github.com/863401402/she-love-me'));
-  }
-  assert.ok(f.document.querySelector('a[href$="/LICENSE"]'));
-  assert.equal(f.document.getElementById('return-to-campus').getAttribute('href'), '/');
+test('examples run without storage or network, render stats, export safely and clear',async t=>{
+ const f=pageFixture(t);assert.ok(f.document.querySelector('input[type=file]'));await f.click('#analyze');assert.equal(f.requests.length,0);assert.equal(f.document.getElementById('report').hidden,false);assert.match(f.document.getElementById('report-meta').textContent,/24 条/);assert.equal(f.document.getElementById('ai-analyze').disabled,true);
+ let blob;f.win.URL.createObjectURL=x=>{blob=x;return 'blob:test';};f.win.URL.revokeObjectURL=()=>{};f.win.HTMLAnchorElement.prototype.click=function(){assert.match(this.download,/\.md$/);};await f.click('#export');assert.ok(blob.size>0);
+ await f.click('#clear');assert.equal(f.document.getElementById('chat-text').value,'');assert.equal(f.document.getElementById('report').hidden,true);assert.equal(f.document.getElementById('sample-preview').textContent,'');
 });
-
-test('clipboard success copies the exact visible instruction', async t => {
-  let copied;
-  const f = pageFixture(t, {clipboard: {async writeText(value) { copied = value; }}});
-  await f.click('#copy-instruction');
-  assert.equal(copied, f.document.getElementById('ai-instruction').value);
-  assert.match(f.document.getElementById('copy-status').textContent, /已复制/);
+test('raw input and model content render as text; changing selection invalidates consent and report',async t=>{
+ const malicious='<img src=x onerror="alert(1)">';const f=pageFixture(t,{fetchImpl:async()=>Response.json({analysis:{...aiResult,summary:malicious}})});await f.click('#tab-paste');const input=f.document.getElementById('chat-text');input.value=`甲: ${malicious}\n乙: 好呀\n甲: 来看看\n乙: 好的`;input.dispatchEvent(new f.win.Event('input'));await f.click('#analyze');assert.equal(f.document.querySelector('#report img'),null);assert.match(f.document.getElementById('sample-preview').textContent,/<img/);
+ f.consent();await f.click('#ai-analyze');assert.equal(f.requests.length,1);const sent=JSON.parse(f.requests[0].init.body);assert.equal(sent.consent,true);assert.equal(sent.messages.length,4);assert.equal(f.document.getElementById('ai-result').textContent.includes(malicious),true);assert.equal(f.document.querySelector('#ai-result img'),null);
+ f.document.getElementById('self-select').dispatchEvent(new f.win.Event('change'));assert.equal(f.document.getElementById('report').hidden,true);assert.equal(f.document.getElementById('consent').checked,false);
 });
-
-test('missing or denied clipboard selects the instruction for manual copying', async t => {
-  for (const clipboard of [undefined, {async writeText() { throw new Error('Permission denied'); }}]) {
-    const f = pageFixture(t, {clipboard});
-    await f.click('#copy-instruction');
-    const field = f.document.getElementById('ai-instruction');
-    assert.equal(f.document.activeElement, field);
-    assert.equal(field.selectionStart, 0);
-    assert.equal(field.selectionEnd, field.value.length);
-    assert.match(f.document.getElementById('copy-status').textContent, /请长按或使用复制快捷键/);
-  }
+test('failed model request retains stats and offers nickname when unauthenticated',async t=>{
+ const f=pageFixture(t,{fetchImpl:async()=>Response.json({error:{message:'请先加入'}},{status:401})});await f.click('#analyze');f.consent();await f.click('#ai-analyze');assert.equal(f.document.getElementById('join-box').hidden,false);assert.equal(f.document.getElementById('report').hidden,false);assert.equal(f.document.getElementById('ai-result').hidden,true);assert.equal(f.document.getElementById('ai-analyze').disabled,false);
 });
-
-test('activity bridge reports the independent work, pauses the whole guide, and exits only from the return control', async t => {
-  let copies = 0;
-  const f = pageFixture(t, {embedded: true, clipboard: {async writeText() { copies += 1; }}});
-  const ready = f.messages.find(item => item.message.type === 'campus:ready');
-  assert.ok(ready);
-  assert.equal(ready.message.workId, 'she-love-me');
-  assert.equal(ready.message.attemptId, 'guide-test');
-  assert.equal(ready.message.level, 'page_opened');
-  assert.equal(ready.origin, 'https://campus.test');
-  f.hostMessage({type: 'campus:activity', paused: true}, 'https://foreign.test');
-  assert.equal(f.document.getElementById('project').inert, false);
-  f.hostMessage({type: 'campus:activity', paused: true});
-  assert.equal(f.document.getElementById('project').inert, true);
-  assert.equal(f.document.getElementById('activity-status').hidden, false);
-  await f.click('#copy-instruction');
-  await f.click('#return-to-campus');
-  assert.equal(copies, 0);
-  assert.equal(f.messages.some(item => item.message.type === 'campus:exit'), false);
-  f.hostMessage({type: 'campus:activity', paused: false});
-  assert.equal(f.document.getElementById('project').inert, false);
-  assert.equal(f.document.getElementById('activity-status').hidden, true);
-  await f.click('#copy-instruction');
-  assert.equal(copies, 1);
-  const event = await f.click('#return-to-campus');
-  assert.equal(event.defaultPrevented, true);
-  const exits = f.messages.filter(item => item.message.type === 'campus:exit');
-  assert.equal(exits.length, 1);
-  assert.equal(exits[0].message.workId, 'she-love-me');
-  assert.equal(exits[0].message.attemptId, 'guide-test');
-  f.hostMessage({type: 'campus:dispose'});
-  assert.equal(f.document.getElementById('project').inert, true);
-  assert.match(f.document.getElementById('activity-status').textContent, /已结束/);
-  await f.click('#return-to-campus');
-  assert.equal(f.messages.filter(item => item.message.type === 'campus:exit').length, 1);
+test('embedded bridge ignores other origins, pauses and aborts AI, suppresses stale results and disposes raw data',async t=>{
+ let resolve;const f=pageFixture(t,{embedded:true,fetchImpl:()=>new Promise(r=>{resolve=r;})});await f.click('#analyze');f.consent();await f.click('#ai-analyze');const signal=f.requests[0].init.signal;
+ const ready=f.messages.find(x=>x.message.type==='campus:ready');assert.equal(ready.message.workId,'she-love-me');assert.equal(ready.message.level,'page_opened');
+ f.hostMessage({type:'campus:activity',paused:true},'https://foreign.test');assert.equal(f.document.getElementById('project').inert,false);
+ f.hostMessage({type:'campus:activity',paused:true});assert.equal(f.document.getElementById('project').inert,true);assert.equal(signal.aborted,true);resolve(Response.json({analysis:aiResult}));await new Promise(r=>setImmediate(r));assert.equal(f.document.getElementById('ai-result').hidden,true);
+ await f.click('#return-to-campus');assert.equal(f.messages.some(x=>x.message.type==='campus:exit'),false);
+ f.hostMessage({type:'campus:activity',paused:false});assert.equal(f.document.getElementById('project').inert,false);await f.click('#return-to-campus');assert.equal(f.messages.filter(x=>x.message.type==='campus:exit').length,1);
+ f.hostMessage({type:'campus:dispose'});assert.equal(f.document.getElementById('project').inert,true);assert.equal(f.document.getElementById('sample-preview').textContent,'');assert.match(f.document.getElementById('activity-status').textContent,/已结束/);
 });
-
-test('standalone return keeps normal campus navigation', async t => {
-  const f = pageFixture(t);
-  let wasPrevented;
-  f.document.getElementById('return-to-campus').addEventListener('click', event => {
-    wasPrevented = event.defaultPrevented;
-    event.preventDefault(); // JSDOM cannot perform navigation; observe the page handler first.
-  });
-  await f.click('#return-to-campus');
-  assert.equal(wasPrevented, false);
-});
+test('standalone return keeps normal campus navigation',async t=>{const f=pageFixture(t);let prevented;f.document.getElementById('return-to-campus').addEventListener('click',e=>{prevented=e.defaultPrevented;e.preventDefault();});await f.click('#return-to-campus');assert.equal(prevented,false);});
 
 test('chat has no hidden project entry before or after completion, including old completion markers', async t => {
   const f = await fixture(t, {phone: true, legacy: '{"version":2,"hasFinishedGame":true}'});

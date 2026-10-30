@@ -14,7 +14,7 @@ export function createNodeActivityHandler(options={}){
       const url=new URL(req.url,`${protocol==='http'?'http':'https'}://${req.headers.host}`);
       const original=url.searchParams.get('__activity_path');
       if(original!=null){
-        if(!/^(?:live|admin|audience|works\/tasay)(?:\/|$)/.test(original)||original.split('/').some(part=>part==='.'||part==='..')){res.writeHead(404);res.end();return;}
+        if(!/^(?:live|admin|audience|works\/(?:tasay|she-love-me))(?:\/|$)/.test(original)||original.split('/').some(part=>part==='.'||part==='..')){res.writeHead(404);res.end();return;}
         url.pathname='/api/'+original;url.searchParams.delete('__activity_path');
       }
       const headers=new Headers();for(const [name,value] of Object.entries(req.headers))if(value!=null)headers.set(name,Array.isArray(value)?value.join(', '):String(value));

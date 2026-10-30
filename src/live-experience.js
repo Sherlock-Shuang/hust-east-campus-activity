@@ -130,8 +130,8 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     if(!admitted||!isEventActive(admitted,client.now())||admitted.url!==current.url){closePortal('活动入口已关闭，请留意主持人通知');return;}
     url.searchParams.set('campusParentOrigin',location.origin);url.searchParams.set('campusAttempt',attemptId);
     frame=document.createElement('iframe');frame.title=current.label;frame.referrerPolicy='same-origin';
-    // The project guide opens its repository only after a deliberate click.
-    const projectLinks=current.workId==='she-love-me'?' allow-popups allow-popups-to-escape-sandbox':'';
+    // The chat observation app supports deliberate source links and report downloads.
+    const projectLinks=current.workId==='she-love-me'?' allow-popups allow-popups-to-escape-sandbox allow-downloads':'';
     frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-pointer-lock'+projectLinks);
     // Keep the host's announcement/pause layer above every experience.
     frame.setAttribute('allow','fullscreen \'none\'');frame.src=url.href;

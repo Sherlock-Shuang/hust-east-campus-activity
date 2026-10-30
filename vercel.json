@@ -1211,7 +1211,7 @@
       }
     },
     {
-      "src": "^/works/she-love-me/(?:index\\.html|project\\.(?:css|js))?$",
+      "src": "^/works/she-love-me/(?:index\\.html|project\\.(?:css|js)|(?:analyzer|demo)\\.js|LICENSE\\.txt)?$",
       "headers": {
         "Cache-Control": "no-cache"
       },

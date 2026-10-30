@@ -34,7 +34,7 @@ export function createRoutes(manifest){
     {src:'^/admin/?$',dest:'/admin.html'},
     ...['library','wanyan','tasay','she-love-me'].map(work=>({src:`^/works/${work}$`,status:308,headers:{Location:`/works/${work}/`}})),
     {src:'^/works/library/games/isaac$',status:308,headers:{Location:'/works/library/games/isaac/'}},
-    {src:'^/works/she-love-me/(?:index\\.html|project\\.(?:css|js))?$',headers:{'Cache-Control':'no-cache'},continue:true},
+    {src:'^/works/she-love-me/(?:index\\.html|project\\.(?:css|js)|(?:analyzer|demo)\\.js|LICENSE\\.txt)?$',headers:{'Cache-Control':'no-cache'},continue:true},
     {src:'^/works/she-love-me/$',dest:'/works/she-love-me/index.html',methods:['GET','HEAD']},
     {src:'^/api/(.*)$',dest:'/api/activity?__activity_path=$1'},
     {handle:'filesystem'},

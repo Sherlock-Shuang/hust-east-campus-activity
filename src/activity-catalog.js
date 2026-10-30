@@ -10,7 +10,7 @@ export const ACTIVITY_WORKS = Object.freeze([
   {id:'library',name:'书境图书馆',description:'走进书境，探索原有旅程与书中游戏。',url:'/works/library/',ready:'runtime_ready'},
   {id:'wanyan',name:'黑神话.晚言',description:'进入晚言的真实 Unity 网页游戏。',url:'/works/wanyan/',ready:'runtime_ready'},
   {id:'tasay',name:'过拟合恋人',description:'一段逐渐偏离预期的恋爱与 Meta 恐怖体验。',url:'/works/tasay/',ready:'page_opened'},
-  {id:'she-love-me',name:'她不一样 · 恋情分析室',description:'在爱因斯坦广场了解聊天记录分析开源项目；与过拟合恋人同步开放，无需通关。',url:'/works/she-love-me/',ready:'page_opened'},
+  {id:'she-love-me',name:'她不一样 · 恋情分析室',description:'在爱因斯坦广场直接体验聊天观察：示例、导入、本地统计与可选 AI 解读；无需通关。',url:'/works/she-love-me/',ready:'page_opened'},
 ]);
 export const ACTIVITY_PHASES = Object.freeze([
   {id:'explore',label:'自由探索',guidance:'自由探索校园；作品开放与集合安排以主持人通知为准。'},

@@ -235,3 +235,16 @@ test('a non-reading SSE client has a bounded queue and releases its lease',async
   assert.equal((await f.dbs[0].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count,0);
   await assert.rejects(reader.read(),/活动连接暂时中断/);
 });
+
+// This route must survive Vercel's __activity_path rewrite and use the same
+// verified audience identity as other campus experiences.
+test('chat observation route is reachable through serverless rewrite and requires identity and consent',async t=>{
+ const f=await fixture(t),path='/api/works/she-love-me/analyze';
+ assert.equal((await f.request(path,{method:'POST',body:'{}'})).status,401);
+ const viewer=await f.join('聊天体验测试','she-love-tab');
+ assert.equal((await f.request(path,{method:'POST',headers:{Cookie:viewer.cookie},body:'{}'})).status,400);
+ const server=http.createServer(f.nodeHandler());await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
+ const base=`http://127.0.0.1:${server.address().port}`;
+ const response=await fetch(base+'/api/activity?__activity_path=works/she-love-me/analyze',{method:'POST',headers:{Origin:base,'Content-Type':'application/json','x-forwarded-proto':'http'},body:'{}'});
+ assert.equal(response.status,401);
+});

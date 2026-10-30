@@ -1,21 +1,23 @@
 import {createTursoDatabase} from './database.mjs';
 import {handleActivityAPI,authenticatedAudience,consumeModelQuota} from './activity-api.mjs';
 import {createTasayProxy} from '../integration/tasay/proxy.mjs';
+import {createSheLoveProxy} from '../integration/she-love-me/proxy.mjs';
 
 // Instantiate once at module scope in api/activity.mjs. Database rows, rather
 // than this instance, own identity, sessions, activity state and model budgets.
 export function createActivityHandler({env=process.env,db,streamClock,diagnostics}={}){
-  let configured=db,proxy;
+  let configured=db,proxy,sheLove;
   return async function activity(request){
     const path=new URL(request.url).pathname;
-    if(!/^\/api\/(?:live|admin|audience|works\/tasay)(?:\/|$)/.test(path))return new Response('Not found',{status:404});
+    if(!/^\/api\/(?:live|admin|audience|works\/(?:tasay|she-love-me))(?:\/|$)/.test(path))return new Response('Not found',{status:404});
     try{
       configured??=createTursoDatabase(env);
       const runtime={...env,DB:configured,...(streamClock?{STREAM_CLOCK:streamClock}:{}),...(diagnostics?{ACTIVITY_DIAGNOSTICS:diagnostics}:{})};
-      if(path.startsWith('/api/works/tasay/')){
+      if(path.startsWith('/api/works/tasay/')||path.startsWith('/api/works/she-love-me/')){
         const audience=await authenticatedAudience(request,runtime);
         proxy??=createTasayProxy({env,rateLimit:id=>consumeModelQuota(id,runtime)});
-        return await proxy(request,{audienceId:audience?.id})||new Response('Not found',{status:404});
+        sheLove??=createSheLoveProxy({proxy});
+        return await (path.startsWith('/api/works/she-love-me/')?sheLove:proxy)(request,{audienceId:audience?.id})||new Response('Not found',{status:404});
       }
       return await handleActivityAPI(request,runtime)||new Response('Not found',{status:404});
     }catch{
