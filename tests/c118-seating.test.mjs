@@ -66,7 +66,7 @@ test('virtual audience forms sparse groups with denser front rows, while every p
 
 test('virtual audience hides only an occupied seat, handles empty chairs, and owns its resources',()=>{
  const before=JSON.stringify(plan),audience=createC118Audience(THREE,{plan}),group=audience.group;
- assert.equal(group.children.length,8);assert.equal(group.userData.type,'virtual-audience');
+ assert.ok(group.children.length<25,'sitting, walking and swimming share fewer than 25 instanced draws');assert.equal(group.userData.type,'virtual-audience');
  const totalTriangles=group.children.reduce((n,m)=>n+(m.geometry.index.count/3)*m.count,0);assert.ok(totalTriangles<280000,`audience triangles ${totalTriangles}`);
  assert.ok(group.children.every(m=>m.isInstancedMesh&&!m.castShadow));
  const clothing=group.children.find(m=>m.name==='c118-audience-clothing'),ids=group.userData.seatIds,a=new THREE.Matrix4(),b=new THREE.Matrix4();clothing.getMatrixAt(122,a);

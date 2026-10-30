@@ -8,7 +8,9 @@ import {mountMobileViewport} from './mobile-viewport.js';
 import {createSkyQrExperience} from './sky-qr.js';
 import {nearbyInterior,crossedInteriorDoor,interiorReturnSnapshot} from './building-interiors.js';
 import {createActivityBridgeMessage} from './activity-bridge-state.js';
+import {createCampusTsunami,mountCampusTsunamiNotice} from './campus-tsunami.js';
 import './live-experience.css';
+import './campus-tsunami.css';
 
 export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,getInteriors=()=>[],getWallText=()=>[],setSuspended,invalidate,notify}) {
   const disposeMobileViewport=mountMobileViewport();
@@ -33,6 +35,17 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   }});
   const projected=new THREE.Vector3();
   const reduced=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+  const campusTsunami=createCampusTsunami({THREE,scene});
+  const tsunamiNotice=mountCampusTsunamiNotice({THREE,root,camera,effect:campusTsunami});
+  let lastTsunamiPaint=-Infinity;
+  function updateTsunami(){
+    if(!client||disposed)return false;
+    const changed=campusTsunami.update({event:client.state.c118Flood,now:client.now(),
+      visible:!opened&&!document.hidden&&!!audienceUI?.registered,paused:client.state.paused,reducedMotion:reduced?.matches});
+    tsunamiNotice.update({paused:client.state.paused});
+    root.dataset.campusTsunami=campusTsunami.active?campusTsunami.sample.phase:'hidden';
+    return changed;
+  }
   const interactionRoots=[document.querySelector('body > header'),document.querySelector('.transport-selector'),canvas,...container.querySelectorAll('.view-toolbar,#inspect,#measurement,#mobile-controls,#mobile-orientation-hint,#mobile-enable-touch,#transport-interact,#resume-exploration')].filter(Boolean);
   const setInert=frozen=>interactionRoots.forEach(el=>{el.inert=frozen;});
   function updateFrozen(){
@@ -180,6 +193,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     if(signature!==visualSignature){visualSignature=signature;rebuild(markers,portals);}
     if(opened&&!frame&&opened.kind!=='building-interior'){const current=portals.find(p=>p.id===opened.id);if(!current||current.url!==opened.url)closePortal('活动入口已关闭，请留意主持人通知');}
     skyQr?.refresh({visible:state.skyQrVisible===true,portalOpen:!!opened,blocked:!audienceUI?.registered});
+    if(updateTsunami())invalidate();
     portalView.inert=state.paused||!!skyQr?.isOpen;
     const nextUI=JSON.stringify([state.paused,state.pauseMessage,activeAnnouncement,state.phase,state.skyQrVisible,state.c118Flood,state.c118Screen]);
     if(nextUI!==uiSignature||force){
@@ -230,8 +244,12 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       restorePending=false;try{const stored=JSON.parse(sessionStorage.getItem('campus-return-pose'));if(stored?.audienceId===audienceUI.client.identity.id)getPlayer().restoreActivityPose?.(stored.pose);}catch{}
     }},
     tick(now){
-      if(!items.length||document.hidden||opened)return false;
-      if(now-lastUpdate<66)return false;lastUpdate=now;
+      // The shared catastrophe animates even when the host has no map markers.
+      // A hidden/embedded campus submits no wave work while C118 renders itself.
+      let tsunamiChanged=false;
+      if((client.state.c118Flood||campusTsunami.active)&&now-lastTsunamiPaint>=33){lastTsunamiPaint=now;tsunamiChanged=updateTsunami();}
+      if(!items.length||document.hidden||opened)return tsunamiChanged;
+      if(now-lastUpdate<66)return tsunamiChanged;lastUpdate=now;
       camera.updateMatrixWorld();
       const width=canvas.clientWidth,height=canvas.clientHeight;
       const textRects=projectWallTextRects(THREE,camera,getWallText(),width,height);
@@ -244,9 +262,9 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
         label.style.left=`${x}px`;label.style.top=`${labelY}px`;
         if(!client.state.paused&&!reduced?.matches){const phase=client.now()/1300+group.position.x*.01;item.material.uniforms.intensity.value=.8+Math.sin(phase)*.12;const scale=1+Math.sin(phase)*.045;item.ring.scale.setScalar(scale);}
       }
-      if(client.state.paused||reduced?.matches)return false;
-      if(now-lastPaint>=100){lastPaint=now;return true;}return false;
+      if(client.state.paused||reduced?.matches)return tsunamiChanged;
+      if(now-lastPaint>=100){lastPaint=now;return true;}return tsunamiChanged;
     },
-    dispose(){disposed=true;announcementNotice.dispose();disposeMobileViewport();clearInterval(timer);client.dispose();closePortal();skyQr.dispose();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},
+    dispose(){disposed=true;announcementNotice.dispose();disposeMobileViewport();clearInterval(timer);client.dispose();closePortal();skyQr.dispose();tsunamiNotice.dispose();campusTsunami.dispose();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},
   };
 }

@@ -1,0 +1,6 @@
+.campus-tsunami-notice{position:absolute;left:50%;top:26px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;max-width:calc(100% - 40px);padding:10px 17px;border:1px solid #b3e4e778;border-radius:12px;background:#102e3bdc;box-shadow:0 6px 25px #05182335;pointer-events:none;color:#effbff;}
+.campus-tsunami-notice small{display:block;font-size:10px;letter-spacing:.08em;color:#b7dce2;margin-bottom:4px;}
+.campus-tsunami-notice strong{display:block;font-weight:500;font-size:13px;white-space:nowrap;}
+.campus-tsunami-arrow{display:grid;place-items:center;flex-shrink:0;width:26px;height:30px;font-size:25px;color:#d8faf8;}
+@media(max-width:600px){.campus-tsunami-notice{top:76px;padding:8px 12px;gap:8px;}.campus-tsunami-notice strong{font-size:11px;}.campus-tsunami-notice small{font-size:9px;}}
+@media(max-height:500px){.campus-tsunami-notice{top:10px;padding:6px 11px;}.campus-tsunami-notice small{display:none;}}

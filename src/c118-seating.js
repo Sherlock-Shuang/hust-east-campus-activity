@@ -7,6 +7,11 @@ export function c118SeatedFov(view,aspect){
   const viewportAspect=Number.isFinite(aspect)&&aspect>0?aspect:16/9;
   return Math.min(115,2*Math.atan(Math.tan(view.fov*Math.PI/360)*Math.max(1,(16/9)/viewportAspect))*180/Math.PI);
 }
+/** Fit the complete 16:9 programme at 90% of the limiting viewport dimension. */
+export function c118CinemaFov(view,aspect){
+  const ratio=Number.isFinite(aspect)&&aspect>0?aspect:16/9;
+  return 2*Math.atan(Math.max(9.8/ratio,9.8*9/16)/(2*view.distance*.90))*180/Math.PI;
+}
 const finitePose=p=>p&&['x','y','z'].every(k=>Number.isFinite(p[k]));
 const inside=(p,polygon)=>{let hit=false;for(let i=0,j=polygon.length-1;i<polygon.length;j=i++){
   const a=polygon[i],b=polygon[j];if((a.z>p.z)!==(b.z>p.z)&&p.x<(b.x-a.x)*(p.z-a.z)/(b.z-a.z)+a.x)hit=!hit;
@@ -46,6 +51,11 @@ export function createC118Seating(plan){
     for(const s of seats){if(Math.abs(s.y-position.y)>.55)continue;const d=Math.hypot(s.x-position.x,s.z-position.z);if(d<distance){best=s;distance=d;}}
     return best;
   }
+  function focusViewFor(id){
+    const s=getSeat(id);if(!s)return null;
+    // This is an optional viewing lens; the player's body remains in its chair.
+    return {x:target.x,y:target.y,z:target.z+9,yaw:0,pitch:0,distance:9,seatId:s.id,label:s.label};
+  }
   function exitPoseFor(id,preferredPose){
     if(safeStandingPose(plan,preferredPose))return {...preferredPose};
     const s=getSeat(id)||recommendedSeat;if(!s)return null;
@@ -53,5 +63,5 @@ export function createC118Seating(plan){
     candidates.sort((a,b)=>Math.abs(a.x-s.x)-Math.abs(b.x-s.x));
     return candidates.find(p=>safeStandingPose(plan,p))||({...plan.spawn});
   }
-  return {seats,recommendedSeat,getSeat,nearest,viewFor,exitPoseFor};
+  return {seats,recommendedSeat,getSeat,nearest,viewFor,focusViewFor,exitPoseFor};
 }

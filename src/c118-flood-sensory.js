@@ -9,13 +9,13 @@ export function sampleC118FloodSensory({active=false,elapsed=-1,waterDepth=0,imp
   if(!active||t<0)return {wash:0,spray:0,rush:0,rumble:0,cutoff:1300,driftX:0,driftY:0,shimmer:0};
   const depth=smooth(-.08,1.1,waterDepth),hit=clamp(impact);
   const arrival=smooth(.25,2.7,t),settle=smooth(9,20,t);
-  const flow=arrival*(1-settle*.68);
+  const flow=arrival*(1-settle*.12)*(.94+.06*Math.sin(t*1.17));
   return {
-    wash:depth*.67,
+    wash:depth*.32,
     spray:clamp(hit*.85+flow*.2)*(1-depth*.55),
     rush:(flow*.25+hit*.21)*(1-depth*.62),
     rumble:arrival*.085+hit*.13+depth*.045,
-    cutoff:1300*(1-depth)+185*depth,
+    cutoff:1300*(1-depth)+340*depth,
     driftX:reducedMotion?0:Math.sin(t*.47)*5,
     driftY:reducedMotion?0:Math.sin(t*.31+.6)*3,
     shimmer:reducedMotion?.12:(.15+.08*Math.sin(t*.63))*depth,

@@ -1,13 +1,15 @@
 import {c118SeatId} from './c118-seating.js';
+import {createC118Walkers,sampleC118AudiencePose} from './c118-audience-motion.js';
 
 /** A deterministic virtual audience, separate from real participant identities.
  * Students share authored seated anatomy, with varied proportions and outfits.
- * Static instances add no network/model download or per-frame animation work.
+ * Seated instances remain static; shared articulated parts animate only the
+ * aisle walkers and, during flooding, the people lifted out of their chairs.
  */
 export function createC118Audience(THREE,{plan}){
   const group=new THREE.Group();group.name='c118-seated-audience';
   const geometries=new Set(),materials=new Set(),batches=[],seatIndex=new Map();
-  let disposed=false,hiddenSeat=null;
+  let disposed=false,hiddenSeat=null,lastTick=null,lastArgs=null;
   const palettes={coat:['#344655','#a3b0aa','#9b705e','#d7d0ba','#655f6d','#466e70','#8a984c','#a79489','#34433f','#b18c68'],
     pants:['#353c44','#4b5559','#5c5a50','#293443','#6f7166'],skin:['#c89573','#dfb394','#b78363','#e3bea3','#cba487'],
     hair:['#242521','#352c26','#191e20','#493a30'],shoes:['#333936','#676b68','#bdbdb1']};
@@ -98,21 +100,111 @@ export function createC118Audience(THREE,{plan}){
   }
   const people=occupied.map((s,i)=>{const id=c118SeatId(s),seed=hash(id);seatIndex.set(id,i);
     const matrix=new THREE.Matrix4().compose(new THREE.Vector3(s.x,s.y,s.z-.018),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,((seed%17)-8)*.007,0)),new THREE.Vector3(.94+(seed%9)*.012,.975+((seed>>>5)%6)*.008,1));
-    return {id,seed,matrix,hair:seed%5<3?'short':seed%5===3?'long':'tied'};
+    return {id,seed,matrix,seat:s,hair:seed%5<3?'short':seed%5===3?'long':'tied'};
   });
   function batch(name,geometry,palette,filter=()=>true){
     const members=people.map((p,i)=>({p,i})).filter(({p})=>filter(p)),mesh=new THREE.InstancedMesh(geometry,material(),members.length),lookup=new Map();
     mesh.name='c118-audience-'+name;mesh.castShadow=false;mesh.receiveShadow=false;
     for(let i=0;i<members.length;i++){const {p,i:person}=members[i];lookup.set(person,i);mesh.setMatrixAt(i,p.matrix);mesh.setColorAt(i,new THREE.Color(palette[(p.seed>>>3)%palette.length]));}
-    mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;mesh.computeBoundingSphere();group.add(mesh);batches.push({mesh,lookup});
+    mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;mesh.computeBoundingSphere();group.add(mesh);batches.push({mesh,lookup,members,palette});
   }
   batch('clothing',merge(coat),palettes.coat);batch('trousers',merge(pants),palettes.pants);batch('faces-hands',merge(skin),palettes.skin);batch('shoes',merge(shoes),palettes.shoes);batch('eyes',merge(details),['#342f2a']);
   for(const style of['short','long','tied'])batch('hair-'+style,hairCap(style),palettes.hair,p=>p.hair===style);
   const zero=new THREE.Matrix4().makeScale(0,0,0);
-  function showSeat(id,shown){const person=seatIndex.get(id);if(person===undefined)return;for(const {mesh,lookup} of batches){const i=lookup.get(person);if(i===undefined)continue;mesh.setMatrixAt(i,shown?people[person].matrix:zero);mesh.instanceMatrix.needsUpdate=true;}}
-  group.userData={type:'virtual-audience',count:people.length,additionalDrawCalls:batches.length,seatIds:people.map(p=>p.id)};
+  const seatedVisible=people.map(()=>true),walkers=createC118Walkers(plan),allPeople=[...people,...walkers],movingBatches=[];
+  function movingBatch(name,geometry,palette,multiplicity=1){
+    const mesh=new THREE.InstancedMesh(geometry,material(),allPeople.length*multiplicity);
+    geometries.add(geometry);mesh.name='c118-audience-moving-'+name;mesh.castShadow=false;mesh.receiveShadow=false;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    // Bounds include every permitted pose; no per-frame bounding-sphere scan.
+    mesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,plan.config.height/2,0),Math.hypot(plan.config.width,plan.config.depth,plan.config.height)/2+2);
+    const entry={mesh,palette,colors:allPeople.map(p=>new THREE.Color(palette[(p.seed>>>3)%palette.length])),owners:[],written:0};
+    mesh.count=0;movingBatches.push(entry);group.add(mesh);return entry;
+  }
+  const torso=movingBatch('torso',merge([
+    loft([[.51,.145,.105,.015],[.59,.15,.11,.015],[.74,.145,.105,.012],[.91,.165,.11,.016],[1.025,.185,.105,.014],[1.07,.155,.085,.01],[1.105,.075,.057,.005]],10),
+    new THREE.TorusGeometry(.054,.01,4,10).rotateX(Math.PI/2).translate(0,1.101,0),
+  ]).translate(0,-.58,0),palettes.coat);
+  const pelvis=movingBatch('pelvis',merge([loft([[.49,.14,.095,0],[.58,.15,.105,0],[.64,.13,.085,0]],8)]).translate(0,-.58,0),palettes.pants);
+  const movingSkin=[loft([[1.09,.046,.044,.001],[1.18,.046,.043,-.008]],8),loft(headProfile,10),ellipsoid(.019,.025,.024,[0,1.255,-.105],6,3)];
+  for(const side of[-1,1])movingSkin.push(ellipsoid(.013,.025,.014,[side*.082,1.263,-.011],6,3));
+  const heads=movingBatch('heads',merge(movingSkin).translate(0,-.58,0),palettes.skin);
+  const eyes=movingBatch('eyes',merge([-1,1].map(side=>ellipsoid(.012,.006,.004,[side*.031,1.292,-.094],4,2))).translate(0,-.58,0),['#342f2a']);
+  const hair={};for(const style of['short','long','tied'])hair[style]=movingBatch('hair-'+style,hairCap(style).translate(0,-.58,0),palettes.hair);
+  const sleeves=movingBatch('sleeves',loft([[-.5,.72,.72,0],[-.43,1,1,0],[.37,.84,.84,0],[.5,.62,.62,0]],6),palettes.coat,4);
+  const legs=movingBatch('legs',loft([[-.5,.78,.78,0],[-.43,1,1,0],[.37,.85,.85,0],[.5,.68,.68,0]],6),palettes.pants,4);
+  const hands=movingBatch('hands',ellipsoid(.035,.058,.029,[0,0,0],7,4),palettes.skin,2);
+  const feet=movingBatch('feet',ellipsoid(.061,.053,.127,[0,-.015,-.052],8,4),palettes.shoes,2);
+  const root=new THREE.Matrix4(),local=new THREE.Matrix4(),matrix=new THREE.Matrix4(),point=new THREE.Vector3(),scale=new THREE.Vector3(1,1,1),direction=new THREE.Vector3(),up=new THREE.Vector3(0,1,0),quaternion=new THREE.Quaternion(),identity=new THREE.Quaternion(),rotation=new THREE.Euler();
+  function writePart(entry,person,transform){
+    const i=entry.written++;entry.mesh.setMatrixAt(i,transform);
+    if(entry.owners[i]!==person){entry.owners[i]=person;entry.mesh.setColorAt(i,entry.colors[person]);entry.colorChanged=true;}
+  }
+  function writeLimb(entry,person,a,b,radius){
+    point.set((a[0]+b[0])*.5,(a[1]+b[1])*.5,(a[2]+b[2])*.5);direction.set(b[0]-a[0],b[1]-a[1],b[2]-a[2]);
+    const length=direction.length();quaternion.setFromUnitVectors(up,direction.multiplyScalar(1/Math.max(.001,length)));
+    scale.set(radius,length,radius);local.compose(point,quaternion,scale);matrix.multiplyMatrices(root,local);writePart(entry,person,matrix);
+  }
+  function writeJoint(entry,person,at,orientation=identity){
+    point.set(...at);scale.set(1,1,1);local.compose(point,orientation,scale);matrix.multiplyMatrices(root,local);writePart(entry,person,matrix);
+  }
+  function showSeat(id,shown){const person=seatIndex.get(id);if(person===undefined)return;for(const {mesh,lookup} of batches){const i=lookup.get(person);if(i===undefined)continue;mesh.setMatrixAt(i,shown&&seatedVisible[person]?people[person].matrix:zero);mesh.instanceMatrix.needsUpdate=true;}}
+  function repackSeated(){
+    // Remove lifted people from the submitted instance count instead of only
+    // drawing zero-scale bodies, keeping the transition's vertex cost bounded.
+    const color=new THREE.Color();
+    for(const {mesh,lookup,members,palette} of batches){
+      lookup.clear();let count=0;
+      for(const {p,i:person} of members){if(!seatedVisible[person])continue;
+        lookup.set(person,count);mesh.setMatrixAt(count,p.id===hiddenSeat?zero:p.matrix);
+        mesh.setColorAt(count,color.set(palette[(p.seed>>>3)%palette.length]));count++;
+      }
+      mesh.count=count;mesh.visible=count>0;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+    }
+  }
+  function update({time=0,elapsed=null,active=true,reducedMotion=false}={}){
+    if(disposed||!active)return false;
+    const clock=Number.isFinite(time)?time:0,floodTime=Number.isFinite(elapsed)?elapsed:null;
+    const tick=`${floodTime===null?'dry':'flood'}:${Math.floor((floodTime??clock)*25)}:${!!reducedMotion}`;
+    if(tick===lastTick)return false;lastTick=tick;lastArgs={time:clock,elapsed:floodTime,active:true,reducedMotion};
+    // A 25 Hz pose budget is independent of the renderer's frame rate. Static
+    // sitting instances upload only when someone enters/leaves the water.
+    for(const entry of movingBatches){entry.written=0;entry.colorChanged=false;}
+    let floatingCount=0,seatedCount=0,swimmingCount=0,divingCount=0,seatingChanged=false;
+    for(let person=0;person<allPeople.length;person++){
+      const p=allPeople[person],pose=!p.walker&&(floodTime===null||floodTime<1.5)?null:sampleC118AudiencePose(plan,p,lastArgs),sitting=!pose||pose.mode==='seated';
+      if(person<people.length){
+        if(seatedVisible[person]!==sitting){seatedVisible[person]=sitting;seatingChanged=true;}
+        if(sitting)seatedCount++;
+      }
+      if(sitting||p.id===hiddenSeat)continue;
+      if(pose.floating>.5)floatingCount++;
+      if(pose.swimming>.5)swimmingCount++;
+      if(pose.diving)divingCount++;
+      point.set(pose.position.x,pose.position.y,pose.position.z);rotation.set(pose.rotation.x,pose.rotation.y,pose.rotation.z);quaternion.setFromEuler(rotation);
+      scale.set(.94+(p.seed%9)*.012,.975+((p.seed>>>5)%6)*.008,1);root.compose(point,quaternion,scale);
+      for(const entry of[torso,pelvis,heads,eyes,hair[p.hair]])writePart(entry,person,root);
+      for(let side=0;side<2;side++){
+        const j=pose.joints;
+        writeLimb(sleeves,person,j.shoulders[side],j.elbows[side],.068);writeLimb(sleeves,person,j.elbows[side],j.wrists[side],.052);
+        writeJoint(hands,person,j.wrists[side],quaternion);
+        writeLimb(legs,person,j.hips[side],j.knees[side],.084);writeLimb(legs,person,j.knees[side],j.ankles[side],.06);
+        writeJoint(feet,person,j.ankles[side]);
+      }
+    }
+    if(seatingChanged)repackSeated();
+    for(const entry of movingBatches){entry.mesh.count=entry.written;entry.mesh.visible=entry.written>0;entry.mesh.instanceMatrix.needsUpdate=true;
+      if(entry.colorChanged&&entry.mesh.instanceColor)entry.mesh.instanceColor.needsUpdate=true;
+    }
+    group.userData.walkingCount=walkers.length;group.userData.floatingCount=floatingCount;group.userData.seatedCount=seatedCount;
+    group.userData.swimmingCount=swimmingCount;group.userData.divingCount=divingCount;
+    return true;
+  }
+  group.userData={type:'virtual-audience',count:people.length,totalCount:allPeople.length,additionalDrawCalls:batches.length+movingBatches.length,seatIds:people.map(p=>p.id)};
+  update({time:0});
   return {group,
-    setHiddenSeat(id){if(disposed)return;const next=seatIndex.has(id)?id:null;if(next===hiddenSeat)return;showSeat(hiddenSeat,true);showSeat(next,false);hiddenSeat=next;},
+    setHiddenSeat(id){if(disposed)return;const next=seatIndex.has(id)?id:null;if(next===hiddenSeat)return;showSeat(hiddenSeat,true);showSeat(next,false);hiddenSeat=next;lastTick=null;if(lastArgs)update(lastArgs);},
+    update,
     dispose(){if(disposed)return;disposed=true;group.removeFromParent();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());group.clear();},
   };
 }

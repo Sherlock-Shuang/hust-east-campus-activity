@@ -6,6 +6,15 @@ const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
 const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
 const pulse=(x,width)=>Math.exp(-(x*x)/(width*width));
 
+// One spectrum feeds CPU height queries and generated GLSL. Each component is
+// [amplitude, x frequency, z frequency, time frequency, phase] in local metres.
+export const C118_FLOOD_WAVES=Object.freeze([
+  [.24,.56,.31,-2.35,0], [.14,1.21,-.86,3.7,.8],
+  [.085,.5,2.8,-5.2,1.7], [.05,3.6,1.3,7.1,2.3],
+].map(w=>Object.freeze(w)));
+const glslFloat=n=>Number.isInteger(n)?`${n}.`:String(n);
+const waveExpression=C118_FLOOD_WAVES.map(([a,x,z,t,p])=>`${glslFloat(a)}*sin(p.x*${glslFloat(x)}+p.y*${glslFloat(z)}+t*${glslFloat(t)}+${glslFloat(p)})`).join('+');
+
 function configuration(plan){
   const c=plan.config,doors=plan.doors.slice(0,4).map(d=>({x:d.x,z:d.z,y:d.y??c.floorY,
     side:d.side??Math.sign(d.x),width:d.width||2.2,delay:d.tier==='middle'?1.2:0}));
@@ -18,10 +27,10 @@ function configuration(plan){
 
 function sample(c,position,elapsed,rippleScale=1){
   const t=Number.isFinite(elapsed)?elapsed:-1;
-  if(t<1.5)return {waterY:c.floorY-1,impact:0,depth:0,submerged:false,phase:'waiting'};
+  if(t<1.5)return {waterY:c.floorY-1,impact:0,depth:0,submerged:false,phase:'waiting',currentX:0,currentZ:0};
   const level=c.floorY-.35+(c.peak-c.floorY+.35)*Math.pow(clamp((t-2.8)/15.2),.85);
-  const turbulence=smooth(1.5,4,t)*(1-.56*smooth(10,20,t));
-  let height=level,impact=0;
+  const turbulence=smooth(1.5,4,t);
+  let height=level,impact=0,currentX=0,currentZ=0;
   for(const d of c.doors){
     const age=t-1.5-d.delay;if(age<0)continue;
     const dx=position.x-d.x,dz=position.z-d.z,dist=Math.hypot(dx,dz*.76);
@@ -29,12 +38,17 @@ function sample(c,position,elapsed,rippleScale=1){
     const crest=pulse(dist-front,1.15)*gate;
     height+=(2.1+(d.y-c.floorY)*.48)*crest;
     impact=Math.max(impact,crest);
+    currentX-=d.side*crest*1.35;
   }
   const x=position.x,z=position.z;
-  height+=rippleScale*turbulence*(.13*Math.sin(x*.72+z*.37-t*2.35)+.075*Math.sin(x*1.91-z*1.3+t*3.7)+.045*Math.sin(z*3.2+x*.5-t*5.2));
+  height+=rippleScale*turbulence*C118_FLOOD_WAVES.reduce((sum,[a,kx,kz,w,p])=>sum+a*Math.sin(x*kx+z*kz+t*w+p),0);
+  // Persistent crossing currents are bounded analytic functions of shared
+  // event time: joining late never requires a fluid history or replay loop.
+  currentX+=turbulence*(.95*Math.sin(z*.3-t*.85)+.45*Math.cos(x*.45+z*.13+t*.4));
+  currentZ+=turbulence*(.8*Math.cos(x*.32+t*.72)+.38*Math.sin(z*.4-t*.6));
   height=Math.min(c.peak+.55,height);
   const depth=Math.max(0,height-(position.y??c.floorY+1.65));
-  return {waterY:height,impact,depth,submerged:depth>.02,phase:t<8?'rush':t<18?'rising':'flooded'};
+  return {waterY:height,impact,depth,submerged:depth>.02,phase:t<8?'rush':t<18?'rising':'flooded',currentX:clamp(currentX,-2.6,2.6),currentZ};
 }
 
 export function sampleC118Flood(plan,position,elapsed){return sample(configuration(plan),position,elapsed);}
@@ -56,8 +70,8 @@ float waterHeight(vec2 p){
     float delta=(dist-age*4.5)/1.15;
     level+=(2.1+(d.z-uFloor)*.48)*exp(-delta*delta)*gate;
   }
-  float turbulence=smoothstep(1.5,4.,t)*(1.-.56*smoothstep(10.,20.,t));
-  level+=uRipple*turbulence*(.13*sin(p.x*.72+p.y*.37-t*2.35)+.075*sin(p.x*1.91-p.y*1.3+t*3.7)+.045*sin(p.y*3.2+p.x*.5-t*5.2));
+  float turbulence=smoothstep(1.5,4.,t);
+  level+=uRipple*turbulence*(${waveExpression});
   return min(uPeak+.55,level);
 }
 float crestMask(vec2 p){
@@ -100,12 +114,13 @@ export function createC118FloodEffect(THREE,{plan}){
         vec2 drift=vec2(vWorld.x*.75+uTime*.78,vWorld.z*1.24-uTime*.68);
         float f=foamNoise(drift),fine=foamNoise(drift*3.1+vec2(uTime*.2,0.));
         float streak=pow(.5+.5*sin(vWorld.z*4.6+vWorld.x*1.3+f*7.-uTime*4.),8.);
-        float foam=smoothstep(.40,.72,f)*vCrest*.94+streak*.13*smoothstep(.48,.7,fine);
+        float breaking=smoothstep(.035,.34,1.-abs(n.y));
+        float foam=smoothstep(.40,.72,f)*vCrest*.94+streak*.32*smoothstep(.38,.66,fine)+breaking*smoothstep(.39,.69,f)*.68;
         float shine=pow(max(0.,dot(reflect(-normalize(vec3(-.3,.85,.15)),n),eye)),44.);
         vec3 deep=vec3(.025,.13,.155),shallow=vec3(.10,.32,.35);
         vec3 color=mix(deep,shallow,.38+.42*fresnel+.12*f)+vec3(.45,.61,.60)*shine*.8;
         color=mix(color,vec3(.78,.88,.84),clamp(foam,0.,.95));
-        gl_FragColor=vec4(color,gl_FrontFacing?.86:.61);
+        gl_FragColor=vec4(color,gl_FrontFacing?.86:.43);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`}));
@@ -117,21 +132,23 @@ export function createC118FloodEffect(THREE,{plan}){
   const jetUniforms=[];
   for(const door of c.doors){
     const u={uTime:uniforms.uTime,uOrigin:{value:new THREE.Vector3(door.x,door.y,door.z)},uSide:{value:door.side},
-      uDoorWidth:{value:door.width},uDelay:{value:door.delay},uFloor:uniforms.uFloor,uPeak:uniforms.uPeak,uRipple:uniforms.uRipple};jetUniforms.push(u);
+      uDoorWidth:{value:door.width},uDelay:{value:door.delay},uFloor:uniforms.uFloor,uPeak:uniforms.uPeak,uRipple:uniforms.uRipple,uDoors:uniforms.uDoors};jetUniforms.push(u);
     const material=ownMaterial(new THREE.ShaderMaterial({uniforms:u,transparent:true,depthWrite:false,side:THREE.DoubleSide,
-      vertexShader:/* glsl */`
-        uniform float uTime,uSide,uDelay,uDoorWidth,uRipple,uPeak,uFloor;uniform vec3 uOrigin;
+      vertexShader:waterField+/* glsl */`
+        uniform float uSide,uDelay,uDoorWidth;uniform vec3 uOrigin;
         varying vec3 vWorld;varying vec2 vUv;varying float vRoll;varying float vFade;
         void main(){float age=max(0.,uTime-1.5-uDelay);float progress=smoothstep(0.,.38,age);
-          float front=min(16.,age*4.5);float u=uv.x,v=uv.y*2.-1.;
+          float ongoing=smoothstep(5.,10.,age);
+          float front=min(16.,age*4.5)*(1.-ongoing*.14*(.5+.5*sin(age*1.3)));float u=uv.x,v=uv.y*2.-1.;
           float width=uDoorWidth*.48+pow(u,1.6)*min(5.2,front*.34);
-          float roll=exp(-pow((u-.84)/.15,2.));
+          float roll=exp(-pow((u-(.84-ongoing*.2*(.5+.5*sin(age*1.8))))/.15,2.));
           float edge=pow(max(0.,1.-v*v),.45);
           float h=(.27+1.8*roll+1.1*exp(-pow((u-.14)/.3,2.)))*edge;
           float x=uOrigin.x-uSide*(u*front+.42*roll*sin(u*12.+age*3.));
-          float y=uOrigin.y+.08+h*progress+.16*uRipple*sin(u*17.-age*7.+v*4.)*edge;
           float z=uOrigin.z+v*width+u*u*1.4;
-          vUv=vec2(u,v);vRoll=roll;vFade=progress*(1.-smoothstep(5.2,8.,age));
+          float base=mix(uOrigin.y,max(uOrigin.y,waterHeight(vec2(x,z))-.19),ongoing);
+          float y=min(uPeak+.83,base+.08+h*progress*(1.-ongoing*.74)+.16*uRipple*sin(u*17.-age*7.+v*4.)*edge);
+          vUv=vec2(u,v);vRoll=roll;vFade=progress*(1.-ongoing*.42);
           vWorld=vec3(x,y,z);gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(vWorld,1.);
         }`,
       fragmentShader:surfaceNoise+/* glsl */`
@@ -157,12 +174,15 @@ export function createC118FloodEffect(THREE,{plan}){
   const sprayGeometry=ownGeometry(new THREE.BufferGeometry());sprayGeometry.setAttribute('position',new THREE.BufferAttribute(positions,3));sprayGeometry.setAttribute('aSeed',new THREE.BufferAttribute(seeds,4));
   const sprayMaterial=ownMaterial(new THREE.ShaderMaterial({uniforms,transparent:true,depthWrite:false,
     vertexShader:/* glsl */`
-      uniform float uTime;uniform vec4 uDoors[4];uniform vec4 uRoom;attribute vec4 aSeed;varying float vAlpha;
+      uniform float uTime,uFloor,uPeak;uniform vec4 uDoors[4];uniform vec4 uRoom;attribute vec4 aSeed;varying float vAlpha;
       void main(){vec4 door=uDoors[int(aSeed.w)];float age=uTime-1.5-door.w;
         float life=1.1+aSeed.y*.55;float born=floor((max(0.,age)+aSeed.x*life)/life)*life-aSeed.x*life;
-        float t=max(0.,age-born);float emission=step(0.,age)*step(born,6.1)*smoothstep(0.,.3,age);
+        float t=max(0.,age-born);float ongoing=smoothstep(5.,10.,age);
+        float emission=step(0.,age)*smoothstep(0.,.3,age)*(1.-ongoing*.3);
         float side=sign(door.x);float speed=5.5+aSeed.x*4.8;
-        vec3 p=vec3(door.x-side*(.1+speed*t),door.z+.5+(3.8+aSeed.y*4.1)*t-4.9*t*t,
+        float level=uFloor-.35+(uPeak-uFloor+.35)*pow(clamp((uTime-2.8)/15.2,0.,1.),.85);
+        float base=mix(door.z,max(door.z,level-.3),ongoing);
+        vec3 p=vec3(door.x-side*(.1+speed*t),base+.5+(3.8+aSeed.y*4.1)*(1.-ongoing*.35)*t-4.9*t*t,
           door.y+(aSeed.z-.5)*1.8+(aSeed.z-.5)*7.*t+t*t*.9);
         vec4 mv=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;
         gl_PointSize=clamp((2.+aSeed.y*5.)*70./max(1.,-mv.z),1.,26.);
@@ -186,7 +206,7 @@ export function createC118FloodEffect(THREE,{plan}){
       if(disposed)return;lastElapsed=Number.isFinite(elapsed)?elapsed:-1;
       group.visible=Boolean(active)&&lastElapsed>=1.5;
       rippleScale=reducedMotion ? .35 : 1;uniforms.uRipple.value=rippleScale;uniforms.uTime.value=Math.max(0,lastElapsed);
-      spray.visible=!reducedMotion&&lastElapsed<10;
+      spray.visible=!reducedMotion;
     },
     sampleAt(position,elapsed=lastElapsed){return sample(c,position,elapsed,rippleScale);},
     dispose(){if(disposed)return;disposed=true;group.visible=false;group.removeFromParent();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());group.clear();},

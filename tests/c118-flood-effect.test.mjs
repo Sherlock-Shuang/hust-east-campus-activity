@@ -53,3 +53,29 @@ test('all samples stay finite across the room, effect has bounded GPU resources 
   let gd=0,md=0;geometries.forEach(g=>g.addEventListener('dispose',()=>gd++));materials.forEach(m=>m.addEventListener('dispose',()=>md++));
   effect.dispose();effect.dispose();assert.equal(gd,geometries.size);assert.equal(md,materials.size);assert.equal(effect.group.children.length,0);
 });
+
+test('late flood retains turbulent wave energy, moving currents and fixed spray resources',()=>{
+  const effect=createC118FloodEffect(THREE,{plan}),p={x:2.1,z:-2.7,y:4};
+  for(const start of[30,300,3600]){
+    const states=Array.from({length:120},(_,i)=>effect.sampleAt(p,start+i/20));
+    const heights=states.map(s=>s.waterY);
+    assert.ok(Math.max(...heights)-Math.min(...heights)>.55,'the surface does not settle to a flat plane');
+    assert.ok(states.reduce((sum,s)=>sum+Math.hypot(s.currentX,s.currentZ),0)/states.length>.55);
+    for(const s of states){assert.ok(Math.abs(s.currentX)<=2.6&&Math.abs(s.currentZ)<=1.18);assert.ok(s.waterY<plan.config.floorY+plan.config.height-1.5);}
+    effect.update({elapsed:start});assert.equal(effect.group.getObjectByName('c118-door-spray').visible,true);
+  }
+  effect.dispose();
+});
+
+test('CPU surface and generated GLSL use the identical persistent wave spectrum',()=>{
+  const effect=createC118FloodEffect(THREE,{plan});
+  const shader=effect.group.getObjectByName('c118-rising-water').material.vertexShader;
+  const expression=shader.match(/level\+=uRipple\*turbulence\*\(([^\n]+)\);/)[1];
+  const gpuWaves=new Function('p','t',`return ${expression.replaceAll('sin(', 'Math.sin(')};`);
+  const peak=effect.group.userData.peakWaterLevel;
+  for(const time of[30,33.7,1000])for(const x of[-9,0,8])for(const z of[-14,0,13]){
+    const expected=peak+gpuWaves({x,y:z},time);
+    assert.ok(Math.abs(effect.sampleAt({x,z,y:3},time).waterY-expected)<1e-10);
+  }
+  effect.dispose();
+});

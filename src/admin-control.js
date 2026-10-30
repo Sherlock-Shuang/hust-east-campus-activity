@@ -70,7 +70,7 @@ function renderC118Screen(){
 function renderC118Flood(){
   const ready=loggedIn&&skyQrReady&&Boolean(snapshot),event=ready?snapshot.state.c118Flood:null;
   const elapsed=event?getC118FloodElapsed(event,now()):null;
-  const label=!ready?'等待同步':!event?'报告厅正常':event.pausedAt!==null?'演出已暂停':elapsed<0?`${Math.ceil(-elapsed)} 秒后涌入`:elapsed<18?'海浪正在涌入':'报告厅已淹没';
+  const label=!ready?'等待同步':!event?'校园 / 报告厅正常':event.pausedAt!==null?'演出已暂停':elapsed<0?`${Math.ceil(-elapsed)} 秒后涌入`:elapsed<18?'校园巨浪逼近 · 厅内涌水':'校园持续巨浪 · 厅内漂浮';
   $('c118-flood-status').textContent=label;
   $('c118-flood-status').dataset.status=event?'active':'off';
   $('trigger-c118-flood').disabled=busy||!ready||Boolean(event);
@@ -615,15 +615,15 @@ $('restart-c118-screen').addEventListener('click',()=>{
   mutate(state=>{const current=normalizeC118Screen(state.c118Screen);state.c118Screen={...current,revision:current.revision+1};},'已通知报告厅内观众重新播放当前影片。');
 });
 $('trigger-c118-flood').addEventListener('click',()=>mutate(state=>{
-  if(state.c118Flood)throw new Error('C118演出已开启，请先恢复报告厅再触发。');
+  if(state.c118Flood)throw new Error('校园海啸已开启，请先恢复报告厅再触发。');
   state.c118Flood={id:id('flood'),startAt:Math.floor(now()),pausedAt:null,pausedMs:0};
-},'C118海啸已排期，报告厅内玩家将同步看到海水涌入；若全场暂停，将在恢复后开始。'));
+},'校园海啸已排期：外侧巨浪与 C118 涌水同步开始；若全场暂停，将在恢复后开始。'));
 $('reset-c118-flood').addEventListener('click',()=>{
   const expectedId=snapshot?.state.c118Flood?.id;
   mutate(state=>{
-    if(state.c118Flood&&state.c118Flood.id!==expectedId)throw new Error('C118演出已被其他管理员更新，请核对后再恢复。');
+    if(state.c118Flood&&state.c118Flood.id!==expectedId)throw new Error('校园海啸已被其他管理员更新，请核对后再恢复。');
     state.c118Flood=null;
-  },'C118已恢复，报告厅内玩家将统一退出海啸效果。');
+  },'校园和 C118 已恢复，所有玩家统一退出海啸效果。');
 });
 $('save-pause-message').addEventListener('click', () => {
   const applyMessageEdit = capturePauseMessageEdit();
