@@ -1,29 +1,59 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f7f4fb"><title>她不一样 · 聊天观察室</title><link rel="stylesheet" href="./project.css"><script defer src="/experiences/activity-bridge.js" data-work="she-love-me"></script><script type="module" src="./project.js"></script></head>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>她不一样</title>
+  <link rel="stylesheet" href="./project.css">
+  <script defer src="/experiences/activity-bridge.js" data-work="she-love-me"></script>
+  <script type="module" src="./project.js"></script>
+</head>
 <body>
-<header class="topbar"><a href="/" id="return-to-campus" class="back">← <span>返回校园</span></a><span class="place">爱因斯坦广场 <span class="dot"></span> 开放体验</span><a class="source-link" href="https://github.com/863401402/she-love-me" target="_blank" rel="noopener noreferrer">开源项目 ↗</a></header>
+<header class="topbar"><h1>她不一样</h1><a href="/" id="return-to-campus">返回校园</a></header>
 <div id="activity-status" role="status" hidden></div>
 <main id="project">
-<section class="intro"><div><p class="eyebrow">CHAT OBSERVATORY / 01</p><h1>她不一样<span class="title-dot">.</span><small>聊天观察室</small></h1><p class="lede">把聊天里的小细节，变成看得见的交流线索。</p></div><div class="intro-note"><span class="note-mark">“</span><p>不猜心意，先看对话。<br><span>一份关于两个人如何交流的小实验。</span></p></div></section>
-<div class="workspace">
-<section class="input-panel" aria-labelledby="input-title"><div class="section-heading"><h2 id="input-title"><span>01</span> 选一段对话</h2><button class="text-button" id="clear" type="button">清空记录</button></div>
-<div class="tabs" role="tablist" aria-label="聊天来源"><button type="button" id="tab-demo" role="tab" aria-selected="true" aria-controls="panel-demo" data-tab="demo">试试示例</button><button type="button" id="tab-paste" role="tab" aria-selected="false" aria-controls="panel-paste" tabindex="-1" data-tab="paste">粘贴聊天</button><button type="button" id="tab-file" role="tab" aria-selected="false" aria-controls="panel-file" tabindex="-1" data-tab="file">导入文件</button></div>
-<div id="panel-demo" role="tabpanel" aria-labelledby="tab-demo"><div class="demo-options"><button class="demo-option selected" data-demo="0" type="button"><span class="demo-symbol">↗</span><strong>一起去看展</strong><small>两个人都在延续话题</small></button><button class="demo-option" data-demo="1" type="button"><span class="demo-symbol">…</span><strong>最近有点忙</strong><small>忙碌中的不同步</small></button></div><p class="micro">虚构对话 · 仅供体验 · 不包含真实个人信息</p><div class="chat-preview" id="chat-preview" aria-label="示例聊天预览"></div></div>
-<div id="panel-paste" role="tabpanel" aria-labelledby="tab-paste" hidden><label class="field-label" for="chat-text">每条消息写成「姓名: 内容」</label><textarea id="chat-text" spellcheck="false" placeholder="2026-10-12 18:00 小林: 周末一起去看展吗？&#10;2026-10-12 18:03 小夏: 好呀！&#10;&#10;也可以直接粘贴 JSON 格式的导出记录。"></textarea><p class="micro">没有时间也能看消息统计；至少 4 条双人文字消息。</p></div>
-<div id="panel-file" role="tabpanel" aria-labelledby="tab-file" hidden><label class="upload-zone" for="chat-file"><span>↑</span><strong>选择聊天记录文件</strong><small>JSON / TXT / Markdown · 最大 2 MB</small><input id="chat-file" type="file" accept=".json,.txt,.md,text/plain,application/json,text/markdown"></label><p class="file-name" id="file-name">文件仅在当前浏览器中读取。</p></div>
-<details class="format-help"><summary>支持哪些格式？</summary><p>支持双人聊天：一行一条「姓名: 内容」；或「2026-10-12 18:00 姓名: 内容」。JSON 使用 messages 数组，其中每条包含 sender、content、timestamp（可选）；也支持 isSend、createTime 等常见字段。</p><p>只分析文字与已有语音转写，不读取聊天软件。若时间不完整，按文件顺序分析，停用时间指标。</p></details>
-<div class="controls"><label>哪位是你？<select id="self-select" aria-label="选择你的发送者"></select></label><label>观察范围<select id="range-select"><option value="0">全部记录</option><option value="7">最近 7 天</option><option value="30">最近 30 天</option></select></label></div>
-<p class="micro" id="range-note">时间范围以记录中的最后一天为基准。</p><button class="primary analyze-button" id="analyze" type="button">开始观察 <span>↗</span></button><p id="input-status" class="status" role="status" aria-live="polite"></p><div class="privacy-note"><span>◇</span><p><strong>先在本地看数据。</strong>只有你勾选并点击 AI 解读，抽样对话才会发送到模型服务。刷新或离开后不保留聊天。</p></div>
-</section>
-<section class="report-panel" aria-labelledby="report-title"><div class="section-heading"><h2 id="report-title"><span>02</span> 看见交流的节奏</h2><span class="local-label">本地统计</span></div>
-<div id="empty-report" class="empty-report"><div class="conversation-art" aria-hidden="true"><div>周末一起去看展吗？<i></i></div><div>好呀，我正想约你。<i></i></div><span>↔</span></div><h3>一段对话，不止一种解读。</h3><button class="outline quick-demo" id="quick-demo" type="button">用示例一键体验 ↗</button><p>从左侧选一个示例，开始你的第一次观察。<br>消息数量、主动开启、回应节奏，会在这里呈现。</p><div class="empty-tags"><span>谁在开启话题</span><span>如何回应彼此</span><span>下一句怎么说</span></div></div>
-<div id="report" hidden><div class="report-top"><div><p class="eyebrow" id="report-source">YOUR CONVERSATION</p><h3 id="report-heading"></h3><p id="report-meta" class="micro"></p></div><button type="button" id="export" class="outline">导出报告 ↓</button></div><section id="export-preview" class="export-preview" hidden aria-labelledby="export-title"><div class="subheading"><h4 id="export-title">保存这份观察</h4><button id="close-export" class="text-button" type="button">收起</button></div><p class="micro">若浏览器未弹出下载，可以复制下方完整报告。</p><textarea id="export-text" aria-label="完整报告文本" readonly rows="8"></textarea><button id="copy-report" class="outline" type="button">复制报告</button><p id="export-status" class="status" role="status"></p></section><div id="metrics" class="metrics"></div>
-<section class="comparison"><div class="subheading"><h4>对话的两端</h4><span id="pair-names"></span></div><div class="share-bar" id="share-bar" aria-label="双方消息占比"></div><div class="share-labels"><span id="me-share"></span><span id="them-share"></span></div><div id="comparison-rows"></div></section>
-<section class="trend" id="trend" hidden><div class="subheading"><h4>每天的交流</h4><span>UTC+8 · 有消息的日期</span></div><div id="daily-chart" class="daily-chart"></div><p id="chart-note" class="micro"></p></section>
-<section class="observations"><div class="subheading"><h4>数据告诉了我们什么</h4><span>事实观察</span></div><ul id="observations"></ul></section>
-<section class="ai-section"><div class="subheading"><h4><span class="spark">✳</span> 再听一个角度</h4><span>可选 · AI 解读</span></div><p>结合这段对话，看看话题如何延续，以及更自然的沟通方式。AI 的解释是推测，不是对关系的判定。</p><details class="payload-details"><summary id="sample-summary">查看将发送的内容</summary><p class="micro">发送者会替换为“我 / 对方”，常见手机号和邮箱会隐藏；其他私人内容仍可能保留，请仔细检查。</p><pre id="sample-preview"></pre></details><label class="consent"><input type="checkbox" id="consent"><span>我已检查抽样内容，同意将以上样本和统计数据发送给 AI 模型服务。</span></label><div id="join-box" hidden><label class="field-label" for="nickname">第一次来？给自己起个校园昵称</label><div class="join-row"><input id="nickname" maxlength="24" placeholder="例如：广场观察员" autocomplete="off"><button class="outline" id="join" type="button">加入并解读</button></div><p class="micro">昵称用于校园体验身份与请求限流，不会和聊天正文一起发送。</p></div><div class="ai-actions"><button class="primary" id="ai-analyze" disabled type="button">生成 AI 解读 ✳</button><button id="cancel-ai" class="text-button" type="button" hidden>取消</button><span>仅发送上方预览的样本和统计</span></div><p class="status" id="ai-status" role="status" aria-live="polite"></p><div id="ai-result" class="ai-result" hidden></div></section>
-<p class="method-note">统计口径：间隔超过 3 小时视为新对话；回复用时只统计双方交替、间隔 10 秒至 24 小时的消息。短回复按字数和常见短语统计，不等于冷淡。以上均不能证明喜欢或不喜欢。</p></div>
-</section></div>
-<footer><span>她不一样 · 网页体验版</span><span>基于开源项目的分析思路制作 <a href="./LICENSE.txt" target="_blank" rel="noopener">MIT License</a></span><span>认真观察，也尊重不确定。</span></footer>
-</main></body></html>
+  <section class="input-panel" aria-label="聊天输入">
+    <div class="input-top">
+      <div class="tabs" role="tablist" aria-label="聊天来源">
+        <button type="button" id="tab-demo" role="tab" aria-selected="true" aria-controls="panel-demo" data-tab="demo">示例</button>
+        <button type="button" id="tab-paste" role="tab" aria-selected="false" aria-controls="panel-paste" tabindex="-1" data-tab="paste">粘贴</button>
+        <button type="button" id="tab-file" role="tab" aria-selected="false" aria-controls="panel-file" tabindex="-1" data-tab="file">导入</button>
+      </div>
+      <button class="text-button" id="clear" type="button">清空</button>
+    </div>
+    <div id="panel-demo" role="tabpanel" aria-labelledby="tab-demo">
+      <div class="demo-options"><button class="demo-option selected" data-demo="0" type="button">一起去看展</button><button class="demo-option" data-demo="1" type="button">最近有点忙</button><span class="micro">虚构示例</span></div>
+      <div class="chat-preview" id="chat-preview" aria-label="示例聊天预览"></div>
+    </div>
+    <div id="panel-paste" role="tabpanel" aria-labelledby="tab-paste" hidden>
+      <textarea id="chat-text" aria-label="聊天记录" spellcheck="false" placeholder="小林: 周末一起去看展吗？&#10;小夏: 好呀！&#10;&#10;至少 4 条双人消息"></textarea>
+      <details class="format-help"><summary>格式说明</summary><p>每行「姓名: 内容」，可在前面加「2026-10-12 18:00」。也支持 JSON messages 数组：sender、content、timestamp（可选）。</p></details>
+    </div>
+    <div id="panel-file" role="tabpanel" aria-labelledby="tab-file" hidden>
+      <label class="upload-zone" for="chat-file"><span>选择聊天文件</span><small>JSON / TXT / Markdown · ≤ 2 MB</small><input id="chat-file" type="file" accept=".json,.txt,.md,text/plain,application/json,text/markdown"></label>
+      <p class="micro" id="file-name"></p>
+    </div>
+    <div class="controls"><label>我是<select id="self-select" aria-label="选择你的发送者"></select></label><label>范围<select id="range-select" title="以最后一条消息为基准"><option value="0">全部</option><option value="7">最近 7 天</option><option value="30">最近 30 天</option></select></label></div>
+    <p class="micro" id="range-note"></p>
+    <div class="run-row"><button class="primary" id="analyze" type="button">分析</button><span class="micro">本地统计，不保存聊天。</span></div>
+    <p id="input-status" class="status" role="status" aria-live="polite"></p>
+  </section>
+  <section id="report" aria-labelledby="report-title" hidden>
+    <div class="report-top"><div><h2 id="report-title">结果</h2><p id="report-meta" class="micro"></p></div><button type="button" id="export" class="text-button">导出</button></div>
+    <section id="export-preview" class="export-preview" hidden aria-labelledby="export-title"><div class="subheading"><h3 id="export-title">报告</h3><button id="close-export" class="text-button" type="button">收起</button></div><textarea id="export-text" aria-label="完整报告文本" readonly rows="8"></textarea><button id="copy-report" class="outline" type="button">复制报告</button><p id="export-status" class="status" role="status"></p></section>
+    <div class="comparison" role="table" aria-label="双方聊天统计"><div class="compare-row compare-head" role="row"><span role="columnheader">指标</span><span role="columnheader">我</span><span role="columnheader">对方</span></div><div id="comparison-rows" role="rowgroup"></div></div>
+    <details class="method-note"><summary>统计说明</summary><p>间隔超过 3 小时算一段对话。回复用时只统计双方交替、间隔 10 秒至 24 小时的消息；无完整时间时不计算。短回复不等于冷淡。</p><ul id="observations"></ul></details>
+    <section class="ai-section" aria-labelledby="ai-title">
+      <h3 id="ai-title">AI 解读</h3>
+      <details class="payload-details"><summary id="sample-summary">预览发送内容</summary><p class="micro">姓名、常见手机号和邮箱会隐藏，其他私人内容仍可能保留，请先检查。</p><pre id="sample-preview"></pre></details>
+      <label class="consent"><input type="checkbox" id="consent"><span>同意将预览中的样本和统计发送给 AI。</span></label>
+      <div id="join-box" hidden><label class="field-label" for="nickname">校园昵称</label><div class="join-row"><input id="nickname" maxlength="24" placeholder="填写昵称" autocomplete="off"><button class="outline" id="join" type="button">继续解读</button></div></div>
+      <div class="ai-actions"><button class="primary" id="ai-analyze" disabled type="button">生成解读</button><button id="cancel-ai" class="text-button" type="button" hidden>取消</button></div>
+      <p class="status" id="ai-status" role="status" aria-live="polite"></p><div id="ai-result" class="ai-result" hidden></div>
+    </section>
+  </section>
+  <footer><a href="https://github.com/863401402/she-love-me" target="_blank" rel="noopener noreferrer">开源项目</a><a href="./LICENSE.txt" target="_blank" rel="noopener">MIT</a></footer>
+</main>
+</body>
+</html>
