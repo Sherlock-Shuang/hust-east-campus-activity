@@ -117,7 +117,7 @@ function pageFixture(t, {embedded=false,fetchImpl=async()=>Response.json({analys
 }
 test('examples run without storage or network, render stats, export safely and clear',async t=>{
  const f=pageFixture(t);assert.ok(f.document.querySelector('input[type=file]'));await f.click('#analyze');assert.equal(f.requests.length,0);assert.equal(f.document.getElementById('report').hidden,false);assert.match(f.document.getElementById('report-meta').textContent,/24 条/);assert.equal(f.document.getElementById('ai-analyze').disabled,true);
- let blob;f.win.URL.createObjectURL=x=>{blob=x;return 'blob:test';};f.win.URL.revokeObjectURL=()=>{};f.win.HTMLAnchorElement.prototype.click=function(){assert.match(this.download,/\.md$/);};await f.click('#export');assert.ok(blob.size>0);
+ let blob;f.win.URL.createObjectURL=x=>{blob=x;return 'blob:test';};f.win.URL.revokeObjectURL=()=>{};f.win.HTMLAnchorElement.prototype.click=function(){assert.match(this.download,/\.md$/);};await f.click('#export');assert.ok(blob.size>0);assert.equal(f.win.document.querySelector("#export-preview").hidden,false);assert.match(f.win.document.querySelector("#export-text").value,/# 她不一样/);
  await f.click('#clear');assert.equal(f.document.getElementById('chat-text').value,'');assert.equal(f.document.getElementById('report').hidden,true);assert.equal(f.document.getElementById('sample-preview').textContent,'');
 });
 test('raw input and model content render as text; changing selection invalidates consent and report',async t=>{

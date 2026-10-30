@@ -3,3 +3,5 @@
 @media(max-width:760px){.report-top{display:block;position:relative}.report-top .outline{position:absolute;right:0;top:-3px}.report-top .eyebrow{padding-right:75px;min-height:16px}.report-top h3{font-size:22px}}
 
 .quick-demo{background:#f3edf7;border-color:#d7c3e1;color:var(--purple);font-size:12px;padding:11px 18px;margin:0 0 8px}.empty-report{padding-top:30px}.conversation-art{margin-top:5px;margin-bottom:24px}
+
+.export-preview{margin:18px 0;padding:20px;background:#f5f1fa;border:1px solid var(--line);border-radius:12px}.export-preview textarea{width:100%;min-height:150px;margin:10px 0;font:12px/1.7 monospace}.export-preview .status{margin-bottom:0}

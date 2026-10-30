@@ -20,7 +20,7 @@ test('counts starts, actual reply samples and trailing runs without inventing mi
 test('validates input and ranges, excludes unsupported media, does not execute content',()=>{
  assert.throws(()=>parseChat('abc'),/无法识别/);assert.throws(()=>parseChat('甲: a\n乙: b\n丙: c\n甲: d'),/3 位/);assert.throws(()=>parseChat('x'.repeat(2097153)),/2 MB/);
  const data=rows();data.push({sender:'them',content:'[语音]',type:'voice'});const p=parseChat(JSON.stringify(data));assert.equal(p.skipped,1);
- const r=analyzeChat(parseChat(demos[0].text),'小林',7);assert.equal(r.total,24);assert.equal(r.me.count+r.them.count,r.total);assert.ok(markdownReport(r).includes('原始聊天未写入'));
+ const r=analyzeChat(parseChat(demos[0].text),'小林',7);assert.equal(r.total,24);assert.equal(r.me.count+r.them.count,r.total);assert.ok(markdownReport(r).includes('未附完整聊天原文'));
  const xss=rows();xss[0].content='<img src=x onerror=alert(1)>';assert.equal(parseChat(JSON.stringify(xss)).messages[0].content,xss[0].content);
 });
 test('sampling keeps ordered adjacent windows, hides common contacts and bounds unicode length',()=>{
