@@ -30,6 +30,10 @@ export function openActivityLibraryDoor(source){
 }
 
 export function openActivityLibraryDocument(source){
+  // A later activity pass may have advanced the runtime version. Once the
+  // entrance hint is converted, preserve its cache token rather than downgrade
+  // the document back to an older script generation.
+  if(source.includes(ACTIVITY_DOOR_HINT)&&/src="\/works\/library\/hub\/main\.mjs\?v=[^"\s]+"/.test(source))return source;
   return source.replaceAll('唯一的密钥是一个日期',ACTIVITY_DOOR_HINT)
     .replace(/(src="\/works\/library\/hub\/main\.mjs)(?:\?[^"\s]*)?"/,'$1?v=open-door-20261030"');
 }

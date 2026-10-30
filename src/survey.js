@@ -9,7 +9,8 @@ import {
 import { createGeoScene,setCartographicLinesVisible } from "./geo-scene.js";
 import { createWaterDetails } from "./water-details.js";
 import { applyRiverTerrain } from "./river-terrain.js";
-import { createCampus3D, createCampus3DAsync } from "./campus-3d.js";
+import { createCampus3D, createCampus3DProgressive } from "./campus-3d.js";
+import {getCampusPlayerSpawn} from './player-experience.js';
 import {mergeCampusExtension} from './campus-data-merge.js';
 import {campusLandmarkArrival} from './campus-landmark-arrival.js';
 import { createCommuteExperience } from "./commute-experience.js";
@@ -29,6 +30,8 @@ import './performance-ui.css';
 import {createFrameMetrics} from './frame-metrics.js';
 import {createGraphicsRecovery} from './graphics-recovery.js';
 import {mountRuntimeDiagnostics} from './runtime-diagnostics.js';
+import {createRenderCadence} from './render-cadence.js';
+import {createGpuFrameTimer} from './gpu-frame-timer.js';
 // Rendering no longer depends on the removed sidebar controls.
 const layerSettings = { symbolic: true, building: true, road: true, water: true };
 const $ = (id) => document.getElementById(id),
@@ -48,6 +51,11 @@ const renderer = new THREE.WebGLRenderer({
   logarithmicDepthBuffer: true,
   powerPreference: "high-performance",
 });
+const renderCadence=createRenderCadence();
+const gpuTimer=createGpuFrameTimer(renderer,{enabled:new URLSearchParams(location.search).get('diagnostics')==='1'&&new URLSearchParams(location.search).get('gpu')==='1'});
+renderer.info.autoReset=false;
+let lastRenderedAt=NaN,renderCpuAccumulator=0,firstDrawPending=false,lastPasses={};
+let inputObservation=null;
 const renderProfile=createMobileRenderProfile({coarsePointer:window.matchMedia('(any-pointer: coarse)').matches,maxTouchPoints:navigator.maxTouchPoints,width:innerWidth,height:innerHeight,devicePixelRatio});
 const performanceQuality=createPerformanceQuality({deviceRatio:devicePixelRatio,handheld:renderProfile.handheld,hardwareConcurrency:navigator.hardwareConcurrency,deviceMemory:navigator.deviceMemory,mode:readQualityPreference()});
 performanceQuality.setViewport(innerWidth,innerHeight);
@@ -138,12 +146,19 @@ let fc,
   animation = null,
   needsRender = true,
   viewMode = "oblique";
-let liveControl, liveFrozen = false, graphicsSuspended=false,datasetLoading=false;
+let liveControl, liveFrozen = false, graphicsSuspended=false,datasetLoading=false,campusBuildAbort;
 const recoveryPanel=document.createElement('div');recoveryPanel.className='graphics-recovery';recoveryPanel.hidden=true;recoveryPanel.setAttribute('role','status');
 const recoveryText=document.createElement('p'),recoveryButton=document.createElement('button');recoveryButton.textContent='重新载入校园';recoveryButton.type='button';recoveryPanel.append(recoveryText,recoveryButton);container.append(recoveryPanel);
 const RECOVERY_POSE_KEY='campus-graphics-recovery-pose-v1';
 let recoveryPose=null;
 function suspendCampus(){const frozen=liveFrozen||graphicsSuspended||datasetLoading;commute?.setSuspended(frozen);controls.enabled=!frozen&&!commute?.player.active;needsRender=true;}
+function observeFirstInput(event){
+  if(startupTimings.firstVisibleInputObservedMs||liveFrozen||datasetLoading||!commute?.player.active)return;
+  if(event.type==='keydown'&&!['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))return;
+  if(event.target?.closest?.('input,textarea,button,select'))return;
+  inputObservation={at:performance.now(),position:camera.position.clone(),quaternion:camera.quaternion.clone()};
+}
+canvas.addEventListener('pointermove',observeFirstInput);document.addEventListener('keydown',observeFirstInput);
 recoveryButton.addEventListener('click',()=>{
   try{if(recoveryPose)sessionStorage.setItem(RECOVERY_POSE_KEY,JSON.stringify({createdAt:Date.now(),pose:recoveryPose}));}catch{}
   location.reload();
@@ -153,17 +168,17 @@ const graphicsRecovery=createGraphicsRecovery({canvas,
   onRestored(){
     scene.environment=daylight.rebuildEnvironment();
     appliedBudget=null;applyPerformanceBudget();renderer.resetState();resize();lastShadowAt=-Infinity;previous=performance.now();lastFrameRendered=false;
-    graphicsSuspended=false;suspendCampus();frameMetrics.reset();
+    graphicsSuspended=false;suspendCampus();frameMetrics.reset();gpuTimer.restore();renderer.info.autoReset=false;renderCadence.reset();lastRenderedAt=NaN;
   },
   onStatus(status){canvas.dataset.graphicsState=status;canvas.dataset.graphicsLosses=String(graphicsRecovery.lossCount);recoveryPanel.hidden=status==='ready';recoveryButton.hidden=status!=='reload-available';recoveryText.textContent=status==='reload-available'?'画面恢复暂未完成，可重新载入并保留活动身份与当前位置。':'正在恢复校园画面…';},
 });
 canvas.dataset.graphicsState='ready';
 const buildId=typeof __CAMPUS_BUILD__==='string'?__CAMPUS_BUILD__:'local';canvas.dataset.buildId=buildId;
-const diagnostics=mountRuntimeDiagnostics({document,window,canvas,renderer,getReport:()=>({
-  buildId,frame:frameMetrics.snapshot(),startup:{...startupTimings},quality:{...qualityBudget},
-  resourceObjects:{geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures},
+const diagnostics=mountRuntimeDiagnostics({document,window,canvas,renderer,scene,getReport:()=>({
+  buildId,frame:frameMetrics.snapshot(),frameSession:frameMetrics.session(),gpu:gpuTimer.snapshot(),passes:{...lastPasses},startup:{...startupTimings},quality:{...qualityBudget},
+  resourceObjects:{geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures},decorations:campus?.decorationStats,
   graphicsLosses:graphicsRecovery.lossCount,graphicsState:canvas.dataset.graphicsState,
-  note:'Frame intervals and CPU samples; resource counts are not GPU memory bytes. Physical-device results apply only to the recorded device.',
+  note:'Actual drawn frame intervals and CPU samples. Pass totals include shadow/reflection work unlike legacy final-render counters; mainCalls includes shadows. Resource counts are not GPU memory bytes. First-frame observations use the next RAF, not hardware presentation timestamps. GPU queries require diagnostics=1&gpu=1.',
 })});
 let pendingLandmark=new URLSearchParams(location.search).get('place');
 const qualityUI=mountPerformanceUI({document,storage:getQualityStorage(),mode:qualityBudget.mode,onChange(mode){performanceQuality.setMode(mode);applyPerformanceBudget();canvas.focus({preventScroll:true});}});
@@ -182,6 +197,7 @@ function applyPerformanceBudget(){
   waterDetails?.setReflectionBudget({enabled:qualityBudget.reflectionEnabled,intervalMs:qualityBudget.reflectionIntervalMs});
   commute?.setPerformanceBudget?.({trafficHz:qualityBudget.trafficHz,detailDistanceScale:qualityBudget.detailDistanceScale});
   liveControl?.setPerformanceBudget?.(qualityBudget);
+  frameMetrics.mark('quality',{level:qualityBudget.level,pixelRatio:qualityBudget.pixelRatio,maxFps:qualityBudget.maxFps});
   qualityUI.update(qualityBudget);canvas.dataset.qualityMode=qualityBudget.mode;canvas.dataset.qualityLevel=qualityBudget.name;
   needsRender=true;
 }
@@ -646,6 +662,7 @@ async function loadDataset(data, manifest = {}) {
   });
   commute?.dispose();
   commute = null;
+  campusBuildAbort?.abort();campusBuildAbort=new AbortController();
   campus?.dispose();
   campusSports?.dispose();
   waterDetails?.dispose();
@@ -659,8 +676,17 @@ async function loadDataset(data, manifest = {}) {
   await yieldBrowserTask();
   campusSports=createCampusSports(THREE,model,{surfaces});model.sportsInfrastructure=campusSports.infrastructure;scene.add(campusSports.group);
   const campusStarted=performance.now();
-  campus = await createCampus3DAsync(THREE, model, { frame, geoToLocal },{yieldTask:yieldBrowserTask,onProgress:({stage})=>{$('load-screen').querySelector('small').textContent=stage;}});
+  const initialPosition=getCampusPlayerSpawn(model)||{x:0,z:0};
+  campus = await createCampus3DProgressive(THREE, model, { frame, geoToLocal },{initialPosition,getPosition:()=>commute?.player?.state||initialPosition,signal:campusBuildAbort.signal,yieldTask:yieldBrowserTask,onProgress:({stage})=>{if(datasetLoading)$('load-screen').querySelector('small').textContent=stage;needsRender=true;}});
   startupTimings.campusBuildMs=performance.now()-campusStarted;
+  canvas.dataset.campusDetails='preparing';
+  const buildingCampus=campus;
+  campus.whenDetailedReady.then(result=>{
+    if(campus!==buildingCampus||result.cancelled)return;
+    canvas.dataset.campusDetails=result.error?'partial':'ready';startupTimings.detailsReadyMs=performance.now()-startupStarted;
+    canvas.dataset.startupTimings=JSON.stringify(startupTimings);needsRender=true;
+    if(result.error)console.warn('Campus detail preparation:',result.error);else syncStats();
+  });
   await yieldBrowserTask();
   scene.add(campus.group);
   riverTerrain=applyRiverTerrain(THREE,{model,datum,surfaces});
@@ -711,7 +737,10 @@ async function loadDataset(data, manifest = {}) {
     console.warn("This dataset has no supported commute route:", error);
   }
   startupTimings.playerBuildMs=performance.now()-playerStarted;
-  startupTimings.interactiveMs=performance.now()-startupStarted;
+  startupTimings.worldReadyMs=performance.now()-startupStarted;
+  // Kept for old reports; this is preparation, not a presented/input frame.
+  startupTimings.interactiveMs=startupTimings.worldReadyMs;
+  firstDrawPending=true;
   canvas.dataset.startupTimings=JSON.stringify(startupTimings);
   $("load-screen").hidden = true;
   liveControl?.sync();
@@ -1014,19 +1043,17 @@ function updateShadowCamera(){
   }
 }
 let previous = performance.now();
-let frameWindow=0,frameSamples=0,renderWork=0,tickWork=0,sceneWork=0,drawWork=0;
+let frameWindow=0,frameSamples=0,renderedSamples=0,renderWork=0,tickWork=0,sceneWork=0,drawWork=0;
 let drawCalls=0,triangles=0,lastFrameCpu=0,lastFrameRendered=false,wasHidden=false,lastLabelAt=-Infinity;
 function render(now) {
   requestAnimationFrame(render);
   const frameStart=performance.now(),elapsed=Math.max(0,now-previous),frozen=liveFrozen||graphicsSuspended||datasetLoading;
-  const continuousFrame=lastFrameRendered&&!wasHidden&&!frozen;
   const dt = wasHidden?0:Math.min(elapsed/1000,0.1);
   previous = now;
-  performanceQuality.update({elapsedMs:elapsed,cpuMs:lastFrameCpu,visible:!document.hidden,active:!frozen,rendered:lastFrameRendered&&!wasHidden});
-  if(document.hidden){wasHidden=true;lastFrameRendered=false;frameWindow=frameSamples=renderWork=tickWork=sceneWork=drawWork=0;return;}
+  if(document.hidden){renderCadence.reset();lastRenderedAt=NaN;renderCpuAccumulator=0;wasHidden=true;lastFrameRendered=false;frameWindow=frameSamples=renderedSamples=renderWork=tickWork=sceneWork=drawWork=0;return;}
   if(wasHidden){needsRender=true;lastShadowAt=-Infinity;}wasHidden=false;
-  if(graphicsSuspended){lastFrameRendered=false;return;}
-  if(!$('load-screen').hidden){lastFrameRendered=false;return;}
+  if(graphicsSuspended){renderCadence.reset();lastRenderedAt=NaN;renderCpuAccumulator=0;lastFrameRendered=false;return;}
+  if(!$('load-screen').hidden){lastRenderedAt=NaN;lastFrameRendered=false;return;}
   applyPerformanceBudget();lastFrameRendered=false;
   if (animation && !frozen) {
     needsRender = true;
@@ -1057,8 +1084,10 @@ function render(now) {
     viewMetricsDirty=false;lastViewMetricsAt=now;
   }
   if (liveControl?.tick(now)) needsRender = true;
-  if (needsRender) {
+  if(!needsRender||frozen){lastRenderedAt=NaN;renderCpuAccumulator=0;}
+  if (needsRender && renderCadence.shouldRender(now,qualityBudget.maxFps)) {
     const sceneStart=performance.now();
+    renderer.info.reset();gpuTimer.begin();
     // A ground-scale fog cutoff hid the far half of the campus in overview.
     // Keep normal street haze while retaining spatial context at aerial scale.
     const overviewLift=Math.max(0,camera.position.y-120);
@@ -1066,24 +1095,41 @@ function render(now) {
     campus?.update?.(camera, { viewportHeight,detailDistanceScale:qualityBudget.detailDistanceScale });
     if(now-lastLabelAt>=100){updateLabels();lastLabelAt=now;}
     if(!frozen)waterDetails?.renderReflection(renderer,scene,camera,now);
+    lastPasses.reflectionCalls=renderer.info.render.calls;lastPasses.reflectionTriangles=renderer.info.render.triangles;
     sceneWork+=performance.now()-sceneStart;
     const drawStart=performance.now();
     if(renderer.shadowMap.enabled&&(renderer.shadowMap.needsUpdate||now-lastShadowAt>=qualityBudget.shadowIntervalMs)){
       updateShadowCamera();renderer.shadowMap.needsUpdate=true;lastShadowAt=now;
     }
-    renderer.render(scene, camera);
+    renderer.render(scene, camera);gpuTimer.end();
+    lastPasses.mainCalls=renderer.info.render.calls-lastPasses.reflectionCalls;
+    lastPasses.mainTriangles=renderer.info.render.triangles-lastPasses.reflectionTriangles;
     drawWork+=performance.now()-drawStart;
     drawCalls=renderer.info.render.calls;
     triangles=renderer.info.render.triangles;
-    lastFrameRendered=true;
+    lastFrameRendered=true;renderedSamples++;
+    if(firstDrawPending){
+      firstDrawPending=false;startupTimings.firstDrawSubmittedMs=performance.now()-startupStarted;
+      requestAnimationFrame(()=>{startupTimings.firstFrameObservedMs=performance.now()-startupStarted;canvas.dataset.startupTimings=JSON.stringify(startupTimings);});
+    }
+    if(inputObservation&&(camera.position.distanceToSquared(inputObservation.position)>.0001||camera.quaternion.angleTo(inputObservation.quaternion)>.0001)){
+      const inputAt=inputObservation.at;inputObservation=null;
+      requestAnimationFrame(()=>{if(startupTimings.firstVisibleInputObservedMs)return;startupTimings.firstVisibleInputObservedMs=performance.now()-startupStarted;startupTimings.inputToObservedFrameMs=performance.now()-inputAt;canvas.dataset.startupTimings=JSON.stringify(startupTimings);});
+    }
     needsRender = false;
   }
   lastFrameCpu=performance.now()-frameStart;
-  frameMetrics.sample({frameMs:elapsed,cpuMs:lastFrameCpu,drawCalls,triangles,active:continuousFrame&&lastFrameRendered&&!document.hidden});
+  renderCpuAccumulator+=lastFrameCpu;
+  if(lastFrameRendered){
+    const drawnInterval=now-lastRenderedAt;
+    frameMetrics.sample({frameMs:drawnInterval,cpuMs:renderCpuAccumulator,drawCalls,triangles,active:!frozen&&Number.isFinite(lastRenderedAt)});
+    performanceQuality.update({elapsedMs:drawnInterval,cpuMs:renderCpuAccumulator,active:!frozen&&Number.isFinite(lastRenderedAt),targetFrameMs:1000/qualityBudget.maxFps});
+    lastRenderedAt=frozen?NaN:now;renderCpuAccumulator=0;
+  }
   if(!document.hidden){
     frameWindow+=elapsed;frameSamples++;renderWork+=performance.now()-frameStart;
-    if(frameWindow>=1200){const distribution=frameMetrics.snapshot();canvas.dataset.frameP50Ms=distribution.p50Ms.toFixed(2);canvas.dataset.frameP95Ms=distribution.p95Ms.toFixed(2);canvas.dataset.frameP99Ms=distribution.p99Ms.toFixed(2);canvas.dataset.frameLong100=String(distribution.longFrames100);canvas.dataset.frameSamples=String(distribution.sampleCount);canvas.dataset.frameWindowMs=distribution.windowMs.toFixed(1);canvas.dataset.frameRate=(frameSamples*1000/frameWindow).toFixed(1);canvas.dataset.frameCpuMs=(renderWork/frameSamples).toFixed(1);canvas.dataset.tickMs=(tickWork/frameSamples).toFixed(1);canvas.dataset.sceneMs=(sceneWork/frameSamples).toFixed(1);canvas.dataset.drawMs=(drawWork/frameSamples).toFixed(1);canvas.dataset.drawCalls=String(drawCalls);canvas.dataset.triangles=String(triangles);canvas.dataset.renderPixelRatio=String(renderPixelRatio);canvas.dataset.gpuGeometries=String(renderer.info.memory.geometries);canvas.dataset.gpuTextures=String(renderer.info.memory.textures);frameWindow=frameSamples=renderWork=tickWork=sceneWork=drawWork=0;}
-  }else{frameWindow=frameSamples=renderWork=tickWork=sceneWork=drawWork=0;}
+    if(frameWindow>=1200){const distribution=frameMetrics.snapshot();canvas.dataset.frameP50Ms=distribution.p50Ms.toFixed(2);canvas.dataset.frameP95Ms=distribution.p95Ms.toFixed(2);canvas.dataset.frameP99Ms=distribution.p99Ms.toFixed(2);canvas.dataset.frameLong100=String(distribution.longFrames100);canvas.dataset.frameSamples=String(distribution.sampleCount);canvas.dataset.frameWindowMs=distribution.windowMs.toFixed(1);canvas.dataset.frameRate=(renderedSamples*1000/frameWindow).toFixed(1);canvas.dataset.rafRate=(frameSamples*1000/frameWindow).toFixed(1);canvas.dataset.frameCpuMs=(renderWork/frameSamples).toFixed(1);canvas.dataset.tickMs=(tickWork/frameSamples).toFixed(1);canvas.dataset.sceneMs=(sceneWork/frameSamples).toFixed(1);canvas.dataset.drawMs=(drawWork/frameSamples).toFixed(1);canvas.dataset.drawCalls=String(drawCalls);canvas.dataset.triangles=String(triangles);canvas.dataset.renderPixelRatio=String(renderPixelRatio);canvas.dataset.gpuGeometries=String(renderer.info.memory.geometries);canvas.dataset.gpuTextures=String(renderer.info.memory.textures);frameWindow=frameSamples=renderedSamples=renderWork=tickWork=sceneWork=drawWork=0;}
+  }else{frameWindow=frameSamples=renderedSamples=renderWork=tickWork=sceneWork=drawWork=0;}
 }
 camera.position.set(500, 1600, 900);
 liveControl = createLiveExperience({THREE,scene,camera,canvas,container,
@@ -1091,9 +1137,17 @@ liveControl = createLiveExperience({THREE,scene,camera,canvas,container,
   getPlayer:()=>commute?.player,
   getInteriors:()=>campus?.optoEntries||[],
   getWallText:()=>campus?.group.visible&&campus.layers.get('building')?.visible?campus.aiMuralPlan:[],
+  onRuntimeBudgetChange({foreground,releaseDecorativeResources}){
+    if(foreground)campus?.resumeDecorativeResources?.();
+    else if(releaseDecorativeResources)campus?.releaseDecorativeResources?.();
+    if(!foreground)renderer.renderLists.dispose();
+    renderCadence.reset();lastRenderedAt=NaN;needsRender=true;
+    frameMetrics.mark('foreground',{campus:foreground});
+  },
   setSuspended(value){liveFrozen=value;suspendCampus();},
   invalidate:()=>{needsRender=true;},notify:toast,
 });
+liveControl.setPerformanceBudget?.(qualityBudget);
 requestAnimationFrame(render);
 try {
   const [data, manifest, extension] = await Promise.all([

@@ -1,6 +1,7 @@
 import {readFile,stat,realpath} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
 import path from 'node:path';
+import {isVersionedWorkAsset} from './versioned-assets.mjs';
 
 // The manifest is the complete allowlist. Never serve source/authoring folders.
 export async function createLibraryHandler({assetsRoot}){
@@ -16,7 +17,7 @@ export async function createLibraryHandler({assetsRoot}){
     if(!entry){res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'});res.end('作品资源不存在');return true;}
     const file=await realpath(path.join(assetsRoot,entry.file));
     if(file!==assetsRoot&&!file.startsWith(assetsRoot+path.sep))throw new Error('Asset outside runtime directory');
-    const info=await stat(file),headers={'Content-Type':entry.contentType,'X-Content-Type-Options':'nosniff','Accept-Ranges':'bytes','Cache-Control':/\.(?:glb|wasm|data|swf|otf|png|jpg)$/.test(entry.file)?'public, max-age=3600':'no-cache','ETag':`"${entry.sha256}"`};
+    const info=await stat(file),headers={'Content-Type':entry.contentType,'X-Content-Type-Options':'nosniff','Accept-Ranges':'bytes','Cache-Control':isVersionedWorkAsset(pathname,entry.sha256)?'public, max-age=31536000, immutable':/\.(?:glb|wasm|data|swf|otf|png|jpg)$/.test(entry.file)?'public, max-age=3600':'no-cache','ETag':`"${entry.sha256}"`};
     if(req.headers['if-none-match']===headers.ETag){res.writeHead(304,headers);res.end();return true;}
     let start=0,end=info.size-1,status=200;
     if(req.headers.range){

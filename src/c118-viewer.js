@@ -11,23 +11,28 @@ import {normalizeC118Screen} from './c118-screen-state.js';
 import {createC118Seating,c118SeatedFov,c118CinemaFov} from './c118-seating.js';
 import {createC118Audience} from './c118-audience.js';
 import {createC118Swimming} from './c118-swimming.js';
-import {createC118Performance} from './c118-performance.js';
+import {createC118Performance,c118RenderRate} from './c118-performance.js';
 import {createMobileRenderProfile} from './mobile-render-profile.js';
 import {readQualityPreference,getQualityStorage} from './performance-ui.js';
 import {CONTROL_PREFERENCES_KEY,createControlPreferences,controlLookDelta} from './control-preferences.js';
 import {createFrameMetrics} from './frame-metrics.js';
 import {createC118PageLifecycle} from './c118-page-lifecycle.js';
+import {createRenderCadence} from './render-cadence.js';
+import {createC118ResourceScope} from './c118-resource-scope.js';
+import {createGpuFrameTimer} from './gpu-frame-timer.js';
 import './c118-viewer.css';
 
 const canvas=document.querySelector('#hall-canvas'),status=document.querySelector('#hall-status'),stick=document.querySelector('#hall-stick');
 let renderer,interior,motion,screenPlayer,raf,screenInView=false,disposed=false,paused=false,returning=false,previous=0,heading=0,pitch=0,joy=null,look=null,mouse=null,axes={forward:0,sideways:0};
-let activitySync,floodEffect,floodSensory,floodEvent=null,floodRunning=false;
+let activitySync,floodEffect,floodSensory,gpuTimer,floodEvent=null,floodRunning=false;
 let resetFloodView=()=>{};
 let screenControl=null,audience,seating,seatedSeat=null,seatView=null,beforeSeatPose=null,seatTransition=null;
 let cinema=false,cinemaView=null,swimming,swimVertical=0,floodReturn=null;
 let enterSeat=()=>{},riseFromSeat=()=>{},faceStage=()=>{};
-let contextLost=false,lastFrameRendered=false,lastCpuMs=0,lastReportAt=0,lastHudAt=-Infinity,inputFocused=document.hasFocus(),pageLifecycle;
+let contextLost=false,lastFrameRendered=false,lastCpuMs=0,pendingCpuMs=0,activeRafCallbacks=0,lastReportAt=0,lastHudAt=-Infinity,lastRenderedAt=0,lastDiagnosticAt=-Infinity,inputFocused=document.hasFocus(),pageLifecycle;
 const frameMetrics=createFrameMetrics();
+const renderCadence=createRenderCadence(),resources=createC118ResourceScope();
+const diagnostics=new URLSearchParams(location.search).get('diagnostics')==='1';
 const handheld=createMobileRenderProfile({coarsePointer:window.matchMedia('(pointer: coarse)').matches,maxTouchPoints:navigator.maxTouchPoints,width:innerWidth,height:innerHeight,devicePixelRatio:devicePixelRatio||1}).handheld;
 const performanceQuality=createC118Performance({handheld,deviceRatio:devicePixelRatio||1,hardwareConcurrency:navigator.hardwareConcurrency,deviceMemory:navigator.deviceMemory,width:innerWidth,height:innerHeight,mode:readQualityPreference()});
 let qualityBudget=performanceQuality.budget;
@@ -37,15 +42,17 @@ const calmMotion=()=>reducedMotion.matches||controlsPreference.comfortableCamera
 const applyStickScale=()=>{stick.style.transform=`translate(-50%,-50%) scale(${controlsPreference.joystickScale})`;};
 applyStickScale();
 const floodStatus=document.querySelector('#hall-flood-status');
-const keys=new Set(),listeners=[];
+const keys=new Set(),listeners=[],navigationListeners=[];
 const on=(target,type,fn,options)=>{target.addEventListener(type,fn,options);listeners.push(()=>target.removeEventListener(type,fn,options));};
+const onNavigation=(target,type,fn)=>{target.addEventListener(type,fn);navigationListeners.push(()=>target.removeEventListener(type,fn));};
 const usable=()=>!disposed&&!paused&&!returning&&!contextLost&&!pageLifecycle?.suspended&&!document.hidden;
 const lock=createPlayerPointerLock({canvas,document,canLock:usable,onChange:()=>resetInput(),onError:()=>{status.hidden=false;status.textContent='可直接移动鼠标环视，或在浏览器中按 L 锁定';}});
 function resetInput(){keys.clear();swimVertical=0;joy=look=mouse=null;axes={forward:0,sideways:0};stick.hidden=true;motion?.suspend();}
 function rotate(dx,dy,touch=false){if(cinema)return;const delta=controlLookDelta(dx,dy,{touch,width:innerWidth,height:innerHeight,preferences:controlsPreference});heading-=Math.max(-.8,Math.min(.8,delta.x));pitch=Math.max(-1.35,Math.min(1.3,pitch-Math.max(-.65,Math.min(.65,delta.y))));}
 function exit(){if(paused||returning)return;returning=true;screenPlayer?.update({active:false,visible:false});floodSensory?.update({active:false});resetInput();lock.release();if(window.parent!==window&&window.campusActivity)window.campusActivity.exit();else location.href='./';}
-on(document.querySelector('#hall-return'),'click',event=>{event.preventDefault();exit();});
-on(document.querySelector('#swim-exit'),'click',exit);
+onNavigation(document.querySelector('#hall-return'),'click',event=>{event.preventDefault();exit();});
+onNavigation(document.querySelector('#swim-exit'),'click',exit);
+onNavigation(window,'pagehide',event=>{if(!event.persisted)dispose();});
 on(window,'keydown',event=>{if(!usable()||event.target.closest?.('a,button,input'))return;if(event.code==='KeyE'&&!event.repeat){event.preventDefault();if(swimming?.state.active)return;if(seatedSeat)riseFromSeat();else enterSeat(true);return;}if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space','KeyC','ControlLeft','ControlRight'].includes(event.code)){event.preventDefault();if(!seatedSeat)keys.add(event.code);}if(event.code==='KeyL'&&!event.repeat){event.preventDefault();lock.toggle();}});
 on(window,'keyup',event=>keys.delete(event.code));
 on(window,'storage',event=>{if(event.key===CONTROL_PREFERENCES_KEY||event.key===null){controlsPreference=createControlPreferences({storage:getQualityStorage()}).value;applyStickScale();resetInput();}});
@@ -53,11 +60,14 @@ on(window,'blur',()=>{inputFocused=false;resetInput();});on(window,'focus',()=>{
 on(document,'visibilitychange',()=>{resetInput();lastFrameRendered=false;performanceQuality.resetSamples();screenPlayer?.update({active:usable()&&!floodRunning,visible:screenInView});if(document.hidden)floodSensory?.update({active:false});});
 on(canvas,'webglcontextlost',event=>{
   event.preventDefault();contextLost=true;lastFrameRendered=false;resetInput();lock.release();
+  renderCadence.reset();lastRenderedAt=0;frameMetrics.mark('context-lost');
   screenPlayer?.update({active:false,visible:false});floodSensory?.update({active:false});
   status.hidden=false;status.textContent='画面正在恢复，可返回校园后重试。';canvas.dataset.graphicsState='lost';
 });
 on(canvas,'webglcontextrestored',()=>{
   if(disposed)return;contextLost=false;lastFrameRendered=false;previous=0;performanceQuality.resetSamples();frameMetrics.reset();
+  renderCadence.reset();lastRenderedAt=0;frameMetrics.mark('context-restored');
+  gpuTimer?.restore();
   resetInput();canvas.dataset.graphicsState='restored';status.hidden=true;
 });
 for(const type of ['pointerdown','keydown'])on(window,type,()=>floodSensory?.unlock(),{capture:true});
@@ -77,7 +87,7 @@ on(canvas,'pointermove',event=>{
 on(document,'mousemove',event=>{if(usable()&&lock.locked)rotate(event.movementX,event.movementY);});
 on(canvas,'pointerleave',()=>{mouse=null;});
 for(const type of ['pointerup','pointercancel','lostpointercapture'])on(canvas,type,event=>{if(joy?.id===event.pointerId){joy=null;axes={forward:0,sideways:0};stick.hidden=true;}if(look?.id===event.pointerId)look=null;});
-activitySync=createC118ActivitySync({embedded:window.parent!==window,bridge:window.campusActivity,onState:state=>{
+activitySync=resources.own(createC118ActivitySync({embedded:window.parent!==window,bridge:window.campusActivity,onState:state=>{
   paused=state.paused;document.querySelector('#hall-pause').hidden=!paused;
   try{screenControl=normalizeC118Screen(state.c118Screen);}catch{/* Keep the last valid programme during malformed updates. */}
   const previousFloodId=floodEvent?.id,hadFlood=Boolean(floodEvent);
@@ -92,11 +102,23 @@ activitySync=createC118ActivitySync({embedded:window.parent!==window,bridge:wind
   screenPlayer?.update({active:usable()&&!floodRunning,visible:screenInView});
   if(paused){resetInput();lock.release();floodSensory?.update({active:false});}
   if(state.disposed)dispose();
-}});
+}}),'activity-subscription');
 // An embedded bridge can synchronously announce disposal during subscribe.
 // Its returned subscription must be released before allocating the room.
 if(disposed)activitySync.dispose();
-function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(raf);resetInput();lock.dispose();pageLifecycle?.dispose();listeners.forEach(fn=>fn());activitySync?.dispose();floodSensory?.dispose();floodEffect?.dispose();screenPlayer?.dispose();audience?.dispose();interior?.dispose();renderer?.dispose();}
+function dispose({keepNavigation=false}={}){
+  if(!keepNavigation)navigationListeners.splice(0).forEach(fn=>fn());
+  if(disposed)return;disposed=true;cancelAnimationFrame(raf);resetInput();lock.dispose();pageLifecycle?.dispose();listeners.splice(0).forEach(fn=>fn());
+  const failures=resources.dispose();frameMetrics.mark('disposed',{cleanupFailures:failures.length});
+  renderer=interior=motion=audience=floodEffect=floodSensory=screenPlayer=activitySync=swimming=seating=gpuTimer=null;
+  resetFloodView=enterSeat=riseFromSeat=faceStage=()=>{};canvas.dataset.resourceOwners='0';
+}
+function failRuntime(error){
+  if(disposed)return;frameMetrics.mark('runtime-error',{name:error?.name||'Error'});
+  dispose({keepNavigation:true});status.hidden=false;status.textContent=`报告厅加载失败：${error.message}，可返回校园后重试。`;
+  if(diagnostics)canvas.dataset.runtimeDiagnostics=JSON.stringify({frameSession:frameMetrics.session(),resources:resources.snapshot()});
+  canvas.dataset.graphicsState='failed';window.campusActivity?.fail(error.message);
+}
 if(!disposed)pageLifecycle=createC118PageLifecycle({window,onDispose:dispose,
   onSuspend(){resetInput();lock.release();lastFrameRendered=false;screenPlayer?.update({active:false,visible:false});floodSensory?.update({active:false});},
   onResume(){
@@ -104,29 +126,31 @@ if(!disposed)pageLifecycle=createC118PageLifecycle({window,onDispose:dispose,
     // preferences without rebuilding the room or changing its activity clock.
     controlsPreference=createControlPreferences({storage:getQualityStorage()}).value;applyStickScale();
     performanceQuality.setMode(readQualityPreference());performanceQuality.resetSamples();
-    inputFocused=document.hasFocus();resetInput();lastFrameRendered=false;previous=0;
+    inputFocused=document.hasFocus();resetInput();lastFrameRendered=false;previous=0;lastRenderedAt=0;renderCadence.reset();
   },
 });
 if(!disposed)try{
-  renderer=new THREE.WebGLRenderer({canvas,antialias:devicePixelRatio<=1.5,powerPreference:'low-power'});
+  renderer=resources.own(new THREE.WebGLRenderer({canvas,antialias:devicePixelRatio<=1.5,powerPreference:'low-power'}),'renderer');
+  if(diagnostics&&new URLSearchParams(location.search).get('gpu')==='1')gpuTimer=resources.own(createGpuFrameTimer(renderer,{enabled:true}),'gpu-timer');
   renderer.setPixelRatio(qualityBudget.pixelRatio);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;
   const scene=new THREE.Scene();scene.background=new THREE.Color('#26272c');
   const camera=new THREE.PerspectiveCamera(65,1,.07,90);camera.rotation.order='YXZ';
-  interior=createOptoC118Interior(THREE);scene.add(interior.group);motion=createC118Navigation(interior);
-  seating=createC118Seating(interior.plan);audience=createC118Audience(THREE,{plan:interior.plan});scene.add(audience.group);
-  floodEffect=createC118FloodEffect(THREE,{plan:interior.plan,level:qualityBudget.waterLevel});scene.add(floodEffect.group);
+  interior=resources.own(createOptoC118Interior(THREE),'interior');scene.add(interior.group);motion=createC118Navigation(interior);
+  seating=createC118Seating(interior.plan);audience=resources.own(createC118Audience(THREE,{plan:interior.plan}),'audience');scene.add(audience.group);
+  floodEffect=resources.own(createC118FloodEffect(THREE,{plan:interior.plan,level:qualityBudget.waterLevel}),'flood-effect');scene.add(floodEffect.group);
   function applyQuality(budget){
     if(qualityBudget.pixelRatio!==budget.pixelRatio)renderer.setPixelRatio(budget.pixelRatio);
     qualityBudget=budget;audience.setPerformanceBudget(budget);floodEffect.setPerformanceBudget({level:budget.waterLevel});
     canvas.dataset.qualityMode=budget.mode;canvas.dataset.qualityLevel=budget.name;canvas.dataset.renderPixelRatio=String(budget.pixelRatio);canvas.dataset.audienceHz=String(budget.audienceHz);
+    frameMetrics.mark('quality',{level:budget.level,pixelRatio:budget.pixelRatio});
   }
   applyQuality(qualityBudget);
   on(window,'storage',event=>{if(event.key==='campus-quality-mode-v1'||event.key===null)applyQuality(performanceQuality.setMode(readQualityPreference()));});
-  floodSensory=createC118FloodSensory({document,window});
+  floodSensory=resources.own(createC118FloodSensory({document,window}),'flood-media');
   swimming=createC118Swimming(interior.plan);
   const underwaterFog=new THREE.FogExp2('#287484',.025);
   const timeLabel=seconds=>{const whole=Math.max(0,Math.floor(seconds));return `${Math.floor(whole/60)}:${String(whole%60).padStart(2,'0')}`;};
-  screenPlayer=createC118VideoScreen(THREE,{screen:interior.videoScreen,onState:s=>{
+  screenPlayer=resources.own(createC118VideoScreen(THREE,{screen:interior.videoScreen,onState:s=>{
     document.querySelector('#screen-title').textContent=s.title||'Vibe Coding 成果展示';
     document.querySelector('#screen-time').textContent=`${timeLabel(s.time)} / ${timeLabel(s.duration)}`;
     document.querySelector('#screen-play').textContent=s.failed?'重试播放':s.blocked?'播放':s.userPaused?'继续播放':'暂停';
@@ -134,7 +158,7 @@ if(!disposed)try{
     document.querySelector('#screen-status').textContent=s.failed?'视频暂时无法播放，可重试':!s.active?'播放已暂停':s.userPaused?'已暂停':!s.visible?'面向大屏时继续播放':s.blocked?'点击播放开始观看':s.loading?'视频缓冲中，可继续走动':s.muted?'静音播放 · 可开启声音':'正在播放';
     canvas.dataset.videoState=s.failed?'error':s.playing?'playing':s.loading?'loading':'paused';
     canvas.dataset.mediaId=s.mediaId||'vibe-coding';
-  }});
+  }}),'video-screen');
   if(screenControl)screenPlayer.selectMedia(screenControl);
   for(const [id,action] of [['screen-play','togglePlayback'],['screen-sound','toggleSound'],['screen-restart','restart']])on(document.querySelector(`#${id}`),'click',event=>{screenPlayer[action]();if(event.detail>0)canvas.focus({preventScroll:true});});
   const screenFrustum=new THREE.Frustum(),projectionView=new THREE.Matrix4();
@@ -203,12 +227,10 @@ if(!disposed)try{
   };
   const transitionTarget=new THREE.Vector3(),screenControls=document.querySelector('#hall-screen-controls'),swimDepth=document.querySelector('#swim-depth');
   let eyeY=motion.state.y+1.65,frame=0,ready=false;
-  function render(now){
+  function renderFrame(now){
     if(disposed)return;raf=requestAnimationFrame(render);const elapsed=previous?Math.max(0,now-previous):0,dt=Math.min(.05,elapsed/1000);previous=now;
-    if(!usable()){lastFrameRendered=false;return;}
-    const continuous=lastFrameRendered,frameStart=performance.now();
-    const nextBudget=performanceQuality.update({elapsedMs:elapsed,cpuMs:lastCpuMs,active:continuous,rendered:continuous,visible:true});
-    if(nextBudget.revision!==qualityBudget.revision)applyQuality(nextBudget);
+    if(!usable()){lastFrameRendered=false;lastRenderedAt=0;pendingCpuMs=0;renderCadence.reset();return;}
+    const frameStart=performance.now();activeRafCallbacks++;
     const serverNow=activitySync.now(),floodElapsed=getC118FloodElapsed(floodEvent,serverNow);
     floodRunning=floodElapsed!==null&&floodElapsed>=0;
     if(floodRunning&&!floodReturn)floodReturn={seatId:seatedSeat?.id,cinema,heading,pitch,pose:{...motion.state}};
@@ -269,17 +291,30 @@ if(!disposed)try{
     screenInView=camera.position.z>interior.videoScreen.position.z&&screenFrustum.intersectsObject(interior.videoScreen);
     if(ready)screenPlayer.update({active:usable()&&!floodRunning,visible:screenInView});
     interior.update?.(camera);
-    renderer.render(scene,camera);
-    lastCpuMs=performance.now()-frameStart;
-    frameMetrics.sample({frameMs:elapsed,cpuMs:lastCpuMs,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,active:continuous});lastFrameRendered=true;
+    // Input, walking, swimming, event clocks and poses above remain RAF driven.
+    // Only GPU submission is capped, with a lower ceiling while watching film.
+    const fps=c118RenderRate({handheld,level:qualityBudget.level,cinema,floodRunning});
+    if(canvas.dataset.renderTargetFps!==String(fps))canvas.dataset.renderTargetFps=String(fps);
+    if(!renderCadence.shouldRender(now,fps)){pendingCpuMs+=performance.now()-frameStart;return;}
+    const continuous=lastFrameRendered,drawElapsed=lastRenderedAt?now-lastRenderedAt:0;
+    const nextBudget=performanceQuality.update({elapsedMs:drawElapsed,cpuMs:lastCpuMs,active:continuous,rendered:continuous,visible:true,targetFrameMs:1000/fps});
+    if(nextBudget.revision!==qualityBudget.revision)applyQuality(nextBudget);
+    gpuTimer?.begin();try{renderer.render(scene,camera);}finally{gpuTimer?.end();}
+    lastCpuMs=pendingCpuMs+performance.now()-frameStart;pendingCpuMs=0;
+    frameMetrics.sample({frameMs:drawElapsed,cpuMs:lastCpuMs,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,active:continuous});lastFrameRendered=true;lastRenderedAt=now;
     if(now-lastReportAt>=1200){
       lastReportAt=now;const metrics=frameMetrics.snapshot();
       canvas.dataset.frameRate=metrics.averageFps.toFixed(1);canvas.dataset.frameCpuMs=metrics.averageCpuMs.toFixed(2);
       canvas.dataset.frameP95Ms=metrics.p95Ms.toFixed(2);canvas.dataset.frameP99Ms=metrics.p99Ms.toFixed(2);canvas.dataset.frameMetrics=JSON.stringify(metrics);
       canvas.dataset.gpuGeometries=String(renderer.info.memory.geometries);canvas.dataset.gpuTextures=String(renderer.info.memory.textures);
+      if(gpuTimer)canvas.dataset.gpuTiming=JSON.stringify(gpuTimer.snapshot());
+      canvas.dataset.activeRafCallbacks=String(activeRafCallbacks);canvas.dataset.renderedFrames=String(frame+1);
+      canvas.dataset.resourceOwners=String(resources.snapshot().owners.length);
+      if(diagnostics&&now-lastDiagnosticAt>=15000){lastDiagnosticAt=now;canvas.dataset.runtimeDiagnostics=JSON.stringify({frameSession:frameMetrics.session(),gpuTiming:gpuTimer?.snapshot()??null,resources:resources.snapshot(),renderTargetFps:fps,activeRafCallbacks,renderedFrames:frame+1,cpuScope:'All active RAF work since each admitted draw; not GPU time.'});}
     }
     if(!ready){ready=true;status.hidden=true;window.campusActivity?.ready('runtime_ready');canvas.focus({preventScroll:true});}
     if(++frame%20===0){canvas.dataset.position=JSON.stringify({x:camera.position.x,y:camera.position.y,z:camera.position.z});canvas.dataset.drawCalls=String(renderer.info.render.calls);canvas.dataset.triangles=String(renderer.info.render.triangles);canvas.dataset.audienceWalking=String(audience.group.userData.walkingCount||0);canvas.dataset.audienceSwimming=String(audience.group.userData.swimmingCount||0);canvas.dataset.audienceDiving=String(audience.group.userData.divingCount||0);}
   }
+  function render(now){try{renderFrame(now);}catch(error){failRuntime(error);}}
   raf=requestAnimationFrame(render);
-}catch(error){status.hidden=false;status.textContent=`报告厅加载失败：${error.message}，可返回校园后重试。`;window.campusActivity?.fail(error.message);}
+}catch(error){failRuntime(error);}

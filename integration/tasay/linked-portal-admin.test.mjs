@@ -8,6 +8,8 @@ import {ACTIVITY_PHASES,ACTIVITY_WORKS,activityPortals,getTasayPortal,isTasayLin
 import {readAdminCoordinates,bindAdminCoordinateInputs} from '../../src/admin-coordinates.js';
 import {activitySelectionSignature,selectActivitiesNow} from '../../src/activity-launch.js';
 import {createDefaultLiveState,validateLiveState} from '../../src/live-state.js';
+import {normalizeC118Screen} from '../../src/c118-screen-state.js';
+import {getC118FloodElapsed} from '../../src/c118-flood-state.js';
 const dependencyRoot=process.env.TASAY_SOURCE?path.join(process.env.TASAY_SOURCE,'package.json'):new URL('./.staging/package.json',import.meta.url);
 const {JSDOM}=createRequire(dependencyRoot)('jsdom');
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));};
@@ -16,7 +18,7 @@ async function fixture(t){
   const source=(await readFile(new URL('../../src/admin-control.js',import.meta.url),'utf8')).replace(/^import .*;\n/gm,'');
   const dom=new JSDOM(html,{url:'https://campus.test/admin.html',runScripts:'outside-only'});t.after(()=>dom.window.close());
   const win=dom.window;win.structuredClone=structuredClone;win.setInterval=()=>1;
-  Object.assign(win,{ACTIVITY_PHASES,ACTIVITY_WORKS,activityPortals,getTasayPortal,isTasayLinkedPortal,SHE_LOVE_POINT_ID,readAdminCoordinates,bindAdminCoordinateInputs,activitySelectionSignature,selectActivitiesNow,geoToLocal:()=>({x:0,z:0}),createLiveMapFrame:()=>({}),getLiveLocationPresets:()=>[]});
+  Object.assign(win,{normalizeC118Screen,getC118FloodElapsed,ACTIVITY_PHASES,ACTIVITY_WORKS,activityPortals,getTasayPortal,isTasayLinkedPortal,SHE_LOVE_POINT_ID,readAdminCoordinates,bindAdminCoordinateInputs,activitySelectionSignature,selectActivitiesNow,geoToLocal:()=>({x:0,z:0}),createLiveMapFrame:()=>({}),getLiveLocationPresets:()=>[]});
   let state=validateLiveState({...createDefaultLiveState(),portals:activityPortals()});const writes=[];
   win.fetch=async(url,options={})=>{
     let data;

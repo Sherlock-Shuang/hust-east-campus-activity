@@ -29,13 +29,22 @@ function fixture(options={}){
   };
   const screen={material:{map:null,needsUpdate:false},visible:false,...options.screen};
   const document={body:{append(v){assert.equal(v,video);}},createElement(tag){assert.equal(tag,'video');return video;}};
-  const player=createC118VideoScreen(THREE,{...options,screen,document,onState:s=>states.push(s)});
+  options.beforeCreate?.({video,listeners,loads,screen});
+  const player=createC118VideoScreen(THREE,{...options,screen,document,onState:s=>{states.push(s);options.onState?.(s);}});
   const poster=makePoster();
   return {player,video,screen,states,textures,poster,listeners,loads,
     readyPoster(index=0,texture=poster){loads[index].ready(texture);return texture;},state:()=>states.at(-1),
     visible(){player.update({active:true,visible:true});},
   };
 }
+
+test('initialization callback failure removes media and listeners before the owner is returned',()=>{
+  let resources;
+  assert.throws(()=>fixture({beforeCreate:value=>{resources=value;},onState(){throw new Error('injected initial UI failure');}}),/injected initial UI failure/);
+  assert.equal(resources.video.removed,true);assert.equal(resources.video.paused,true);
+  assert.ok([...resources.listeners.values()].every(listeners=>listeners.size===0));
+  const late=makePoster();resources.loads[0].ready(late);assert.equal(late.disposals,1);assert.equal(resources.screen.material.map,null);
+});
 
 test('campus/invisible hall does not assign video src or load; visible active hall starts once',async()=>{
   const f=fixture();assert.equal(f.video.preload,'none');assert.equal(f.video.muted,true);assert.equal(f.video.playsInline,true);

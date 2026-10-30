@@ -84,6 +84,14 @@ export function createC118VideoScreen(THREE,{screen,document=globalThis.document
     const hadSource=assigned;assigned=false;waiting=false;hasFrame=false;
     if(hadSource){video.removeAttribute('src');video.load();}
   }
+  function dispose(){
+    if(disposed)return;disposed=true;listeners.splice(0).forEach(fn=>fn());video.pause();
+    video.removeAttribute('src');video.load();video.remove();
+    screen.material.map=null;screen.material.needsUpdate=true;screen.visible=false;
+    if(baseScale)screen.scale.set(baseScale.x,baseScale.y,baseScale.z);
+    posterTexture?.dispose();videoTexture?.dispose();posterTexture=videoTexture=null;
+  }
+  try{
   loadPoster();
   on('loadedmetadata',()=>{if(disposed)return;fitVideo();emit();});
   on('loadeddata',()=>{
@@ -96,6 +104,7 @@ export function createC118VideoScreen(THREE,{screen,document=globalThis.document
   for(const type of ['pause','timeupdate','durationchange','volumechange'])on(type,emit);
   on('error',fail);
   emit();
+  }catch(error){dispose();throw error;}
   return {
     video,
     selectMedia(next){
@@ -130,12 +139,6 @@ export function createC118VideoScreen(THREE,{screen,document=globalThis.document
     },
     toggleSound(){if(disposed)return;video.muted=!video.muted;blocked=false;sync();},
     restart(){if(disposed)return;try{video.currentTime=0;}catch{}userPaused=false;blocked=false;sync();},
-    dispose(){
-      if(disposed)return;disposed=true;listeners.forEach(fn=>fn());video.pause();
-      video.removeAttribute('src');video.load();video.remove();
-      screen.material.map=null;screen.material.needsUpdate=true;screen.visible=false;
-      if(baseScale)screen.scale.set(baseScale.x,baseScale.y,baseScale.z);
-      posterTexture?.dispose();videoTexture?.dispose();
-    },
+    dispose,
   };
 }

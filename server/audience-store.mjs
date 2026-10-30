@@ -130,11 +130,15 @@ export function aggregateAudiences(records,{points=[],works=[],now=Date.now(),qu
   const search=query.trim().toLocaleLowerCase();
   return {summary:{totalParticipants:participants.length,onlineParticipants:participants.filter(p=>p.online).length,currentParticipants:participants.filter(p=>p.currentExperiences.some(a=>a.status==='opened')).length,points:[...pointMap.values()],works:[...workMap.values()]},participants:participants.filter(p=>!search||p.nickname.toLocaleLowerCase().includes(search)||p.id.includes(search)).sort((a,b)=>b.lastSeenAt-a.lastSeenAt)};
 }
-export function createAudienceStore({initial=createAudienceData(),persist=async()=>{},now=Date.now,idFactory=()=>crypto.randomUUID()}={}){
+export function createAudienceStore({initial=createAudienceData(),persist=async()=>{},now=Date.now,idFactory=()=>crypto.randomUUID(),presenceFlushMs=0}={}){
   let data=validateAudienceData(initial),queue=Promise.resolve();
+  let presenceDirty=false,presenceTimer;
+  const clearPresenceTimer=()=>{clearTimeout(presenceTimer);presenceTimer=undefined;};
+  const enqueue=operation=>{const job=queue.then(operation);queue=job.catch(()=>{});return job;};
+  const flushPresence=()=>enqueue(async()=>{if(!presenceDirty)return;await persist(copy(data));presenceDirty=false;});
+  function schedulePresence(){if(presenceTimer||!presenceDirty)return;presenceTimer=setTimeout(()=>{presenceTimer=undefined;flushPresence().catch(()=>{schedulePresence();});},Math.max(100,Math.min(5000,presenceFlushMs)));presenceTimer.unref?.();}
   const transact=operation=>{
-    const job=queue.then(async()=>{const next=copy(data),result=operation(next);await persist(next);data=next;return copy(result);});
-    queue=job.catch(()=>{});return job;
+    return enqueue(async()=>{const next=copy(data),result=operation(next);await persist(next);data=next;presenceDirty=false;clearPresenceTimer();return copy(result);});
   };
   const requireRecord=(state,id)=>{validId(id,'观众标识');const record=Object.hasOwn(state.audiences,id)?state.audiences[id]:null;if(!record)fail('观众身份已失效，请重新加入',401);return record;};
   return {
@@ -146,10 +150,15 @@ export function createAudienceStore({initial=createAudienceData(),persist=async(
       if(record){record.nickname=normalizeNickname(nickname);}else{if(Object.keys(next.audiences).length>=5000)fail('本场参与人数已达上限',429);record=createAudienceRecord({id:idFactory(),identityHash,nickname},now());}
       record=touchAudience(record,tabId,now());next.audiences[record.id]=record;return summarizeAudience(record,{now:now()});
     });},
-    async heartbeat(id,tabId){return transact(next=>{const r=touchAudience(requireRecord(next,id),tabId,now());next.audiences[id]=r;return summarizeAudience(r,{now:now()});});},
+    async heartbeat(id,tabId){
+      if(presenceFlushMs<=0)return transact(next=>{const r=touchAudience(requireRecord(next,id),tabId,now());next.audiences[id]=r;return summarizeAudience(r,{now:now()});});
+      // Presence is ephemeral. Coalesce only its disk writes, not exploration
+      // receipts; all operations remain serialized with durable transactions.
+      return enqueue(()=>{const r=touchAudience(requireRecord(data,id),tabId,now());data.audiences[id]=r;presenceDirty=true;schedulePresence();return summarizeAudience(r,{now:now()});});
+    },
     async event(id,event,context){return transact(next=>{const result=applyAudienceEvent(requireRecord(next,id),event,{...(typeof context==='function'?context():context),now:now()});next.audiences[id]=result.record;return {duplicate:result.duplicate,audience:summarizeAudience(result.record,{now:now()})};});},
     statistics(options){return aggregateAudiences(Object.values(data.audiences),{...options,now:now()});},
     detail(id){return audienceDetail(requireRecord(data,id),{now:now()});},
-    async flush(){await queue;},
+    async flush(){clearPresenceTimer();await flushPresence();},
   };
 }

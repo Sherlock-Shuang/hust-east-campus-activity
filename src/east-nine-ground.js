@@ -147,29 +147,39 @@ export function planEastNineGround(model,{entrySurfaces=[]}={}){
   return plan;
 }
 
-function groundMaterials(THREE,surfaces){
+function* groundMaterials(THREE,surfaces){
   const textures=[],materials=[],size=512,tile=2.4,fract=x=>x-Math.floor(x),hash=(x,y)=>fract(Math.sin(x*127.1+y*311.7)*43758.5453),byte=x=>Math.max(0,Math.min(255,Math.round(x)));
+  let completed=false,disposed=false;
+  function dispose(){if(disposed)return;disposed=true;materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());}
+  try{
   function texture(data,color){const t=new THREE.DataTexture(data,size,size,THREE.RGBAFormat);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(1/tile,1/tile);t.minFilter=THREE.LinearMipmapLinearFilter;t.magFilter=THREE.LinearFilter;t.generateMipmaps=true;t.anisotropy=8;if(color)t.colorSpace=THREE.SRGBColorSpace;t.needsUpdate=true;textures.push(t);return t;}
-  function paving(herring){const color=new Uint8Array(size*size*4),bump=new Uint8Array(size*size*4);
-    for(let y=0;y<size;y++)for(let x=0;x<size;x++){const u=x/size,v=y/size;let edge,idX,idY;
+  function* paving(herring){const color=new Uint8Array(size*size*4),bump=new Uint8Array(size*size*4);
+    for(let y=0;y<size;y++){
+      if(y%32===0)yield {stage:herring?"东九人字铺砖材质":"东九柱廊铺装材质",row:y};
+      for(let x=0;x<size;x++){const u=x/size,v=y/size;let edge,idX,idY;
       if(herring){const px=u*20,py=v*20,ix=Math.floor(px),iy=Math.floor(py),phase=((ix-iy)%4+4)%4,horizontal=phase<2,bx=ix-(phase===1?1:0),by=iy-(phase===2?1:0),fx=px-bx,fy=py-by;edge=(horizontal?Math.min(fx,2-fx,fy,1-fy):Math.min(fx,1-fx,fy,2-fy))*.12;idX=bx;idY=by;}
       else{const px=u*4,py=v*6,ix=Math.floor(px),iy=Math.floor(py);edge=Math.min(fract(px)*.6,(1-fract(px))*.6,fract(py)*.4,(1-fract(py))*.4);idX=ix;idY=iy;}
       const seam=edge<.0028,grain=(hash(x,y)-.5)*5,variation=(hash((idX+20)%20,(idY+20)%20)-.5)*(herring?13:7),n=(seam?(herring?94:123):(herring?143:163))+variation+grain,at=(y*size+x)*4;
       color.set([byte(n+2),byte(n),byte(n-(herring?5:3)),255],at);const h=seam?112:156+grain;bump.set([byte(h),byte(h),byte(h),255],at);
     }
+    }
     const m=new THREE.MeshStandardMaterial({name:herring?'东九前场灰褐人字小砖':'柱廊灰石铺装',map:texture(color,true),bumpMap:texture(bump,false),bumpScale:herring?.006:.0035,roughness:.91});m.userData={estimated:true,tileMetres:tile,brickMetres:herring?[.24,.12]:[.6,.4],jointMetres:.0056,displacement:false};materials.push(m);return m;
   }
-  const pavers=paving(true),gallery=paving(false);
+  const pavers=yield* paving(true),gallery=yield* paving(false);
   const stone=surfaces?.concrete?.clone()||new THREE.MeshStandardMaterial();stone.name='浅灰踏步与排水铺石';stone.color.set(surfaces?.concrete?'#f1f1e9':'#b8b9b0');stone.roughness=.92;materials.push(stone);
   const edge=gallery.clone();edge.name='沿路浅灰分缝石带';edge.color.set('#ffffff');materials.push(edge);
   const nose=new THREE.MeshStandardMaterial({color:'#92978e',roughness:.96});materials.push(nose);
-  return{pavers,gallery,stone,edge,nose,dispose(){materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());}};
+  completed=true;return{pavers,gallery,stone,edge,nose,dispose};
+  }finally{if(!completed)dispose();}
 }
 
-export function createEastNineGround(THREE,model,{surfaces,entrySurfaces=[]}={}){
+export function* buildEastNineGround(THREE,model,{surfaces,entrySurfaces=[]}={}){
   const plan=planEastNineGround(model,{entrySurfaces}),group=new THREE.Group();group.name='东九楼下 · 铺装、局部平台与浅阶';
   group.userData={component:'east-nine-ground',...plan.evidence,estimated:true,sourceFootprintPreserved:true,platforms:plan.galleryPlatforms.map(p=>({id:p.id,wing:p.wing,rise:p.rise,stepCount:p.stepCount,start:p.start,end:p.end,centralRamp:!!p.rampGap}))};
-  const materials=groundMaterials(THREE,surfaces),batches=new Map(),geometries=new Set();
+  const batches=new Map(),geometries=new Set();let materials=null,completed=false,disposed=false;
+  function dispose(){if(disposed)return;disposed=true;group.removeFromParent();for(const parts of batches.values())parts.forEach(g=>g.dispose());geometries.forEach(g=>g.dispose());materials?.dispose();group.clear();}
+  try{
+  materials=yield* groundMaterials(THREE,surfaces);
   const axis=plan.axis||{anchor:{x:0,z:0},tx:0,tz:1,nx:1,nz:0};
   function bake(g,material){const flat=g.index?g.toNonIndexed():g;if(flat!==g)g.dispose();flat.computeVertexNormals();const p=flat.attributes.position,n=flat.attributes.normal,uv=new Float32Array(p.count*2);
     for(let i=0;i<p.count;i++){if(Math.abs(n.getY(i))>.6){uv[i*2]=p.getX(i)*axis.nx+p.getZ(i)*axis.nz;uv[i*2+1]=p.getX(i)*axis.tx+p.getZ(i)*axis.tz;}else{uv[i*2]=Math.abs(n.getX(i))>Math.abs(n.getZ(i))?p.getZ(i):p.getX(i);uv[i*2+1]=p.getY(i);}}
@@ -183,7 +193,7 @@ export function createEastNineGround(THREE,model,{surfaces,entrySurfaces=[]}={})
       const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));bake(g,material);
     }
   }
-  for(const item of plan.surfaces){const material=item.kind==='forecourt'?materials.pavers:item.kind==='step'?materials.stone:materials.gallery;surfaceMesh(item,material);}
+  for(const item of plan.surfaces){yield {stage:"东九步道几何",surfaceId:item.id};const material=item.kind==='forecourt'?materials.pavers:item.kind==='step'?materials.stone:materials.gallery;surfaceMesh(item,material);}
   if(plan.edgeBands.length)surfaceMesh({polygons:plan.edgeBands,start:0,end:1,startSurfaceY:DATUM+.004,endSurfaceY:DATUM+.004,surfaceY:DATUM+.004},materials.edge,false);
   // A narrow stone nose and occasional transverse seam give the long steps
   // depth at walking height; no geometry noise changes the flat forecourt.
@@ -194,7 +204,10 @@ export function createEastNineGround(THREE,model,{surfaces,entrySurfaces=[]}={})
     // exact source edge creates unnecessary near-coincident sliver polygons.
     if(corners.every(p=>contains(p.x,p.z,item.polygons)))surfaceMesh({...item,polygons:poly(corners),startSurfaceY:item.startSurfaceY+.003,endSurfaceY:item.endSurfaceY+.003},materials.nose,false);
   }
-  for(const [material,parts]of batches){const geometry=mergeGeometries(parts,false);parts.forEach(g=>g.dispose());geometries.add(geometry);const mesh=new THREE.Mesh(geometry,material);mesh.name=material.name||'踏步鼻口';mesh.receiveShadow=true;mesh.castShadow=false;mesh.renderOrder=203;mesh.userData={component:'east-nine-ground-surface',estimated:true,sourceIds:[MAIN,ARCADE,ROAD],materialEvidence:plan.evidence.surface};group.add(mesh);}
-  const infrastructure={walkSurfaces:plan.walkSurfaces,barriers:[]};let disposed=false;
-  return{group,plan,infrastructure,heightAt:(x,z)=>heightAtEastNineGround(plan,x,z),surfaceHeightAt:(x,z)=>surfaceHeightAtEastNineGround(plan,x,z),dispose(){if(disposed)return;disposed=true;group.removeFromParent();geometries.forEach(g=>g.dispose());materials.dispose();group.clear();}};
+  for(const [material,parts]of batches){yield {stage:"东九铺装合批"};const geometry=mergeGeometries(parts,false);parts.forEach(g=>g.dispose());parts.length=0;geometries.add(geometry);const mesh=new THREE.Mesh(geometry,material);mesh.name=material.name||'踏步鼻口';mesh.receiveShadow=true;mesh.castShadow=false;mesh.renderOrder=203;mesh.userData={component:'east-nine-ground-surface',estimated:true,sourceIds:[MAIN,ARCADE,ROAD],materialEvidence:plan.evidence.surface};group.add(mesh);}
+  const infrastructure={walkSurfaces:plan.walkSurfaces,barriers:[]};completed=true;
+  return{group,plan,infrastructure,heightAt:(x,z)=>heightAtEastNineGround(plan,x,z),surfaceHeightAt:(x,z)=>surfaceHeightAtEastNineGround(plan,x,z),dispose};
+  }finally{if(!completed)dispose();}
 }
+
+export function createEastNineGround(THREE,model,options={}){const iterator=buildEastNineGround(THREE,model,options);let step;do{step=iterator.next();}while(!step.done);return step.value;}

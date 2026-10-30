@@ -10,10 +10,11 @@ import {createSkyQrExperience} from './sky-qr.js';
 import {nearbyInterior,crossedInteriorDoor,interiorReturnSnapshot} from './building-interiors.js';
 import {createActivityBridgeMessage} from './activity-bridge-state.js';
 import {createCampusTsunami,mountCampusTsunamiNotice} from './campus-tsunami.js';
+import {campusEffectBudget} from './campus-effect-budget.js';
 import './live-experience.css';
 import './campus-tsunami.css';
 
-export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,getInteriors=()=>[],getWallText=()=>[],setSuspended,invalidate,notify,tsunamiQuality='desktop',handheld=false}) {
+export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,getInteriors=()=>[],getWallText=()=>[],setSuspended,invalidate,notify,tsunamiQuality='desktop',handheld=false,onRuntimeBudgetChange=()=>{}}) {
   const disposeMobileViewport=mountMobileViewport();
   const root=document.createElement('div');root.id='live-experience';
   root.innerHTML=`
@@ -38,6 +39,19 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   const reduced=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
   const campusTsunami=createCampusTsunami({THREE,scene,quality:tsunamiQuality});
   const tsunamiNotice=mountCampusTsunamiNotice({THREE,root,camera,effect:campusTsunami,scene});
+  let visualBudget=campusEffectBudget(),lastForeground='';
+  function runtimeBudget(){return {foreground:!opened,experience:opened?(opened.workId||opened.kind||opened.id):null,level:visualBudget.level,releaseDecorativeResources:!!opened&&visualBudget.level===0,exteriorEffectsResident:campusTsunami.resident};}
+  function updateRuntimeBudget(){
+    if(disposed)return;
+    const next=runtimeBudget(),signature=`${next.experience||'campus'}:${next.level}`;if(signature===lastForeground)return;
+    lastForeground=signature;
+    // The campus remains available as the return destination. Its optional
+    // exterior flood mesh need not coexist with another heavy WebGL runtime;
+    // returning reconstructs it at the authoritative current event time.
+    if(opened)campusTsunami.releaseResources();
+    root.dataset.runtimeForeground=next.experience||'campus';root.dataset.effectQuality=String(next.level);
+    onRuntimeBudgetChange({...next,exteriorEffectsResident:campusTsunami.resident});
+  }
   function updateTsunami(){
     if(!client||disposed)return false;
     const changed=campusTsunami.update({event:client.state.c118Flood,now:client.now(),
@@ -59,6 +73,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     if(!frozen&&pendingInteriorReturn&&getPlayer()?.restoreActivityPose?.(pendingInteriorReturn)){
       pendingInteriorReturn=null;previousInteriorPosition=null;
     }
+    updateRuntimeBudget();
   }
   function bridge(){
     if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage(createActivityBridgeMessage({opened,state:client.state,serverTime:client.now(),locallyPaused:!!skyQr?.isOpen}),frameOrigin);
@@ -134,6 +149,10 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     $('.live-portal-bar > span').textContent=current.label;prompt.hidden=true;portalView.hidden=false;
     loading('正在准备 C118 报告厅…');
     url.searchParams.set('campusParentOrigin',location.origin);url.searchParams.set('campusAttempt',attemptId);
+    if(new URLSearchParams(location.search).get('diagnostics')==='1'){
+      url.searchParams.set('diagnostics','1');
+      if(new URLSearchParams(location.search).get('gpu')==='1')url.searchParams.set('gpu','1');
+    }
     frame=document.createElement('iframe');frame.title=current.label;frame.referrerPolicy='same-origin';
     frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-pointer-lock');frame.setAttribute('allow',"fullscreen 'none'");frame.src=url.href;
     frame.addEventListener('load',()=>{if(!disposed&&opened?.attemptId===attemptId)bridge();});
@@ -239,8 +258,9 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   const timer=setInterval(()=>refresh(),200);
   const visibility=()=>refresh(true);document.addEventListener('visibilitychange',visibility);
   return {
-    setPerformanceBudget({level}){return campusTsunami.setQuality(level===0?'low':handheld?'mobile':'desktop');},
     get frozen(){return lastFrozen;},get portalOpen(){return !!opened;},get state(){return client.state;},
+    get runtimeBudget(){return runtimeBudget();},
+    setPerformanceBudget(next){visualBudget=campusEffectBudget(next);const changed=campusTsunami.setQuality(visualBudget.level===0?'low':handheld?'mobile':'desktop');if(changed)invalidate();updateRuntimeBudget();return changed;},
     sync(){refresh(true);setSuspended(lastFrozen);if(restorePending&&audienceUI.registered&&!lastFrozen&&getPlayer()){
       restorePending=false;try{const stored=JSON.parse(sessionStorage.getItem('campus-return-pose'));if(stored?.audienceId===audienceUI.client.identity.id)getPlayer().restoreActivityPose?.(stored.pose);}catch{}
     }},

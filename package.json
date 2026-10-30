@@ -9,7 +9,7 @@
     "build:works": "node integration/library/build.mjs && node integration/tasay/build.mjs",
     "build:activity": "npm run build:works && npm run build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --test tests/*.test.mjs deploy-assets/prepare-local.test.mjs",
+    "test": "node --test tests/*.test.mjs deploy-assets/*.test.mjs",
     "start": "node server/index.mjs",
     "build:vercel": "vite build && node deploy-assets/materialize.mjs --assets asset-source --output dist",
     "db:migrate": "node serverless/migrate.mjs",

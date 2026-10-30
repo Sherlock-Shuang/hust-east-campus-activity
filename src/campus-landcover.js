@@ -1,7 +1,7 @@
 import polygonClipping from 'polygon-clipping';
 import {getRoadProfile} from './building-profiles.js';
 import {getReconstructionBuildings} from './campus-feature-selection.js';
-import {createTreeLayer,createShrubLayer} from './vegetation.js';
+import {createShrubLayer,buildTreeLayer} from './vegetation.js';
 import {applyWorldUV} from './surface-materials.js';
 
 export const CAMPUS_VEGETATION_EVIDENCE = Object.freeze({
@@ -33,13 +33,15 @@ function capsule(a,b,r){const angle=Math.atan2(b[1]-a[1],b[0]-a[0]),ring=[];for(
 /** Source-constrained planting plan. This does not change source geometry, road
  * width or ground elevations. It also excludes sports/parking, which the old
  * woodland-only sampler omitted. Park labels alone do not imply a planted lawn. */
-export function planCampusLandcover(model,{frame,geoToLocal,maxTrees=7800,maxShrubs=1500,photoOpenLawns=[],hardscapeExclusions=[]}={}){
+export function* buildCampusLandcoverPlan(model,{frame,geoToLocal,maxTrees=7800,maxShrubs=1500,photoOpenLawns=[],hardscapeExclusions=[]}={}){
   if(!model?.records||!frame||typeof geoToLocal!=='function')throw new TypeError('Source model and projection required');
   const local=c=>{const p=geoToLocal({longitude:c[0],latitude:c[1],height:0,coordinateSystem:'EPSG:4326'},frame);return[p.x??p.east,p.z??-p.north];};
   const obstacles=[],cells=new Map(),cellSize=35,coverages=[],trees=[],shrubs=[];
   function addObstacle(polygons,margin,category,id){if(!polygons.length)return;const box=bounds(polygons),o={polygons,margin,category,id,bounds:box};obstacles.push(o);for(let x=Math.floor((box.minX-margin)/cellSize);x<=Math.floor((box.maxX+margin)/cellSize);x++)for(let z=Math.floor((box.minZ-margin)/cellSize);z<=Math.floor((box.maxZ+margin)/cellSize);z++){const k=`${x}/${z}`;if(!cells.has(k))cells.set(k,[]);cells.get(k).push(o);}}
   const buildingIds=new Set(getReconstructionBuildings(model).map(r=>r.id));
+  let obstacleIndex=0;
   for(const r of model.records){
+    if(obstacleIndex++%64===0)yield {stage:"植被通道保留范围"};
     const t=r.feature.properties?.tags||{},category=buildingIds.has(r.id)?'building':r.category;
     if(['building','water','sports','road'].includes(category)||t.amenity==='parking')addObstacle(sourcePolygons(r),category==='building'?2.8:category==='sports'?1.1:.65,category,r.id);
     if(r.category==='road'&&!r.shapes?.length){const g=r.feature.geometry,lines=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:[],w=getRoadProfile(r.feature).width;
@@ -61,6 +63,7 @@ export function planCampusLandcover(model,{frame,geoToLocal,maxTrees=7800,maxShr
     // dozens of almost coincident cuts from woodland repeatedly is expensive.
     // Derived presentation polygons share nominal edges; snap only these
     // exclusion copies to 1 mm so floating-point treads cannot leave slivers.
+    yield {stage:"植被硬地避让",featureId:exclusion.id};
     const snapped=exclusion.polygons.map(p=>p.map(r=>r.map(v=>v.map(n=>Math.round(n*1000)/1000))));
     const polygons=polygonClipping.union(...snapped);
     for(const [part,polygon] of polygons.entries())addObstacle([polygon],.4,'architecture-access',`${exclusion.id||`architecture-access-${index}`}${part?`:${part}`:''}`);
@@ -78,6 +81,7 @@ export function planCampusLandcover(model,{frame,geoToLocal,maxTrees=7800,maxShr
   // consume the bounded instance budget. Sampling stays deterministic per source.
   sources.sort((a,b)=>(kindFor(a)==='row'?-1:0)-(kindFor(b)==='row'?-1:0)||(a.flatArea||0)-(b.flatArea||0)||a.id.localeCompare(b.id));
   for(const r of sources){
+    yield {stage:"植被源范围裁剪",featureId:r.id};
     const kind=kindFor(r),rng=seeded(r.id),polygons=sourcePolygons(r),featureId=r.id,evidence={featureId,sourceUrl:r.feature.properties?.sourceUrl,positionStatus:kind==='row'?'sampled-on-source-tree-row':'sampled-inside-source-planting-polygon',dimensionsStatus:'photo-informed estimate'};
     if(kind==='row'){
       const g=r.feature.geometry,lines=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:[];
@@ -93,6 +97,7 @@ export function planCampusLandcover(model,{frame,geoToLocal,maxTrees=7800,maxShr
     // and younger gaps inside the SAME source woodland, without a regular grid.
     const phase=rng()*Math.PI*2,densityAt=(x,z)=>.58+.19*Math.sin(x*.041+phase)*Math.cos(z*.033-phase)+.15*Math.sin(x*.087+z*.059+phase);
     for(let attempt=0,n=0;attempt<desired*45&&n<desired&&trees.length<maxTrees;attempt++){
+      if(attempt%512===0)yield {stage:"源范围树木规划",featureId,attempt};
       const x=box.minX+rng()*(box.maxX-box.minX),z=box.minZ+rng()*(box.maxZ-box.minZ);if(!pointInLandcover(x,z,clipped))continue;
       const density=densityAt(x,z);if(rng()>density)continue;
       const age=rng(),young=age<.16,height=young?6+age*13:9.4+age*7.3,form=['spreading','oval','upright'][Math.floor(rng()*3)],spacing=young?3.7:4.3+age*1.4;
@@ -102,6 +107,7 @@ export function planCampusLandcover(model,{frame,geoToLocal,maxTrees=7800,maxShr
     // scrub, garden/flowerbed, and a sparse understory inside small woodland.
     const desiredShrubs=kind==='lawn'?0:Math.min(kind==='wood'?70:180,Math.floor(area/(kind==='wood'?220:24)));
     for(let attempt=0,n=0;attempt<desiredShrubs*30&&n<desiredShrubs&&shrubs.length<maxShrubs;attempt++){
+      if(attempt%256===0)yield {stage:"源范围灌木规划",featureId,attempt};
       const x=box.minX+rng()*(box.maxX-box.minX),z=box.minZ+rng()*(box.maxZ-box.minZ),radius=.65+rng()*.65;
       // The photographs show open grass here. Keep the map planting polygons
       // and tree rows, but do not scatter decorative shrubs across that lawn.
@@ -114,19 +120,28 @@ export function planCampusLandcover(model,{frame,geoToLocal,maxTrees=7800,maxShr
   return{trees,shrubs,coverages,obstacles,blocked,evidence:CAMPUS_VEGETATION_EVIDENCE,counts:{trees:trees.length,shrubs:shrubs.length,sourceFeatures:sources.length,coverages:coverages.length,woodlandArea:Math.round(coverages.filter(c=>c.kind==='wood').reduce((s,c)=>s+c.area,0))}};
 }
 
+export function planCampusLandcover(model,options={}){const iterator=buildCampusLandcoverPlan(model,options);let step;do{step=iterator.next();}while(!step.done);return step.value;}
+
 /** Render sampled canopies and genuine source land-cover, in batches. All new
  * surfaces are cut around existing road/building/water/sports/parking geometry. */
-export function createCampusLandcover(THREE,model,options={}){
-  const plan=planCampusLandcover(model,options),group=new THREE.Group();group.name='源植被范围 · 林冠、灌木与地被';group.userData={...CAMPUS_VEGETATION_EVIDENCE,sourceFeatures:plan.counts.sourceFeatures};
-  const geometries=[],materials=[],surfaces=options.surfaces,trees=createTreeLayer(THREE,plan.trees,{name:'source-multilayer-canopy',detail:'forest',whitewash:false,barkMaterial:surfaces?.bark});group.add(trees.group);
+export function* buildCampusLandcover(THREE,model,options={}){
+  const plan=options.preparedPlan||planCampusLandcover(model,options),group=new THREE.Group();group.name='源植被范围 · 林冠、灌木与地被';group.userData={...CAMPUS_VEGETATION_EVIDENCE,sourceFeatures:plan.counts.sourceFeatures};
+  const geometries=[],materials=[],surfaces=options.surfaces;let trees=null,shrubs=null,disposed=false,completed=false;
+  function dispose(){if(disposed)return;disposed=true;trees?.dispose();shrubs?.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());group.removeFromParent();group.clear();}
+  try{
+  trees=yield* buildTreeLayer(THREE,plan.trees,{name:'source-multilayer-canopy',detail:'forest',whitewash:false,barkMaterial:surfaces?.bark,resident:options.resident===true});group.add(trees.group);
   const palette={wood:'#a6aa8c',lawn:'#e8e6cb',garden:'#c5d0a8',scrub:'#adb591',bed:'#caba9a'},coverBatches=new Map();
   for(const coverage of plan.coverages){if(!coverBatches.has(coverage.kind))coverBatches.set(coverage.kind,[]);coverBatches.get(coverage.kind).push(coverage);}
   for(const[kind,covers]of coverBatches){
+    yield {stage:`地表覆盖 ${kind}`};
     const mat=surfaces?.grass?.clone()||new THREE.MeshStandardMaterial({roughness:1});mat.color.set(palette[kind]);mat.roughness=1;mat.polygonOffset=true;mat.polygonOffsetFactor=-1;mat.polygonOffsetUnits=-1;materials.push(mat);
     const shapes=covers.flatMap(c=>c.polygons.map(p=>{const s=new THREE.Shape(p[0].map(q=>new THREE.Vector2(q[0],-q[1])));s.holes=p.slice(1).map(r=>new THREE.Path(r.map(q=>new THREE.Vector2(q[0],-q[1]))));return s;}));
     const geometry=applyWorldUV(new THREE.ShapeGeometry(shapes,1),1,'xy');geometries.push(geometry);const mesh=new THREE.Mesh(geometry,mat);mesh.name=`source-${kind}-ground-cover`;mesh.rotation.x=-Math.PI/2;mesh.position.y=.031;mesh.receiveShadow=true;mesh.renderOrder=199;mesh.userData={component:'source-landcover-ground',sourceIds:covers.map(c=>c.featureId),footprint:'source minus existing hardscape; unmodified source data',materialStatus:'photo-informed estimate'};group.add(mesh);
   }
-  const shrubs=createShrubLayer(THREE,plan.shrubs);group.add(shrubs.group);
-  let disposed=false;
-  return{group,plan,counts:{...plan.counts,drawCalls:trees.counts.drawCalls+coverBatches.size+shrubs.counts.drawCalls},update(camera,options){trees.update(camera,options);shrubs.update(camera,options);},dispose(){if(disposed)return;disposed=true;trees.dispose();shrubs.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());group.removeFromParent();group.clear();}};
+  shrubs=createShrubLayer(THREE,plan.shrubs);group.add(shrubs.group);
+  completed=true;
+  return{group,plan,counts:{...plan.counts,drawCalls:trees.counts.drawCalls+coverBatches.size+shrubs.counts.drawCalls},update(camera,options){trees.update(camera,options);shrubs.update(camera,options);},releaseDecorativeResources(){trees.releaseDecorativeResources();},resumeDecorativeResources(){trees.resumeDecorativeResources();},get residency(){return trees.residency;},dispose};
+  }finally{if(!completed)dispose();}
 }
+
+export function createCampusLandcover(THREE,model,options={}){const iterator=buildCampusLandcover(THREE,model,options);let step;do{step=iterator.next();}while(!step.done);return step.value;}

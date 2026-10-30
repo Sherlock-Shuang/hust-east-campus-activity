@@ -58,3 +58,13 @@ test('cached parking pickup and return update immediately, and changing detail d
   f.render.setDetailDistanceScale(1);f.render.update(camera);
   assert.ok(f.meshes().some(m=>m.userData.component==='electric-scooter'&&m.userData.agentIds.includes(rider.id)));
 });
+
+test('roadside canopy receives the current detail budget through dynamic and static updates',t=>{
+  const f=fixture(t),canopy=f.render.staticGroup.getObjectByName('photo-inferred-roadside-trees');
+  const tree=f.route.roadsideTrees[0],camera=new THREE.PerspectiveCamera(58,16/9,.1,1200);camera.position.set(tree.x,8,tree.z+80);camera.lookAt(tree.x,5,tree.z);
+  f.render.update(camera);assert.equal(canopy.userData.visibilityStats.detailDistanceScale,1);
+  f.render.setDetailDistanceScale(.45);assert.equal(canopy.userData.visibilityStats.detailDistanceScale,.45);
+  f.render.updateStatic(camera);assert.equal(canopy.userData.visibilityStats.detailDistanceScale,.45);
+  f.render.setDetailDistanceScale(1.25);f.render.update(camera);assert.equal(canopy.userData.visibilityStats.detailDistanceScale,1.25);
+  f.render.updateStatic(null);assert.equal(canopy.children.filter(o=>/leaves-\d+$/.test(o.name)).reduce((n,m)=>n+m.count,0),canopy.userData.visibilityStats.candidates,'export returns every tree to full detail');
+});

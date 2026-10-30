@@ -28,6 +28,9 @@ after(()=>{campus.dispose();model.dispose();});
 
 const arrivalIds=['canteen-arrival','canteen-entry-display'];
 const pointOnSign=(item,u=0,v=0)=>new THREE.Vector3(item.x+item.nz*u,item.y+v,item.z-item.nx*u);
+// Failed ray assertions compare presence only. A raw hit owns its Mesh and
+// the complete parent scene; formatting that value can exhaust test memory
+// before Node can report the useful obstruction name.
 const probe=(origin,target,stopBefore=.005)=>{
   const delta=target.clone().sub(origin),length=delta.length();
   return new THREE.Raycaster(origin,delta.normalize(),0,length-stopBefore).intersectObject(facades,true)[0];
@@ -68,7 +71,7 @@ test('spawn eye-level rays reach both inscriptions without hitting the real buil
     // Cover the inscription interior, not just a convenient clear centre.
     for(const u of [-.4,0,.4])for(const v of [-.4,0,.4]){
       const target=pointOnSign(item,item.width*u,item.height*v),hit=probe(eye,target);
-      assert.equal(hit,undefined,`${id} (${u},${v}) is obscured by ${hit?.object.name} before its text plane`);
+      assert.equal(Boolean(hit),false,`${id} (${u},${v}) is obscured by ${hit?.object.name} before its text plane`);
     }
   }
 });
@@ -138,7 +141,7 @@ test('every poem footprint stays on its intended solid surface and can be seen f
       if(item.expectedSupportFeatureId)assert.equal(hit.object.userData.featureId,item.expectedSupportFeatureId,`${item.poetryId} must not attach to a different unnamed building mesh`);
       const delta=point.clone().sub(eye),distance=delta.length();
       const obstruction=new THREE.Raycaster(eye,delta.normalize(),0,distance-.005).intersectObject(campus.group,true)[0];
-      assert.equal(obstruction,undefined,`${item.poetryId} inspection blocked by ${obstruction?.object.name}`);
+      assert.equal(Boolean(obstruction),false,`${item.poetryId} inspection blocked by ${obstruction?.object.name}`);
     }
   }
 });
@@ -178,7 +181,7 @@ test('relocated poems are visible from safe ordinary route approaches, not only 
     for(const u of [-.49,-.25,0,.25,.49])for(const v of [-.49,0,.49]){
       const target=pointOnSign(item,item.width*u,item.height*v),delta=target.clone().sub(eye),distance=delta.length();
       const hit=new THREE.Raycaster(eye,delta.normalize(),0,distance-.005).intersectObject(campus.group,true)[0];
-      assert.equal(hit,undefined,`${item.poetryId}: ordinary route view (${u},${v}) blocked by ${hit?.object.name}`);
+      assert.equal(Boolean(hit),false,`${item.poetryId}: ordinary route view (${u},${v}) blocked by ${hit?.object.name}`);
     }
   }
   assert.equal(campusLandmarkArrival(campus,null),null,'the normal URL keeps the existing canteen spawn');

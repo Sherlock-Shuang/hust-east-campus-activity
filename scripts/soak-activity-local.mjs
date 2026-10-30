@@ -15,6 +15,7 @@ import {createNodeActivityHandler} from '../serverless/node-handler.mjs';
 const option=(name,fallback)=>{const i=process.argv.indexOf(name);return i<0?fallback:process.argv[i+1];};
 const durationSeconds=Math.max(5,Math.min(3600,Number(option('--seconds','1800'))||1800));
 const audienceCount=Math.max(2,Math.min(100,Number(option('--audiences','100'))||100));
+const heartbeatMs=Math.max(10000,Math.min(30000,Number(option('--heartbeat-ms','25000'))||25000));
 const output=path.resolve(option('--output','artifacts/optimization-2026-10-30/activity-soak.json'));
 const directory=await mkdtemp(path.join(tmpdir(),'campus-isolated-soak-'));
 const url=pathToFileURL(path.join(directory,'activity.db')).href;
@@ -45,12 +46,13 @@ const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const percentile=(values,p)=>{if(!values.length)return null;const sorted=[...values].sort((a,b)=>a-b);return Number(sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*p)-1)].toFixed(2));};
 function summary(){return {elapsedSeconds:Number(((performance.now()-started)/1000).toFixed(1)),databaseQueries:{...databaseQueries},apiRequests:metrics.apiRequests,errors:metrics.errors.length,transientErrors:metrics.transientErrors.length,snapshots:metrics.snapshots,connectionsOpened:metrics.connectionsOpened,rotationCloses:metrics.rotationCloses,deliberateReconnects:metrics.deliberateReconnects,eventP95Ms:percentile(metrics.eventLatencies,.95),hostP95Ms:percentile(metrics.hostLatencies,.95)};}
 async function call(route,{method='GET',payload,identity,instance=0}={}){
-  const before=performance.now();let response;
+  const before=performance.now();let response,data;
   const retrySafe=method==='GET'||route==='/api/audience/heartbeat'||(route==='/api/audience/events'&&typeof payload?.eventId==='string');
   for(let attempt=0;attempt<2;attempt++){
     metrics.apiRequests++;
     try{
       response=await fetch(origin+route,{method,signal:AbortSignal.timeout(15000),headers:{Origin:origin,'x-forwarded-proto':'http','x-soak-instance':String(instance),'Content-Type':'application/json',...(identity?{Cookie:identity.cookie,'X-CSRF-Token':identity.csrfToken}:{})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});
+      data=await response.json();
       break;
     }catch(error){
       const record={route,code:error.cause?.code||error.name,message:error.cause?.message||error.message,atSeconds:Math.round((performance.now()-started)/1000)};
@@ -58,28 +60,27 @@ async function call(route,{method='GET',payload,identity,instance=0}={}){
       metrics.transientErrors.push(record);await sleep(100);
     }
   }
-  const data=await response.json();
   assert.equal(response.status,200,`${route}: ${response.status} ${data.error||''}`);
   if(route==='/api/audience/events')metrics.eventLatencies.push(performance.now()-before);
   return {...data,cookie:response.headers.get('set-cookie')?.split(';')[0]};
 }
 async function save(patch){
-  const next={...state,...patch},revision=state.revision+1;commands.set(revision,{at:performance.now(),received:new Set()});
+  const next={...state,...patch},revision=state.revision+1;commands.set(revision,{at:performance.now(),received:new Set(),expected:new Set(streamStates.filter(s=>s.connected&&!s.abort?.signal.aborted).map(s=>s.id))});
   const result=await call('/api/admin/state',{method:'PUT',identity:admin,payload:{state:next,expectedRevision:state.revision},instance:metrics.cycles%2});state=result.state;
 }
 function received(stream,kind,data){
   if(kind==='clock'){metrics.clockFrames++;return;}
   if(kind!=='snapshot')return;
   metrics.snapshots++;assert.ok(data.state.revision>=stream.lastRevision,'stream revision moved backwards');stream.lastRevision=data.state.revision;
-  const command=commands.get(data.state.revision);
-  if(command&&!command.received.has(stream.id)){command.received.add(stream.id);metrics.hostLatencies.push(performance.now()-command.at);}
+  for(const [revision,command] of commands)if(revision<=data.state.revision&&command.expected.has(stream.id)&&!command.received.has(stream.id)){command.received.add(stream.id);metrics.hostLatencies.push(performance.now()-command.at);}
 }
+function missingReceipts(){return [...commands].flatMap(([revision,c])=>[...c.expected].filter(id=>!c.received.has(id)).map(id=>({revision,id,ageMs:Math.round(performance.now()-c.at)})));}
 async function watch(stream){
   while(!ending){
     const abort=new AbortController();stream.abort=abort;
     try{
       const response=await fetch(origin+'/api/live/events',{signal:abort.signal,headers:{'x-forwarded-proto':'http','x-soak-instance':String(stream.instance)}});
-      assert.equal(response.status,200);metrics.connectionsOpened++;
+      assert.equal(response.status,200);metrics.connectionsOpened++;stream.connected=true;
       const reader=response.body.getReader(),decoder=new TextDecoder();let pending='';
       for(;;){
         const packet=await reader.read();if(packet.done){if(!ending)metrics.rotationCloses++;break;}
@@ -87,7 +88,7 @@ async function watch(stream){
         let at;while((at=pending.indexOf('\n\n'))>=0){const block=pending.slice(0,at);pending=pending.slice(at+2);
           const kind=/^event: (.+)$/m.exec(block)?.[1],raw=/^data: (.+)$/m.exec(block)?.[1];if(raw)received(stream,kind,JSON.parse(raw));}
       }
-    }catch(error){if(!ending&&!abort.signal.aborted)metrics.errors.push({kind:'stream',message:error.message,atSeconds:Math.round((performance.now()-started)/1000)});}
+    }catch(error){if(!ending&&!abort.signal.aborted)metrics.errors.push({kind:'stream',code:error.cause?.code||error.name,message:error.message,atSeconds:Math.round((performance.now()-started)/1000)});}finally{stream.connected=false;}
     if(!ending)await sleep(50);
   }
 }
@@ -115,7 +116,7 @@ try{
   while(performance.now()<deadline){
     const now=performance.now();
     if(now>=nextHeartbeat){
-      await Promise.all(viewers.map((viewer,i)=>call('/api/audience/heartbeat',{method:'POST',identity:viewer,instance:i%2,payload:{tabId:`tab-${i}`}})));metrics.heartbeats+=audienceCount;nextHeartbeat=performance.now()+15000;
+      await Promise.all(viewers.map((viewer,i)=>call('/api/audience/heartbeat',{method:'POST',identity:viewer,instance:i%2,payload:{tabId:`tab-${i}`}})));metrics.heartbeats+=audienceCount;nextHeartbeat=performance.now()+heartbeatMs;
     }
     if(now>=nextControl){
       metrics.cycles++;
@@ -127,9 +128,12 @@ try{
       nextReconnect=performance.now()+180000;
     }
     if(now>=nextSummary){const report=summary();phaseSummaries.push(report);console.log(JSON.stringify(report));nextSummary=performance.now()+60000;}
+    assert.equal(missingReceipts().filter(r=>r.ageMs>12000).length,0,'each active viewer must receive this or a newer host revision within 12 seconds');
     await sleep(Math.min(1000,Math.max(1,deadline-performance.now())));
   }
   if(state.paused)await save({paused:false});
+  const receiptDeadline=performance.now()+12000;while(missingReceipts().length&&performance.now()<receiptDeadline)await sleep(100);
+  assert.deepEqual(missingReceipts(),[],'host revision coverage');
   const stats=await call('/api/admin/audience',{identity:admin,instance:1});
   assert.equal(stats.summary.totalParticipants,audienceCount);assert.equal(stats.summary.onlineParticipants,audienceCount);
   assert.deepEqual(stats.summary.points.slice(0,3).map(p=>p.visitors),expectedVisitors);
@@ -137,7 +141,7 @@ try{
   assert.equal(stats.summary.currentParticipants,0);
   assert.equal(metrics.errors.length,0);
   if(durationSeconds>=300)assert.ok(metrics.rotationCloses>=audienceCount-10,'uninterrupted SSE clients rotate after their real 240-second lifetime');
-  result={passed:true,...summary(),startedAt,durationSeconds,audienceCount,nodeVersion:process.version,instanceCount:2,expectedVisitors,expectedOpened,summary:stats.summary,clockFrames:metrics.clockFrames,heartbeats:metrics.heartbeats,phaseSummaries,errors:metrics.errors,transientErrors:metrics.transientErrors,scope:'Actual localhost HTTP/SSE, two serverless handlers and two SQLite clients sharing a fresh local DB. No production traffic, physical devices, GPU or CDN throughput test.'};
+  result={passed:true,...summary(),startedAt,durationSeconds,audienceCount,heartbeatMs,nodeVersion:process.version,instanceCount:2,hostRevisionCoverage:[...commands].map(([revision,c])=>({revision,expected:c.expected.size,received:c.received.size})),expectedVisitors,expectedOpened,summary:stats.summary,clockFrames:metrics.clockFrames,heartbeats:metrics.heartbeats,phaseSummaries,errors:metrics.errors,transientErrors:metrics.transientErrors,scope:'Actual localhost HTTP/SSE, two serverless handlers and two SQLite clients sharing a fresh local DB. No production traffic, physical devices, GPU or CDN throughput test.'};
 }catch(error){result={passed:false,...summary(),startedAt,durationSeconds,audienceCount,nodeVersion:process.version,error:error.message,errors:metrics.errors,transientErrors:metrics.transientErrors,phaseSummaries};process.exitCode=1;}
 finally{
   ending=true;for(const stream of streamStates)stream.abort?.abort();await Promise.allSettled(tasks);

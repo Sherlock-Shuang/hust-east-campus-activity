@@ -89,7 +89,13 @@ float crestMask(vec2 p){
 const surfaceNoise=/* glsl */`
 float hash21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise21(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash21(i),hash21(i+vec2(1.,0.)),f.x),mix(hash21(i+vec2(0.,1.)),hash21(i+1.),f.x),f.y);}
-float foamNoise(vec2 p){return .55*noise21(p)+.3*noise21(p*2.13)+.15*noise21(p*4.09);}
+float foamNoise(vec2 p){
+  #if EFFECT_DETAIL > 0
+    return .55*noise21(p)+.3*noise21(p*2.13)+.15*noise21(p*4.09);
+  #else
+    return noise21(p);
+  #endif
+}
 `;
 
 export function createC118FloodEffect(THREE,{plan,level=2}){
@@ -101,7 +107,7 @@ export function createC118FloodEffect(THREE,{plan,level=2}){
     uRoom:{value:new THREE.Vector4(c.width/2,c.depth/2,c.floorY,c.floorY+plan.config.height)},
     uDoors:{value:c.doors.map(d=>new THREE.Vector4(d.x,d.z,d.y,d.delay))}};
   const geometry=ownGeometry(new THREE.PlaneGeometry(c.width-.06,c.depth-.06,columns,rows));geometry.rotateX(-Math.PI/2);
-  const waterMaterial=ownMaterial(new THREE.ShaderMaterial({uniforms,transparent:true,depthWrite:false,side:THREE.DoubleSide,
+  const waterMaterial=ownMaterial(new THREE.ShaderMaterial({uniforms,defines:{EFFECT_DETAIL:qualityLevel},transparent:true,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,
     vertexShader:waterField+/* glsl */`
       varying vec3 vWorld;varying vec3 vNormal;varying float vCrest;
       void main(){vec3 p=position;p.y=waterHeight(p.xz);float e=.08;
@@ -136,7 +142,7 @@ export function createC118FloodEffect(THREE,{plan,level=2}){
   for(const door of c.doors){
     const u={uTime:uniforms.uTime,uOrigin:{value:new THREE.Vector3(door.x,door.y,door.z)},uSide:{value:door.side},
       uDoorWidth:{value:door.width},uDelay:{value:door.delay},uFloor:uniforms.uFloor,uPeak:uniforms.uPeak,uRipple:uniforms.uRipple,uDoors:uniforms.uDoors};jetUniforms.push(u);
-    const material=ownMaterial(new THREE.ShaderMaterial({uniforms:u,transparent:true,depthWrite:false,side:THREE.DoubleSide,
+    const material=ownMaterial(new THREE.ShaderMaterial({uniforms:u,defines:{EFFECT_DETAIL:qualityLevel},transparent:true,depthWrite:false,side:THREE.DoubleSide,
       vertexShader:waterField+/* glsl */`
         uniform float uSide,uDelay,uDoorWidth;uniform vec3 uOrigin;
         varying vec3 vWorld;varying vec2 vUv;varying float vRoll;varying float vFade;
@@ -209,6 +215,7 @@ export function createC118FloodEffect(THREE,{plan,level=2}){
     const next=safeLevel(level);
     if(next===qualityLevel)return;
     qualityLevel=next;
+    for(const material of materials)if(material.defines?.EFFECT_DETAIL!==undefined){material.defines.EFFECT_DETAIL=next;material.needsUpdate=true;}
     const [columns,rows,jetColumns,jetRows,particles]=meshBudgets[next];
     // Only one set is resident; changing quality replaces two immutable meshes,
     // not the shader, shared clock or CPU collision/water sampler.

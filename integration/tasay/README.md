@@ -94,3 +94,11 @@ React 正式 `main` 出现后发送 `campus:ready {workId:'tasay', level:'page_o
 全场控制中的阶段下拉及引导文字仅修改 `phase`，不会自动恢复／暂停活动或重置位置。入口编辑增加作品关联，“载入三个作品点位”只补齐缺少的稳定 ID；已有点位的位置、开放状态和文案保持原值。自定义作品可以填写稳定 ID 和真实 URL。
 
 `admin-ui.test.mjs` 使用构建副本已安装的 JSDOM 运行真实管理端 HTML/JS；也可用 `TASAY_SOURCE=/absolute/path/to/ta-say node --test integration/tasay/admin-ui.test.mjs`。3 项行为测试覆盖去重统计、私有接口、昵称转义、失败／返回状态、阶段独立性、并发阶段冲突、作品合并及正式 URL。连同作品适配与代理共 16 项通过。本轮相关观众领域测试与上述测试合计 24 项通过，校园正式 Vite 构建通过；浏览器视觉和最终部署仍由整体验收单独验证。
+
+## 退出清理（2026-10-30 性能第二阶段）
+
+活动副本入口保存 React root，并在可信宿主 `campus:dispose` 或页面 `pagehide` 时执行 `root.unmount()`。这会执行 `useChatViewport` 的 effect 清理，解除同源校园父窗口和 visualViewport 的 resize/scroll/orientation 监听，避免已删除 iframe 的 Document 被父窗口回调继续持有。随后停止适配器计时器、动画帧、就绪重发、MutationObserver 和音频上下文。暂停仍仅冻结时间，不卸载 React；原叙事、回复流程和存档不变。消息同时校验父窗口、来源和本次 attempt ID。
+
+回归：`TASAY_SOURCE=/absolute/path/to/ta-say node --test integration/tasay/activity-lifecycle.test.mjs integration/tasay/chat-viewport.test.mjs`。真实校园十轮脚本为 `node scripts/verify-performance-works.mjs --works tasay --output artifacts/tasay-lifecycle`；查看 GC 后 Documents、Nodes、JSHeapUsedSize，不能只检查 iframe 已删除。
+
+BFCache：pagehide仍解除父窗口引用；如随后收到persisted pageshow，活动iframe会刷新重建React并继续使用既有存档与attempt。正常首次pageshow不会刷新，独立打开且无宿主context时沿用原页面生命周期。

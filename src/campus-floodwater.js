@@ -1,3 +1,5 @@
+import {campusEffectBudget} from './campus-effect-budget.js';
+
 /** Water left behind the first campus wave. The advancing front is supplied by
  * the shared event timeline; subsequent crests never uncover flooded ground. */
 export const CAMPUS_FLOOD_WATER=Object.freeze({
@@ -59,19 +61,26 @@ const waterField=/* glsl */`
   float waterHeight(vec2 p){float fill=floodFill(p);return -1.+(uLevel+1.)*fill+fill*uRipple*(${spectrum});}
 `;
 
-export function createCampusFloodwater({THREE,placement={},quality='desktop'}){
+export function createCampusFloodwater({THREE,placement={},quality='desktop',level}){
+  if(Number.isFinite(level))quality=campusEffectBudget({level}).quality;
   const config=configuration(placement),group=new THREE.Group();group.name='campus-floodwater';group.visible=false;
-  const budget=Object.hasOwn(WATER_QUALITY,quality)?WATER_QUALITY[quality]:WATER_QUALITY.desktop;
+  let budget=Object.hasOwn(WATER_QUALITY,quality)?WATER_QUALITY[quality]:WATER_QUALITY.desktop;
   group.position.x=config.x;
-  let geometry=null,material=null,disposed=false;
+  let geometry=null,material=null,mesh=null,disposed=false;
   let state={active:false,elapsed:0,front:Infinity,reducedMotion:false};
   const uniforms={uTime:{value:0},uFront:{value:4200},uCenterX:{value:config.x},uHalfWidth:{value:config.width/2},
     uArcDepth:{value:config.arcDepth},uLevel:{value:config.level},uFillDistance:{value:config.fillDistance},uRipple:{value:1},
     uHazeColor:{value:new THREE.Color('#cbd6d6')},uHazeNear:{value:480},uHazeFar:{value:2900},uHazeDensity:{value:0},uHazeMode:{value:1}};
+  function surfaceGeometry(){
+    const g=new THREE.PlaneGeometry(config.width,config.maxZ-config.minZ,budget.segmentsX,budget.segmentsZ);
+    g.rotateX(-Math.PI/2);g.translate(0,0,(config.maxZ+config.minZ)/2);
+    const swell=CAMPUS_FLOOD_WAVES.reduce((sum,wave)=>sum+Math.abs(wave[0]),0);
+    g.boundingBox=new THREE.Box3(new THREE.Vector3(-config.width/2,Math.min(-1,config.level)-swell,config.minZ),new THREE.Vector3(config.width/2,Math.max(-1,config.level)+swell,config.maxZ));
+    g.boundingSphere=g.boundingBox.getBoundingSphere(new THREE.Sphere());return g;
+  }
   function build(){
     if(geometry)return;
-    geometry=new THREE.PlaneGeometry(config.width,config.maxZ-config.minZ,budget.segmentsX,budget.segmentsZ);
-    geometry.rotateX(-Math.PI/2);geometry.translate(0,0,(config.maxZ+config.minZ)/2);
+    geometry=surfaceGeometry();
     material=new THREE.ShaderMaterial({uniforms,defines:{WATER_DETAIL:budget.detail},transparent:true,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,fog:false,
       vertexShader:/* glsl */`
         #include <common>
@@ -172,7 +181,7 @@ export function createCampusFloodwater({THREE,placement={},quality='desktop'}){
           #include <colorspace_fragment>
         }`,
     });
-    const mesh=new THREE.Mesh(geometry,material);mesh.name='campus-advancing-floodwater';mesh.frustumCulled=false;mesh.renderOrder=8;group.add(mesh);
+    mesh=new THREE.Mesh(geometry,material);mesh.name='campus-advancing-floodwater';mesh.frustumCulled=true;mesh.renderOrder=8;group.add(mesh);
     // Use the scene's live fog range (including overview changes) while preserving
     // the independent water shader and its existing no-automatic-fog contract.
     mesh.onBeforeRender=(_renderer,scene)=>{
@@ -185,6 +194,12 @@ export function createCampusFloodwater({THREE,placement={},quality='desktop'}){
   }
   return {
     group,
+    setPerformanceBudget(next){
+      if(disposed)return false;const selected=WATER_QUALITY[campusEffectBudget(next).quality];
+      if(selected===budget)return false;budget=selected;if(!geometry)return true;
+      const old=geometry;geometry=surfaceGeometry();mesh.geometry=geometry;old.dispose();
+      material.defines.WATER_DETAIL=budget.detail;material.needsUpdate=true;return true;
+    },
     update({active=false,elapsed=0,front=Infinity,reducedMotion=false}={}){
       if(disposed)return false;
       const valid=!!active&&Number.isFinite(elapsed)&&Number.isFinite(front);

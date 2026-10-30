@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scope": "Public runtime fingerprints from the previously verified activity build; no original source paths or private content. Pack materialization deliberately omits authoring sourceChecks.",
+  "sourceFiles": [
+    {
+      "file": "library/isaac-source/剧情扩展/Isaac-High-Damage.swf",
+      "sha256": "b82a8ae21057c2a27a8cfc87ddf8a31a14b8752308239fedfdd345af3959d138"
+    }
+  ],
+  "unityRuntime": {
+    "schemaVersion": 1,
+    "bridgeVersion": 1,
+    "files": [
+      {
+        "file": "Build/wanyan.data",
+        "bytes": 103399966,
+        "sha256": "402902893567d89ec7eaedad7f098a7cae309e4e7feba5eb642c8e80f2b2a78b"
+      },
+      {
+        "file": "Build/wanyan.wasm",
+        "bytes": 42562040,
+        "sha256": "d240f7273266bad8ad14e3f548cc69518b6c689d95e14986f0d322069156dffc"
+      },
+      {
+        "file": "Build/wanyan.framework.js",
+        "bytes": 442960,
+        "sha256": "8456441d652207d508a93211e6bbd2380852a83093cc91ff548870bf5b3a8e63"
+      },
+      {
+        "file": "Build/wanyan.loader.js",
+        "bytes": 27675,
+        "sha256": "51913a5fe87140c62e0b4aa30da3e8585331152d4c6b27f8f5c59093017a9ea8"
+      }
+    ]
+  }
+}

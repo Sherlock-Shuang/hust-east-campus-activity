@@ -47,7 +47,7 @@ export async function createLiveServer(options={}) {
   const audienceFile=path.join(dataDir,'audiences.json');
   let audienceData=createAudienceData();
   try{audienceData=validateAudienceData(JSON.parse(await readFile(audienceFile,'utf8')));}catch(error){if(error.code!=='ENOENT')throw new Error(`无法读取观众状态，请检查 ${audienceFile}: ${error.message}`);}
-  const audiences=createAudienceStore({initial:audienceData,now,idFactory:()=>randomBytes(16).toString('hex'),persist:async next=>{
+  const audiences=createAudienceStore({initial:audienceData,now,presenceFlushMs:1000,idFactory:()=>randomBytes(16).toString('hex'),persist:async next=>{
     const temp=`${audienceFile}.${randomBytes(8).toString('hex')}.tmp`;
     try{await writeFile(temp,JSON.stringify(next)+'\n',{mode:0o600,flag:'wx'});await rename(temp,audienceFile);}
     catch{throw httpError(503,'观众记录保存失败，请稍后重试');}

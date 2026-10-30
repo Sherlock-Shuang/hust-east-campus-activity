@@ -99,17 +99,22 @@ test('generated copies use the verified activity Unity build, retain SWF bytes, 
  const isaac=await readFile(new URL('library/games/isaac/index.html',base),'utf8');assert(isaac.includes('attachIsaacTouch(player, requestMenu)'));assert(isaac.includes('viewport-fit=cover'));
  const unity=await readFile(new URL('wanyan/index.html',base),'utf8');assert(unity.includes('mobile?1.1:2'));assert(unity.includes('wanyan-touch.mjs'));assert(!unity.includes('user-scalable=no'));
  const manifest=JSON.parse(await readFile(new URL('library-manifest.json',base),'utf8'));
+ const baseline=JSON.parse(await readFile(new URL('./fixtures/runtime-baseline.json',import.meta.url),'utf8'));
+ const unityRuntime=manifest.unityRuntime||baseline.unityRuntime;
+ assert.equal(baseline.schemaVersion,1);
  for(const name of ['library/isaac-source/剧情扩展/Isaac-High-Damage.swf']){
-  const output=manifest.entries.find(x=>x.file===name),source=manifest.sourceChecks.find(x=>x.sha256===output.sha256);assert(source,`${name} must be copied byte-for-byte`);
+  const output=manifest.entries.find(x=>x.file===name),source=Array.isArray(manifest.sourceChecks)?manifest.sourceChecks.find(x=>x.sha256===output.sha256):baseline.sourceFiles.find(x=>x.file===name&&x.sha256===output.sha256);assert(source,`${name} must be copied byte-for-byte`);
+  assert.equal(createHash('sha256').update(await readFile(new URL(name,base))).digest('hex'),source.sha256,'actual SWF bytes must match independent baseline');
  }
- assert.equal(manifest.unityRuntime.bridgeVersion,1);
+ assert.equal(unityRuntime.bridgeVersion,1);
  for(const ext of ['wasm','framework.js','loader.js']){
-  const output=manifest.entries.find(x=>x.file===`wanyan/Build/wanyan.${ext}`),input=manifest.unityRuntime.files.find(x=>x.file===`Build/wanyan.${ext}`);
+  const output=manifest.entries.find(x=>x.file===`wanyan/Build/wanyan.${ext}`),input=unityRuntime.files.find(x=>x.file===`Build/wanyan.${ext}`);
   assert.equal(output.sha256,input.sha256,`${ext} must match the verified activity build`);
+  assert.equal(createHash('sha256').update(await readFile(new URL(output.file,base))).digest('hex'),input.sha256,`${ext} actual bytes must match the verified activity build`);
  }
  const framework=await readFile(new URL('wanyan/Build/wanyan.framework.js',base),'utf8');assert(framework.includes('bookrealmNativeSkill'));
  const data=await readFile(new URL('wanyan/Build/wanyan.data',base));
  for(const [before,after]of WANYAN_PUBLIC_TEXT){const value=Buffer.from(after),at=data.indexOf(value);assert(at>=0);assert.equal(data.indexOf(value,at+value.length),-1);Buffer.from(before).copy(data,at);}
- const original=manifest.unityRuntime.files.find(x=>x.file==='Build/wanyan.data');
+ const original=unityRuntime.files.find(x=>x.file==='Build/wanyan.data');
  assert.equal(createHash('sha256').update(data).digest('hex'),original.sha256,'reversing only four names must reproduce the exact activity Unity output');
 });

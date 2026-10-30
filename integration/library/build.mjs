@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {publicWanyanData} from './wanyan-public-text.mjs';
 import {loadWanyanRuntime} from './wanyan-runtime.mjs';
+import {applyLibraryPerformance} from './library-performance.mjs';
 import {openActivityLibraryDoor,openActivityLibraryDocument} from './activity-door.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
@@ -59,9 +60,11 @@ export async function buildLibrary({sourceRoot,outputRoot,wanyanBuildRoot}){
   await put('library/activity-adapter.js',adapter);await put('wanyan/activity-adapter.js',adapter);
   for(const file of ['touch-controls.mjs','touch-controls.css'])for(const work of ['library','wanyan'])await put(`${work}/${file}`,await readFile(path.join(here,file),'utf8'));
   for(const file of ['wanyan-touch.mjs','wanyan-touch-gamepad.mjs','wanyan-skill-state.mjs'])await put(`wanyan/${file}`,await readFile(path.join(here,file),'utf8'));
+  await put('library/library-asset-runtime.mjs',await readFile(path.join(here,'library-asset-runtime.mjs'),'utf8'));
+  await put('library/performance-assets.json',JSON.stringify({schemaVersion:2,library:{url:LIBRARY+'model.glb',original:LIBRARY+'model.glb'},hero:{url:LIBRARY+'hero.glb',original:LIBRARY+'hero.glb'}}));
   await put('library/isaac-touch.mjs',await readFile(path.join(here,'isaac-touch.mjs'),'utf8'));
   await put('wanyan/pointer-lock-compat.js',await readFile(path.join(here,'wanyan-pointer-lock.js'),'utf8'));
-  await copy(`${app}/viewer/index.html`,'library/index.html',s=>openActivityLibraryDocument(mobileAssets(injectAdapter(rebaseLibraryText(s),'library'),LIBRARY)));
+  await copy(`${app}/viewer/index.html`,'library/index.html',s=>openActivityLibraryDocument(mobileAssets(injectAdapter(rebaseLibraryText(s),'library'),LIBRARY)).replace(/main\.mjs\?v=[^"']+/, 'main.mjs?v=assets-v2-20261030'));
   await tree(`${app}/viewer/hub`,'library/hub',name=>/\.(?:m?js|css)$/.test(name),async source=>{
     let s=rebaseLibraryText(source).replaceAll('library-save-v1','campus-library-save-v1').replaceAll('library-view-mode','campus-library-view-mode');
     if(s.includes('function frame(now){')){
@@ -95,7 +98,7 @@ export async function buildLibrary({sourceRoot,outputRoot,wanyanBuildRoot}){
       s=replaceExactly(s,"throw error;}\nconst gamepads", "window.campusWorkAdapter?.fail('图书馆剧情资源未能载入');throw error;}\nconst gamepads",'library story failure');
       s+=await readFile(path.join(here,'library-hooks.txt'),'utf8');
       s+=await readFile(path.join(here,'library-touch-hooks.txt'),'utf8');
-      s=openActivityLibraryDoor(s);
+      s=applyLibraryPerformance(openActivityLibraryDoor(s));
     }
     return s;
   });

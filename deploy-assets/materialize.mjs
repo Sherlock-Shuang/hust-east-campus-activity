@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {gunzipSync} from 'node:zlib';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {isVersionedWorkAsset} from '../integration/library/versioned-assets.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url));
 const digest=data=>createHash('sha256').update(data).digest('hex');
 const regexEscape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -20,7 +21,7 @@ export function createRoutes(manifest){
   const routes=[{src:'^/(.*)$',headers:{'X-Content-Type-Options':'nosniff'},continue:true}];
   for(const [url,entry] of Object.entries(manifest.routes)){
     const source='^'+regexEscape(encodeURI(url))+'$';
-    const hashedAsset=url.startsWith('/assets/')||url.startsWith('/works/tasay/assets/');
+    const hashedAsset=url.startsWith('/assets/')||url.startsWith('/works/tasay/assets/')||isVersionedWorkAsset(url,entry.sha256);
     const mutableDocument=/^(?:text\/(?:html|javascript|css)|application\/json)/.test(entry.mime);
     routes.push({src:source,headers:{'Content-Type':entry.mime,'Cache-Control':hashedAsset?'public, max-age=31536000, immutable':mutableDocument?'no-cache':'public, max-age=3600'},continue:true});
   }

@@ -37,7 +37,7 @@ export function createPerformanceQuality({
     const next={mode:selected,level,name:preset.name,pixelRatio,
       shadowEnabled:preset.shadowEnabled,shadowMapSize:preset.shadowMapSize,shadowIntervalMs:preset.shadowIntervalMs,
       reflectionEnabled:preset.reflectionEnabled&&!handheld,reflectionIntervalMs:preset.reflectionIntervalMs,
-      detailDistanceScale:preset.detailDistanceScale,trafficHz:preset.trafficHz};
+      detailDistanceScale:preset.detailDistanceScale,trafficHz:preset.trafficHz,maxFps:level===0?30:60};
     if(!budget||Object.keys(next).some(key=>next[key]!==budget[key]))budget=Object.freeze({...next,revision:++revision});
     return budget;
   }

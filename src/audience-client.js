@@ -82,9 +82,14 @@ export function createAudienceClient({onIdentity=()=>{},onError=()=>{},fetchImpl
       for(const entry of entries())if(entry.finishedAt&&Date.now()-entry.finishedAt>60000)remove(entry.event.eventId);
     }catch(e){onError(e.message);}finally{draining=false;}
   }
-  async function heartbeat(){if(audience&&!disposed)try{await request('/api/audience/heartbeat',{tabId});}catch(e){onError(e.message);}}
-  const interval=setInterval(()=>{heartbeat();drain();},15000);
+  let beating=false;
+  async function heartbeat(){if(audience&&!disposed&&!beating){beating=true;try{await request('/api/audience/heartbeat',{tabId});}catch(e){onError(e.message);}finally{beating=false;}}}
+  // 22.5–27.5 s keeps >2 attempts within the 65 s presence TTL and avoids
+  // hundreds of simultaneous writes after an audience-wide start/resume.
+  let interval;
+  function scheduleHeartbeat(){interval=setTimeout(()=>{heartbeat();drain();if(!disposed)scheduleHeartbeat();},22500+Math.random()*5000);}
+  scheduleHeartbeat();
   const resume=()=>{if(!document.hidden){heartbeat();drain();}};document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
   ready.then(()=>{heartbeat();drain();});
-  return {ready,join,event,flush:drain,get identity(){return audience;},get tabId(){return tabId;},dispose(){disposed=true;clearInterval(interval);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);}};
+  return {ready,join,event,flush:drain,get identity(){return audience;},get tabId(){return tabId;},dispose(){disposed=true;clearTimeout(interval);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);}};
 }

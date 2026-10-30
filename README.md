@@ -4,6 +4,8 @@
 
 默认自动调整画质，右上角可选择「流畅优先／均衡／清晰」。已优化远景树木、实例缓冲、停车与骑手更新、阴影、倒影及角色加载，保持地图、碰撞与玩法。[优化说明和验证](docs/PERFORMANCE-OPTIMIZATION.md)。
 
+第二阶段已接入出生区先可玩、装饰实例按需驻留、30/60 Hz 绘制、图书馆轻量资源与角色延迟加载、作品退出清理和活动查询减量。实测收益、运行命令与未完成的真机验收见 [本轮实施报告](docs/PERFORMANCE-PHASE2-IMPLEMENTATION-2026-10-30.md)。普通界面不显示诊断；需要导出报告时添加 `?diagnostics=1`。
+
 现有华科东校区 3D 校园、主持人控制台及三个真实作品的活动运行版本。观众填写昵称，在校园点位进入作品并返回；主持人控制公告、暂停、光柱、入口和活动阶段，查看个人记录与全场统计。默认在韵苑食堂步行出发。出行方式已改为场景交互：靠近现有电动车、路边跑车、草坪直升机、飞行器或地面战衣，按 F 使用；停稳落地后 F 退出。右上角显示透明操作提示。没有积分、钥匙、排行榜或玩家互相可见的多人同步。
 
 已发布试用站点：[观众入口](https://hust-east-campus-activity.vercel.app/) · [主持人控制端](https://hust-east-campus-activity.vercel.app/admin)。本机直连 Vercel 存在超时；开启现有代理后，公网接口、真实作品进入／返回、双浏览器观众和主持人联动已验证，现场网络与物理手柄仍未验收，具体边界见 [部署验收记录](docs/VERCEL-ACCEPTANCE.md)。
@@ -24,7 +26,7 @@ npm run build
 npm start
 ```
 
-访问 `http://127.0.0.1:5178/`，控制端为 `/admin`。首次启动会从 `asset-source/` 自动恢复作品到忽略提交的 `work-assets/`（约 370 MB）；以后启动校验缓存。源码已包含全部必需网页运行资源，无须原制作工程。开发模式使用 `npm run dev`。
+访问 `http://127.0.0.1:5178/`，控制端为 `/admin`。首次启动会从 `asset-source/` 自动恢复作品到忽略提交的 `work-assets/`（本轮约 692 MB，含保留的原模型与显式移动候选）；以后启动校验缓存。源码已包含全部必需网页运行资源，无须原制作工程。开发模式使用 `npm run dev`。
 
 本地 Node 将活动数据保存在 `server-data/`。管理员密码由 `ADMIN_PASSWORD` 提供（至少 12 字符），未配置则首次随机生成并保存到 `server-data/admin-password.txt`。局域网使用 `HOST=0.0.0.0 npm start`，分享这台电脑的局域网 IP；不要分享 localhost。模型服务设置见下文。
 
@@ -43,7 +45,7 @@ npx vercel env pull .env.production.local --environment production
 node --env-file=.env.production.local serverless/migrate.mjs
 ```
 
-部署应通过 Git 集成：运行资源压缩源约 218 MB，超过 Hobby 的 CLI 源文件上传限制；仓库文件以小于 16 MB 的压缩片段保存，构建时校验 SHA-256 并还原真实资源，不经 API 传输大模型。`.env*`、`.vercel/`、`server-data/`、`dist/` 均不提交。
+部署应通过 Git 集成：本轮运行资源压缩源约 361 MB；仓库按块保存，构建时校验 SHA-256 并还原真实资源，不经 API 传输大模型。新增哈希资源与原资源共存，观众只在进入对应作品时请求所选版本，不会下载全部资源包。`.env*`、`.vercel/`、`server-data/`、`dist/` 均不提交。
 
 ## 作品、控制台与配置
 

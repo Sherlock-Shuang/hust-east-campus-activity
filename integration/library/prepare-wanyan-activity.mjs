@@ -30,14 +30,38 @@ mergeInto(LibraryManager.library, {
   }
 });
 `;
-export function activityBuilder(source){
+export function activityBuilder(source,{mobile=false}={}){
   let result=exactly(source,'public static class LibraryWebBuild {','public static class CampusActivityWebBuild {','original build class');
   result=exactly(result,'  var root=Path.GetFullPath(Path.Combine(Application.dataPath,"../../.."));\n  var output=Path.Combine(root,"games/wanyan");','  var output=Environment.GetEnvironmentVariable("CAMPUS_WANYAN_OUTPUT");\n  if(string.IsNullOrEmpty(output)||!Path.IsPathRooted(output))throw new Exception("CAMPUS_WANYAN_OUTPUT must be an absolute isolated output directory.");\n  output=Path.GetFullPath(output);','original build output');
   result=exactly(result,'Path.Combine(root,"integration/webgl_build_report.json")','Path.Combine(output,"build-report.json")','original report output');
   result=exactly(result,'  Directory.CreateDirectory(output);','  Directory.CreateDirectory(output);\n  AuditSkillProperties(output);','build-time skill audit');
   result=exactly(result,' [Serializable]class Summary',`${skillAudit}\n [Serializable]class Summary`,'editor-only audit insertion');
+  if(mobile){
+    result=exactly(result,'var quality=DesktopQuality();','var quality=MobileQuality();','mobile quality selection');
+    result=exactly(result,'EditorUserBuildSettings.webGLBuildSubtarget=WebGLTextureSubtarget.DXT;','EditorUserBuildSettings.webGLBuildSubtarget=WebGLTextureSubtarget.ASTC;','mobile texture compression');
+    result=exactly(result,'target=BuildTarget.WebGL,options=BuildOptions.None','target=BuildTarget.WebGL,subtarget=(int)WebGLTextureSubtarget.ASTC,options=BuildOptions.None','explicit mobile texture subtarget');
+    result=exactly(result,'qualityProfile="PC",renderScale=quality.renderScale','qualityProfile="Mobile",renderScale=quality.renderScale','mobile report');
+    result=exactly(result,' static UniversalRenderPipelineAsset DesktopQuality()',`${mobileQuality}\n static UniversalRenderPipelineAsset DesktopQuality()`,'mobile quality implementation');
+  }
   return result;
 }
+const mobileQuality=` static UniversalRenderPipelineAsset MobileQuality() {
+  int mobile=Array.IndexOf(QualitySettings.names,"Mobile");
+  if(mobile<0||Array.IndexOf(QualitySettings.GetActiveQualityLevelsForPlatform("WebGL"),mobile)<0)throw new Exception("Mobile quality profile is not enabled for WebGL.");
+  var asset=QualitySettings.GetRenderPipelineAssetAt(mobile) as UniversalRenderPipelineAsset;
+  if(!asset)throw new Exception("Mobile URP asset is missing.");
+  asset.renderScale=.85f;asset.msaaSampleCount=1;asset.mainLightShadowmapResolution=1024;asset.shadowCascadeCount=1;asset.shadowDistance=30;
+  EditorUtility.SetDirty(asset);AssetDatabase.SaveAssets();
+  string settingsPath=Path.Combine(Application.dataPath,"../ProjectSettings/QualitySettings.asset");
+  string settings=File.ReadAllText(settingsPath);
+  if(!Regex.IsMatch(settings,@"(?m)^\\s+WebGL:\\s*\\d+\\s*$"))throw new Exception("WebGL default quality entry is missing.");
+  settings=Regex.Replace(settings,@"(?m)^(\\s+WebGL:\\s*)\\d+\\s*$",match=>match.Groups[1].Value+mobile);
+  File.WriteAllText(settingsPath,settings);AssetDatabase.Refresh();
+  QualitySettings.SetQualityLevel(mobile,true);QualitySettings.globalTextureMipmapLimit=1;
+  Debug.Log("Campus mobile build: Mobile profile, ASTC, scale=.85, MSAA=1, shadow=1024, cascades=1.");
+  return asset;
+ }
+`;
 const skillAudit=` // This fixture exists only in the Editor assembly and never enters the WebGL player.
  static void AuditSkillProperties(string output) {
   var checks=new System.Collections.Generic.List<string>();
@@ -75,7 +99,7 @@ async function canonicalDestination(destination){
   for(;;){try{return path.join(await realpath(current),...tail.reverse());}catch(error){if(error.code!=='ENOENT')throw error;const parent=path.dirname(current);if(parent===current)throw error;tail.push(path.basename(current));current=parent;}}
 }
 
-export async function prepareWanyanActivity({sourceRoot,outputRoot,unityEditor}){
+export async function prepareWanyanActivity({sourceRoot,outputRoot,unityEditor,mobile=false,scratchRoot}){
   if(!sourceRoot||!unityEditor)throw new Error('Pass --source and --unity-editor; both are build-time paths only.');
   sourceRoot=await realpath(path.resolve(sourceRoot));outputRoot=await canonicalDestination(path.resolve(outputRoot||path.join(here,'../../work-assets-source/wanyan-skill')));
   const relative=path.relative(sourceRoot,outputRoot);if(!relative||(!relative.startsWith(`..${path.sep}`)&&relative!=='..'))throw new Error('Output must be outside the original gift project.');
@@ -85,7 +109,13 @@ export async function prepareWanyanActivity({sourceRoot,outputRoot,unityEditor})
   for(const dir of ['Assets','Packages','ProjectSettings'])await assertNoLinks(path.join(project,dir));
   const before=await fingerprints(project,[GAMEPAD,ORIGINAL_BUILDER,'Assets/EmberSanctum/EmberGame.cs','Assets/EmberSanctum/Plugins/BookRealmControls.jslib']);
   const baseline=await fingerprints(originalBuild,FILES.map(name=>`Build/${name}`));
-  const scratch=await mkdtemp(path.join(os.tmpdir(),'campus-wanyan-activity-')),clone=path.join(scratch,'UnityPortalBuild'),compiled=path.join(scratch,'webgl/wanyan'),log=path.join(scratch,'unity-build.log');
+  if(scratchRoot){
+    scratchRoot=await canonicalDestination(path.resolve(scratchRoot));
+    const scratchRelative=path.relative(sourceRoot,scratchRoot);
+    if(!scratchRelative||(!scratchRelative.startsWith(`..${path.sep}`)&&scratchRelative!=='..'&&!path.isAbsolute(scratchRelative)))throw new Error('Scratch must be outside the original gift project.');
+    await mkdir(scratchRoot,{recursive:true});
+  }
+  const scratch=await mkdtemp(path.join(scratchRoot||os.tmpdir(),'campus-wanyan-activity-')),clone=path.join(scratch,'UnityPortalBuild'),compiled=path.join(scratch,'webgl/wanyan'),log=path.join(scratch,'unity-build.log');
   console.log(JSON.stringify({phase:'cloning',scratch,project:clone,output:outputRoot,log}));
   // APFS copy-on-write keeps existing import/IL2CPP caches without modifying the gift.
   if(process.platform==='darwin')await run('/bin/cp',['-cR',project,clone]);
@@ -94,7 +124,7 @@ export async function prepareWanyanActivity({sourceRoot,outputRoot,unityEditor})
   async function put(file,content){let old=null;try{old=await readFile(path.join(clone,file));}catch(error){if(error.code!=='ENOENT')throw error;}await writeFile(path.join(clone,file),content);changes.push({file,beforeSha256:old?hash(old):null,afterSha256:hash(content)});}
   await put(GAMEPAD,patchGamepad(await readFile(path.join(clone,GAMEPAD),'utf8')));
   await put(PLUGIN,skillPlugin);
-  await put(BUILDER,activityBuilder(await readFile(path.join(clone,ORIGINAL_BUILDER),'utf8')));
+  await put(BUILDER,activityBuilder(await readFile(path.join(clone,ORIGINAL_BUILDER),'utf8'),{mobile}));
   await mkdir(path.dirname(compiled),{recursive:true});
   console.log(JSON.stringify({phase:'building',project:clone,compiled,log}));
   await run(unityEditor,['-batchmode','-quit','-nographics','-buildTarget','WebGL','-projectPath',clone,'-executeMethod','CampusActivityWebBuild.Build','-logFile',log],{env:{...process.env,CAMPUS_WANYAN_OUTPUT:compiled}});
@@ -112,7 +142,7 @@ export async function prepareWanyanActivity({sourceRoot,outputRoot,unityEditor})
   const framework=await readFile(path.join(outputRoot,'Build/wanyan.framework.js'),'utf8');
   if(!framework.includes('window.bookrealmNativeSkill=Object.freeze'))throw new Error('Framework does not contain the native skill snapshot.');
   const audit=await readFile(path.join(compiled,'skill-audit.txt'),'utf8');if(!audit.includes('COMPLETE: 14 actual skill property boundary checks'))throw new Error('Missing successful original skill property boundary audit.');
-  const provenance={schemaVersion:1,bridgeVersion:1,createdAt:new Date().toISOString(),unityVersion:(await readFile(path.join(project,'ProjectSettings/ProjectVersion.txt'),'utf8')).split('\n')[0].replace('m_EditorVersion: ',''),files,sourceChanges:changes,baseline,sourceBaseline:before,build:{result:report.result,errors:report.errors,warnings:report.warnings,qualityProfile:report.qualityProfile,textureSubtarget:report.textureSubtarget},validation:{skillPropertyChecks:14,skillAuditSha256:hash(audit)},scope:'Activity-only read-only skill observation; original gameplay, original project and original desktop deliverables preserved.'};
+  const provenance={schemaVersion:1,bridgeVersion:1,createdAt:new Date().toISOString(),unityVersion:(await readFile(path.join(project,'ProjectSettings/ProjectVersion.txt'),'utf8')).split('\n')[0].replace('m_EditorVersion: ',''),files,sourceChanges:changes,baseline,sourceBaseline:before,build:{result:report.result,errors:report.errors,warnings:report.warnings,qualityProfile:report.qualityProfile,textureSubtarget:report.textureSubtarget,renderScale:report.renderScale,msaaSamples:report.msaaSamples,mainShadowResolution:report.mainShadowResolution,shadowCascades:report.shadowCascades},validation:{skillPropertyChecks:14,skillAuditSha256:hash(audit)},scope:'Activity-only read-only skill observation; original gameplay, original project and original desktop deliverables preserved.'};
   await writeFile(path.join(outputRoot,'provenance.json'),JSON.stringify(provenance,null,2)+'\n');
   // Local-only logs remain outside the runtime asset whitelist.
   await copyFile(log,path.join(scratch,'build-completed.log'));
@@ -120,5 +150,5 @@ export async function prepareWanyanActivity({sourceRoot,outputRoot,unityEditor})
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const args=process.argv.slice(2),value=name=>{const at=args.indexOf(name);return at<0?undefined:args[at+1];};
-  console.log(JSON.stringify(await prepareWanyanActivity({sourceRoot:value('--source')||process.env.BOOKREALM_SOURCE,outputRoot:value('--output'),unityEditor:value('--unity-editor')||process.env.UNITY_EDITOR})));
+  console.log(JSON.stringify(await prepareWanyanActivity({sourceRoot:value('--source')||process.env.BOOKREALM_SOURCE,outputRoot:value('--output'),unityEditor:value('--unity-editor')||process.env.UNITY_EDITOR,mobile:args.includes('--mobile'),scratchRoot:value('--scratch-root')})));
 }

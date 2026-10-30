@@ -1,7 +1,7 @@
 import {waterFootprint} from './water-details.js';
 import {getRoadProfile} from './building-profiles.js';
 import {createEastNinePeople} from './east-nine-people.js';
-import {createEastNinePlanting} from './east-nine-planting.js';
+import {buildEastNinePlanting} from './east-nine-planting.js';
 
 const PATCH_IDS=new Set(['way/102754430','way/102754452']);
 const PHOTO='https://www.hust.edu.cn/images/22/09/29/1z26t6x3br/11.jpg';
@@ -29,10 +29,12 @@ export function planEastNineForecourt(model){
   return{patches,plants};
 }
 
-export function createEastNineForecourt(THREE,model,{surfaces,existingTrees=[],heightAt}={}){
+export function* buildEastNineForecourt(THREE,model,{surfaces,existingTrees=[],heightAt}={}){
   const plan=planEastNineForecourt(model),group=new THREE.Group();group.name='东九前场 · 源绿地内低曲线绿篱';
   group.userData={component:'east-nine-forecourt',sourceIds:plan.patches.map(p=>p.id),photo:PHOTO,sourceFootprintPreserved:true,dimensions:'estimated',basis:'Official aerial photograph: low curved hedges and planted islands in the two side greens; exact contours, species, heights and seasonal colours not surveyed',plantCount:plan.plants.length};
-  const planting=createEastNinePlanting(THREE,model,{plan,existingTrees});group.add(planting.group);plan.planting=planting.plan;
+  const planting=yield* buildEastNinePlanting(THREE,model,{plan,existingTrees});group.add(planting.group);plan.planting=planting.plan;
   const people=createEastNinePeople(THREE,model,{heightAt});group.add(people.group);plan.people=people.plan.people;group.userData.personCount=plan.people.length;
   let disposed=false;return{group,plan,dynamicGroup:people.group,update:people.update,dispose(){if(disposed)return;disposed=true;people.dispose();planting.dispose();group.removeFromParent();group.clear();}};
 }
+
+export function createEastNineForecourt(THREE,model,options={}){const iterator=buildEastNineForecourt(THREE,model,options);let step;do{step=iterator.next();}while(!step.done);return step.value;}

@@ -1016,6 +1016,126 @@
       "continue": true
     },
     {
+      "src": "^/works/library/assets/e18af03f7e27067225f404099758f0220e2d69386af6f2ee90de070e8b33cea3/hero\\.glb$",
+      "headers": {
+        "Content-Type": "model/gltf-binary",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/assets/73ad8244a874564c0685fab18c17b644cac3c5ac99c183bcb3f16302cdeee1e1/meshopt-decoder\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/assets/e4a26033e3551fb2722888949fbb41e77aee628e8e8f04dcffeee301aa7e5634/meshopt-LICENSE\\.txt$",
+      "headers": {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/performance-assets\\.json$",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/library-asset-runtime\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/assets/51913a5fe87140c62e0b4aa30da3e8585331152d4c6b27f8f5c59093017a9ea8/wanyan\\.loader\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/assets/8456441d652207d508a93211e6bbd2380852a83093cc91ff548870bf5b3a8e63/wanyan\\.framework\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/assets/d240f7273266bad8ad14e3f548cc69518b6c689d95e14986f0d322069156dffc/wanyan\\.wasm$",
+      "headers": {
+        "Content-Type": "application/wasm",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/assets/339ab77e8087d4af29131263cca279f441a0343b102302d1b95c7b1fa5473310/wanyan\\.data$",
+      "headers": {
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/assets/cde3ca325bdb57ca3da2cbbe8e4af28444d486a80118882040318e333a774df0/wanyan\\.data$",
+      "headers": {
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/performance-builds\\.json$",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/wanyan/wanyan-quality\\.mjs$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/library/assets/e55afd1e0a4cdb935782540cc59c98120c5a2bf86c98cfc6b2fff9e443678026/model\\.glb$",
+      "headers": {
+        "Content-Type": "model/gltf-binary",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/tasay/activity-build\\.json$",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/works/tasay/assets/index-CrDQGr40\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
       "src": "^/api/games/?$",
       "dest": "/works/library/api/games.json",
       "methods": [

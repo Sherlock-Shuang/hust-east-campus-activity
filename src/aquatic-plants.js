@@ -73,7 +73,7 @@ function shorelineClusters(footprint) {
 
 /** Deterministic authored planting layout, not a vegetation or seasonal model.
  * A whole circumscribed leaf disc must fit inside the source water polygon. */
-export function planAquaticPlants({ record, footprint = record && waterFootprint(record), roads = [], maxLeaves = 12000 } = {}) {
+export function* buildAquaticPlantPlan({ record, footprint = record && waterFootprint(record), roads = [], maxLeaves = 12000 } = {}) {
   if (record?.id !== LAKE_ID || !footprint || !record.mesh?.isMesh) return { leaves: [], clusters: [], footprint: null };
   const clusters = shorelineClusters(footprint), occupied = new Map(), leaves = [];
   const blocked = roadExclusions(roads, footprint.bounds);
@@ -82,6 +82,7 @@ export function planAquaticPlants({ record, footprint = record && waterFootprint
   for (const cluster of clusters) {
     const step = .335;
     for (let i = -Math.ceil(cluster.tangentRadius / step); i <= Math.ceil(cluster.tangentRadius / step); i++) {
+      if(i%8===0)yield {stage:"湖岸水生植物规划",cluster:cluster.index,row:i};
       for (let j = -Math.ceil(cluster.normalRadius / step); j <= Math.ceil(cluster.normalRadius / step); j++) {
         const seed = cluster.index * 97;
         const u = (i + (random(i, j, seed) - .5) * .82) * step;
@@ -128,6 +129,8 @@ export function planAquaticPlants({ record, footprint = record && waterFootprint
   leaves.length = Math.min(leaves.length, Math.max(0, Math.floor(maxLeaves)));
   return { leaves, clusters, footprint };
 }
+
+export function planAquaticPlants(options={}){const iterator=buildAquaticPlantPlan(options);let step;do{step=iterator.next();}while(!step.done);return step.value;}
 
 function leafGeometry(THREE, variant) {
   const positions = [0, 0, 0], uv = [.5, .5], indices = [], segments = 16, rings = [.29, .64, 1];
@@ -178,7 +181,7 @@ function leafTexture(THREE) {
 
 /** Low round-leaf shoreline vegetation informed by a reviewed campus photo.
  * Species, coordinates, diameter, growth density and season are not measured. */
-export function createAquaticPlants(THREE, { record, footprint, roads = [], maxLeaves = 12000 } = {}) {
+export function* buildAquaticPlants(THREE, { record, footprint, roads = [], maxLeaves = 12000 } = {}) {
   const group = new THREE.Group();
   group.name = '东九湖岸 · 圆叶水生植物（外观与分布估计）';
   group.userData = {
@@ -188,10 +191,12 @@ export function createAquaticPlants(THREE, { record, footprint, roads = [], maxL
     leafDiameterMetres: [.18, .42], coverage: 'Authored shore-biased clusters; not a registered vegetation survey or seasonal reconstruction',
     waterBoundary: 'Original source water shape and island holes unchanged; every complete leaf disc is clipped by clearance tests',
   };
-  const layout = planAquaticPlants({ record, footprint, roads, maxLeaves });
+  const layout = yield* buildAquaticPlantPlan({ record, footprint, roads, maxLeaves });
   const counts = { leaves: layout.leaves.length, emergentLeaves: 0, clusters: new Set(layout.leaves.map(leaf => leaf.cluster)).size, drawCalls: 0, leafAreaUpperBoundM2: 0, lakeAreaM2: record?.flatArea || 0 };
   const geometries = [], materials = [], textures = [], batches = [];
-  let disposed = false;
+  let disposed = false,completed=false;
+  function dispose(){if(disposed)return;disposed=true;group.removeFromParent();group.traverse(object=>{if(object.isInstancedMesh)object.dispose();});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());}
+  try{
   const visibility = new Uint8Array(layout.leaves.length);
   visibility.fill(1);
   const leafIndices = new Map(layout.leaves.map((leaf, index) => [leaf, index]));
@@ -214,6 +219,7 @@ export function createAquaticPlants(THREE, { record, footprint, roads = [], maxL
     const matrix = new THREE.Matrix4(), position = new THREE.Vector3(), scale = new THREE.Vector3(), rotation = new THREE.Quaternion(), euler = new THREE.Euler(), colour = new THREE.Color();
     const level = record.mesh.position.y;
     for (let variant = 0; variant < 3; variant++) {
+      yield {stage:"湖岸圆叶实例",variant};
       const leaves = layout.leaves.filter(leaf => leaf.variant === variant);
       if (!leaves.length) continue;
       const geometry = leafGeometry(THREE, variant);
@@ -317,16 +323,8 @@ export function createAquaticPlants(THREE, { record, footprint, roads = [], maxL
     group.userData.visibleLeaves = batches.slice(0, 3).filter(batch => batch.colours).reduce((sum, batch) => sum + batch.mesh.count, 0);
     return changed;
   }
-  return {
-    group, counts, update,
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      group.removeFromParent();
-      group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
-      geometries.forEach(geometry => geometry.dispose());
-      materials.forEach(material => material.dispose());
-      textures.forEach(texture => texture.dispose());
-    },
-  };
+  completed=true;return {group,counts,update,dispose};
+  }finally{if(!completed)dispose();}
 }
+
+export function createAquaticPlants(THREE,options={}){const iterator=buildAquaticPlants(THREE,options);let step;do{step=iterator.next();}while(!step.done);return step.value;}

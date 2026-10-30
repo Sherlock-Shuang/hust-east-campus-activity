@@ -53,16 +53,18 @@ export function planCampusLawnLandmarks(model, { frame, geoToLocal } = {}) {
     const lines = geometry?.type === 'LineString' ? [geometry.coordinates] : geometry?.type === 'MultiLineString' ? geometry.coordinates : [];
     for (const line of lines) { const p = line.map(local); for (let i = 1; i < p.length; i++) obstacles.push(capsule(p[i - 1], p[i], getRoadProfile(record.feature).width / 2 + .65)); }
   }
+  const obstacleBounds=obstacles.map(p=>({polygon:p,bounds:polygonBounds([p])}));
+  const clip=polygons=>{const b=polygonBounds(polygons),cuts=obstacleBounds.filter(({bounds:a})=>a.minX<=b.maxX+1e-8&&a.maxX>=b.minX-1e-8&&a.minZ<=b.maxZ+1e-8&&a.maxZ>=b.minZ-1e-8).map(o=>o.polygon);return cuts.length?polygonClipping.difference(polygons,...cuts):polygons;};
   const source = (model.records || []).find(r => r.id === YUNYUAN_LAWN);
   if (source?.shapes?.length) {
-    const polygons = polygonClipping.difference(asPolygons(source), ...obstacles);
+    const polygons = clip(asPolygons(source));
     if (polygons.length) plan.lawns.push({ id: 'yunyuan-lawn', sourceId: YUNYUAN_LAWN, polygons, footprintBasis: 'source grass polygon minus mapped obstacles', photo: PHOTOS[0], bounds: polygonBounds(polygons) });
   }
   // Located between the user-confirmed lake road and the existing water outline.
   // Do not substitute the two established B/C forecourt hedge polygons.
   if ((model.roads || []).some(r => r.id === 'way/97080595') && (model.water || []).some(r => r.id === 'relation/13705236')) {
     const ring = [[114.42288, 30.51618], [114.42322, 30.51624], [114.42380, 30.51623], [114.42385, 30.51591], [114.42322, 30.51572], [114.42288, 30.51578]].map(c => { const p = local(c); return [p.x, p.z]; }); ring.push(ring[0]);
-    const polygons = polygonClipping.difference([[ring]], ...obstacles);
+    const polygons = clip([[ring]]);
     if (polygons.length) plan.lawns.push({ id: 'east-nine-lake-lawn', sourceId: null, contextSourceIds: ['way/97080595', 'relation/13705236'], polygons, footprintBasis: 'limited photo-derived candidate lawn; no OSM grass outline, clipped against source obstacles', photo: PHOTOS[2], bounds: polygonBounds(polygons) });
   }
   const accept = (kind, lawnId, coordinate, details) => {
@@ -144,9 +146,11 @@ function weatheredRockGeometry(THREE) {
   return geometry;
 }
 
-function stoneTextures(THREE) {
+function* stoneTextures(THREE) {
   const width = 256, height = 512, colour = new Uint8Array(width * height * 4), bump = new Uint8Array(colour.length);
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+  for (let y = 0; y < height; y++) {
+    if(y%16===0)yield {stage:"景石表面材质",row:y};
+    for (let x = 0; x < width; x++) {
     const u = x / width, v = y / height, flow = u * 104 + rockNoise(u*9,v*8)*11 + Math.sin(v * 8) * 1.25;
     const broad = (rockNoise(u*7,v*5)-.5)*2, weather=(rockNoise(u*31,v*17)-.5)*2;
     const mask=rockNoise(u*18,v*22),vein=Math.pow(Math.max(0,Math.sin(flow)),12)*mask;
@@ -154,6 +158,7 @@ function stoneTextures(THREE) {
     const c=Math.max(45,Math.min(238,154+broad*28+weather*34+vein*42-split*60+grain));
     const b=Math.max(0,Math.min(255,130+broad*12+weather*20+vein*35-split*74+grain));
     colour.set([c + 3, c + 3, c, 255], (y * width + x) * 4); bump.set([b, b, b, 255], (y * width + x) * 4);
+  }
   }
   const map = new THREE.DataTexture(colour, width, height, THREE.RGBAFormat), bumpMap = new THREE.DataTexture(bump, width, height, THREE.RGBAFormat);
   map.colorSpace = THREE.SRGBColorSpace;
@@ -181,17 +186,21 @@ function rockSurfaceSampler(geometry) {
   };
 }
 
-export function createCampusLawnLandmarks(THREE, model, options = {}) {
-  const plan = planCampusLawnLandmarks(model, options), group = new THREE.Group(); group.name = '实拍草坪 · 题字景石与轻型膜棚';
+export function* buildCampusLawnLandmarks(THREE, model, options = {}) {
+  const plan = options.preparedPlan||planCampusLawnLandmarks(model, options), group = new THREE.Group(); group.name = '实拍草坪 · 题字景石与轻型膜棚';
   group.userData = { component: 'campus-lawn-landmarks', photographs: PHOTOS, positionStatus: plan.placementStatus, estimated: true,
     inscription: plan.inscription, note: '韵苑花田文化石铭文由校方正文核实，不称为正式校训；设施精确坐标和白棚长期存续未知。' };
   const geometries = new Set(), materials = new Set(), textures = new Set(), instances = new Set();
+  let disposed=false,completed=false;
+  function dispose(){if(disposed)return;disposed=true;instances.forEach(m=>m.dispose());geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.removeFromParent();group.clear();}
+  try{
   const ownGeometry = g => { geometries.add(g); return g; }, ownMaterial = m => { materials.add(m); return m; };
   const fabric = ownMaterial(new THREE.MeshStandardMaterial({ name: '白色张拉膜 · 实拍形态估计', color: '#e7e6d8', roughness: .83, metalness: 0, side: THREE.DoubleSide }));
   const steel = ownMaterial(new THREE.MeshStandardMaterial({ name: '棚架浅灰细管', color: '#c5ccca', roughness: .45, metalness: .55 }));
   const grass = ownMaterial(options.surfaces?.grass?.clone() || new THREE.MeshStandardMaterial({ roughness: 1 })); grass.color.set(options.surfaces?.grass ? '#dae7bd' : '#759344'); grass.roughness = 1;
   grass.polygonOffset = true; grass.polygonOffsetFactor = -2; grass.polygonOffsetUnits = -2;
   for (const lawn of plan.lawns) {
+    yield {stage:"实拍草坪表面",featureId:lawn.id};
     const shapes = lawn.polygons.map(poly => { const shape = new THREE.Shape(poly[0].map(p => new THREE.Vector2(p[0], -p[1]))); shape.holes = poly.slice(1).map(ring => new THREE.Path(ring.map(p => new THREE.Vector2(p[0], -p[1])))); return shape; });
     const g = ownGeometry(applyWorldUV(new THREE.ShapeGeometry(shapes, 1), 1, 'xy')), mesh = new THREE.Mesh(g, grass);
     mesh.rotation.x = -Math.PI / 2; mesh.position.y = .038; mesh.receiveShadow = true; mesh.name = lawn.id;
@@ -205,6 +214,7 @@ export function createCampusLawnLandmarks(THREE, model, options = {}) {
   }
   const tension = ownGeometry(tensionGeometry(THREE));
   for (const p of plan.canopies) {
+    yield {stage:"白棚外观",featureId:p.id};
     const holder = new THREE.Group(); holder.position.set(p.x, p.y, p.z); holder.rotation.y = p.yaw; holder.name = p.id;
     holder.userData = { component: 'photo-canopy', ...p, permanence: 'unknown; photographed installation, not a mapped permanent building' }; group.add(holder);
     if (p.form === 'tension') {
@@ -222,9 +232,10 @@ export function createCampusLawnLandmarks(THREE, model, options = {}) {
     }
   }
   if (pipes.length) { const mesh = new THREE.InstancedMesh(pipeGeometry, steel, pipes.length); pipes.forEach((m, i) => mesh.setMatrixAt(i, m)); mesh.instanceMatrix.needsUpdate = true; mesh.castShadow = mesh.receiveShadow = true; mesh.name = '白棚共享支柱、弧肋与锚索'; mesh.computeBoundingSphere(); group.add(mesh); instances.add(mesh); }
-  const stoneMaps = stoneTextures(THREE); textures.add(stoneMaps.map); textures.add(stoneMaps.bumpMap);
+  const stoneMaps = yield* stoneTextures(THREE); textures.add(stoneMaps.map); textures.add(stoneMaps.bumpMap);
   const stoneMat = ownMaterial(new THREE.MeshStandardMaterial({ name: '风化灰白纵向岩纹与裂隙', color: '#ffffff', roughness: .98, metalness: 0, ...stoneMaps, bumpScale: .075 }));
   for (const p of plan.stones) {
+    yield {stage:"题字景石",featureId:p.id};
     const holder = new THREE.Group(); holder.name = p.id; holder.position.set(p.x, p.y, p.z); holder.rotation.y = p.yaw; holder.userData = { component: 'photo-inscribed-stone', ...p, estimated: true }; group.add(holder);
     const rock = new THREE.Mesh(ownGeometry(weatheredRockGeometry(THREE)), stoneMat); rock.name = '自然岩体 · 凹凸双面与竖向裂隙'; rock.userData = { component: 'weathered-stone-body', reliefStatus: 'estimated geometry, not a photogrammetric scan' }; rock.castShadow = rock.receiveShadow = true; holder.add(rock);
     if (typeof document !== 'undefined') {
@@ -246,6 +257,8 @@ export function createCampusLawnLandmarks(THREE, model, options = {}) {
     plan.tufts.forEach((p, i) => { dummy.position.set(p.x, .04, p.z); dummy.rotation.set(0, p.yaw, 0); dummy.scale.set(1, p.height, 1); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix); mesh.setColorAt(i, new THREE.Color().setHSL(.21 + random(i, 4) * .035, .33, .35 + random(i, 7) * .08)); });
     mesh.instanceMatrix.needsUpdate = true; mesh.receiveShadow = true; mesh.name = '低草簇 · 共享实例'; mesh.computeBoundingSphere(); group.add(mesh); instances.add(mesh);
   }
-  let disposed = false;
-  return { group, plan, dispose() { if (disposed) return; disposed = true; instances.forEach(m => m.dispose()); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); group.removeFromParent(); group.clear(); } };
+  completed=true;return {group,plan,dispose};
+  }finally{if(!completed)dispose();}
 }
+
+export function createCampusLawnLandmarks(THREE,model,options={}){const iterator=buildCampusLawnLandmarks(THREE,model,options);let step;do{step=iterator.next();}while(!step.done);return step.value;}

@@ -1,3 +1,4 @@
+import {campusEffectBudget} from './campus-effect-budget.js';
 import {getC118FloodElapsed} from './c118-flood-state.js';
 import {createCampusFloodwater} from './campus-floodwater.js';
 
@@ -213,7 +214,8 @@ const sprayFragment=/* glsl */`
   }
 `;
 
-export function createCampusTsunami({THREE,scene,quality='desktop'}){
+export function createCampusTsunami({THREE,scene,quality='desktop',level}){
+  if(Number.isFinite(level))quality=campusEffectBudget({level}).quality;
   quality=Object.hasOwn(QUALITY,quality)?quality:'desktop';
   let budget=QUALITY[quality];
   const group=new THREE.Group();group.name='campus-tsunami';group.visible=false;
@@ -221,6 +223,17 @@ export function createCampusTsunami({THREE,scene,quality='desktop'}){
   let built=false,disposed=false,lastSample=null,lastTime=null,lastId=null,lastReduced=false,qualityDirty=false,water;
   const geometries=[],materials=[],surges=[];
   const air={uFogColor:{value:new THREE.Color('#cbd6d6')},uFogNear:{value:480},uFogFar:{value:2900},uImmersion:{value:0}};
+  const animatedBounds=new THREE.Box3();
+  function boundSurge(surge,wave){
+    // Conservative envelopes of both Bezier pieces, rear water and ballistic
+    // instanced billboard corners; do not use the undisplaced unit planes.
+    for(const mesh of surge.children){
+      const spray=mesh.name==='campus-tsunami-spray',back=mesh.name==='campus-tsunami-backwater';
+      animatedBounds.min.set(spray?-4850:-4510,spray?-1800:-40,wave.front-(spray?wave.height*.56+950:Math.max(260,wave.height*.56)+75));
+      animatedBounds.max.set(spray?4850:4510,wave.height*1.21+(spray?360:40),wave.front+(back?1800:spray?980:wave.height*.31+680));
+      animatedBounds.getBoundingSphere(mesh.boundingSphere);
+    }
+  }
   function syncAir(){const fog=scene.fog;if(fog?.isFog){air.uFogColor.value.copy(fog.color);air.uFogNear.value=fog.near;air.uFogFar.value=fog.far;air.uImmersion.value=fog.name==='campus-tsunami-immersion'?1:0;}}
   function build(){
     if(built)return;built=true;
@@ -238,18 +251,19 @@ export function createCampusTsunami({THREE,scene,quality='desktop'}){
       for(const [geometry,layer,name] of [[bodyGeometry,0,'wall'],[foamGeometry,1,'crest'],[backGeometry,2,'backwater']]){
         const material=new THREE.ShaderMaterial({uniforms:{...uniforms,uLayer:{value:layer}},defines,vertexShader:waveVertex,fragmentShader:waveFragment,
           side:THREE.DoubleSide,transparent:true,depthWrite:layer!==1,fog:false,forceSinglePass:true});
-        const mesh=new THREE.Mesh(geometry,material);mesh.name=`campus-tsunami-${name}`;mesh.frustumCulled=false;mesh.onBeforeRender=syncAir;
+        const mesh=new THREE.Mesh(geometry,material);mesh.name=`campus-tsunami-${name}`;mesh.frustumCulled=true;mesh.boundingSphere=new THREE.Sphere();mesh.onBeforeRender=syncAir;
         mesh.renderOrder=layer===1?9:6;surge.add(mesh);materials.push(material);
       }
       const sprayMaterial=new THREE.ShaderMaterial({uniforms,vertexShader:sprayVertex,fragmentShader:sprayFragment,transparent:true,depthWrite:false,fog:false,forceSinglePass:true});
-      const spray=new THREE.Mesh(sprayGeometry,sprayMaterial);spray.name='campus-tsunami-spray';spray.frustumCulled=false;spray.renderOrder=10;surge.add(spray);materials.push(sprayMaterial);
+      const spray=new THREE.Mesh(sprayGeometry,sprayMaterial);spray.name='campus-tsunami-spray';spray.frustumCulled=true;spray.boundingSphere=new THREE.Sphere();spray.renderOrder=10;surge.add(spray);materials.push(sprayMaterial);
       surges.push({group:surge,uniforms});
     }
     water=createCampusFloodwater({THREE,quality});water.group.position.x=0;group.add(water.group);
+    group.userData.resident=true;group.userData.quality=quality;
   }
   function paintSample(sample,time,reducedMotion){
     for(const wave of sample.waves){
-      const {group:surge,uniforms}=surges[wave.slot];surge.visible=wave.visible;
+      const {group:surge,uniforms}=surges[wave.slot];surge.visible=wave.visible;boundSurge(surge,wave);
       uniforms.uTime.value=time;uniforms.uFront.value=wave.front;uniforms.uHeight.value=wave.height;uniforms.uReveal.value=wave.reveal;uniforms.uOpacity.value=wave.opacity;
     }
     return water.update({active:true,elapsed:sample.elapsed,front:sample.firstFront,reducedMotion});
@@ -257,10 +271,13 @@ export function createCampusTsunami({THREE,scene,quality='desktop'}){
   function releaseResources(){
     water?.dispose();water=null;
     for(const geometry of geometries)geometry.dispose();for(const material of materials)material.dispose();
-    geometries.length=materials.length=surges.length=0;group.clear();built=false;
+    geometries.length=materials.length=surges.length=0;group.clear();built=false;group.userData.resident=false;
   }
   return {
     group,
+    get resident(){return built;},
+    releaseResources(){group.visible=false;releaseResources();},
+    setPerformanceBudget(next){return this.setQuality(campusEffectBudget(next).quality);},
     setQuality(next){
       next=Object.hasOwn(QUALITY,next)?next:'desktop';if(disposed||next===quality)return false;
       quality=next;budget=QUALITY[next];qualityDirty=true;

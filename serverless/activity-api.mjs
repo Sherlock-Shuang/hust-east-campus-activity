@@ -36,6 +36,16 @@ const changes=result=>Number(result?.meta?.changes||0);
 // may host more than one independent environment. Weak keys do not retain old
 // deployments or closed test databases.
 const publicStateCaches=new WeakMap();
+const presenceCaches=new WeakMap();
+// Display-only aggregation for snapshot fan-out. Admission and /live/state
+// still read fresh counts; no authorization decision uses this cache.
+async function streamCounts(env){
+  let cache=presenceCaches.get(env.DB);
+  if(!cache){cache={expires:0,value:null,pending:null};presenceCaches.set(env.DB,cache);}
+  const now=Date.now();if(cache.value&&now<cache.expires)return cache.value;
+  if(!cache.pending)cache.pending=counts(env,now).then(value=>{cache.value=value;cache.expires=Date.now()+1500;return value;}).finally(()=>{cache.pending=null;});
+  return cache.pending;
+}
 function publicStateCache(env){
   let cache=publicStateCaches.get(env.DB);
   if(!cache){cache=createPublicStateCache(env.STREAM_CLOCK?{now:env.STREAM_CLOCK.now}:{});publicStateCaches.set(env.DB,cache);}
@@ -145,23 +155,35 @@ async function login(request,env,input){
 export const STREAM_LIFETIME_MS=240000;
 async function liveStream(request,env){
   const streamClock=env.STREAM_CLOCK||{now:Date.now,setTimeout,clearTimeout};
-  const now=Date.now(),existing=await counts(env,now);if(existing.onlineCount>=2500)throw error(503,'连接繁忙，请稍后重试');
+  const now=Date.now(),existing=await env.DB.prepare('SELECT COUNT(*) AS count FROM activity_connections WHERE expires_at>?').bind(now).first();if(Number(existing?.count||0)>=2500)throw error(503,'连接繁忙，请稍后重试');
   const id=crypto.randomUUID();await env.DB.prepare('INSERT INTO activity_connections (id,expires_at) VALUES (?,?)').bind(id,now+45000).run();
-  let closed=false,timer,expiryTimer,controller,lastRevision=-1,lastHeartbeat=0;
+  let closed=false,timer,expiryTimer,controller,lastRevision=-1,lastHeartbeat=0,phase='initial';
   const cleanup=async()=>{if(closed)return;closed=true;streamClock.clearTimeout(timer);streamClock.clearTimeout(expiryTimer);request.signal.removeEventListener('abort',abort);await env.DB.prepare('DELETE FROM activity_connections WHERE id=?').bind(id).run().catch(()=>{});};
-  const send=(name,payload)=>controller.enqueue(encoder.encode(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`));
+  const send=(name,payload)=>{
+    // Bound a stalled reader's queue. Reconnection always sends the latest
+    // complete snapshot, so keeping an unlimited old-command backlog is worse.
+    if(controller.desiredSize<=-8)throw Object.assign(Error('Slow stream reader'),{code:'SLOW_CONSUMER'});
+    controller.enqueue(encoder.encode(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`));
+  };
   const abort=()=>{void cleanup();try{controller?.close();}catch{}};
   const pump=async()=>{
     if(closed)return;
     try{
+      phase='state-read';
       const row=await publicStateCache(env).read(()=>stateRow(env));if(closed)return;
-      if(row.revision!==lastRevision){send('snapshot',await snapshot(env,row));lastRevision=row.revision;}
+      phase='snapshot';
+      if(row.revision!==lastRevision){send('snapshot',{state:JSON.parse(row.payload),serverTime:Date.now(),...await streamCounts(env)});lastRevision=row.revision;}
       const time=streamClock.now();
       if(time-lastHeartbeat>=15000){
+        phase='lease';
         await env.DB.prepare('UPDATE activity_connections SET expires_at=? WHERE id=?').bind(time+45000,id).run();
-        if(closed)return;send('clock',{serverTime:time,...await counts(env,time)});lastHeartbeat=time;
+        if(closed)return;send('clock',{serverTime:time});lastHeartbeat=time;
       }
-    }catch{if(!closed){try{controller.error(new Error('活动连接暂时中断'));}catch{}await cleanup();}}
+    }catch(cause){if(!closed){
+      // Allow tests/operations to correlate a failed stream without exposing
+      // SQL, URLs, cookies, participant identities or arbitrary error text.
+      try{env.ACTIVITY_DIAGNOSTICS?.({type:'stream-failure',streamId:id,phase,code:/^[A-Z0-9_]{1,50}$/i.test(cause?.code||'')?cause.code:'STREAM_ERROR'});}catch{}
+      try{controller.error(new Error('活动连接暂时中断'));}catch{}await cleanup();}}
     if(!closed)timer=streamClock.setTimeout(pump,1500);
   };
   const stream=new ReadableStream({start(c){controller=c;request.signal.addEventListener('abort',abort,{once:true});if(request.signal.aborted)abort();else{expiryTimer=streamClock.setTimeout(abort,STREAM_LIFETIME_MS);void pump();}},cancel:cleanup});

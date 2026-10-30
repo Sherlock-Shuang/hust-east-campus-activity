@@ -136,18 +136,23 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
       [6,optoPlan.groundFloor.college,2.6,2.6,1.8,4],
       [7,optoPlan.rear,2,2.8,1.9,4.2],
     ])add(index,opto,{x:e.x-e.nx*1.6+e.tx*e.width/2,z:e.z-e.nz*1.6+e.tz*e.width/2,nx:-e.tx,nz:-e.tz},{
-      width,height,y,out:.025,distance,floor:.14,surface:index===6?'opto-left-entry-corridor-right-wall':'opto-north-foyer-right-wall',
+      // The photo-derived stone lining/poster relief projects up to 0.1225 m
+      // into this corridor. Keep the same copy rectangle and eye positions,
+      // with 7.5 mm clearance above that real finish instead of buried paint.
+      width,height,y,out:.13,distance,floor:.14,surface:index===6?'opto-left-entry-corridor-right-wall':'opto-north-foyer-right-wall',
       approach:{x:e.x-e.nx*.35-e.tx*e.width*.15,z:e.z-e.nz*.35-e.tz*e.width*.15,y:.14},
       approachLabel:index===6?'学院左侧楼门 · 进入门槛即见':'光电楼后门 · 进入门槛即见',
-      ink:'#e4e2d3',expectedSupportNames:[index===6?'relation/13705821:central-high:ground:0':'relation/13705821:north-wing:ground:0'],
+      ink:'#e4e2d3',expectedSupportNames:['opto-photo-light-stone-details','opto-photo-dark-details','opto-window-head-sill'],
     });
   }
 
-  // Keep STAY on the road-facing blank plaster band, closer to the entrance
-  // and above the projecting floor strip. Leave the original AI line clear.
+  // Keep STAY on the same road-facing blank band. The photographed seven-row
+  // facade has its next window reveal at y=4.755 m; the old 4.775 m centre
+  // overlapped it. Lower the small inscription 0.325 m without moving its
+  // source-edge location, width or ordinary-road viewing point.
   sourceWall(9,'way/98867881',[114.4278446600322,30.513006891543753],{
-    width:1.8,height:.48,y:4.775,out:.04,along:-8,distance:8,surface:'east-eleven-entry-wall-band',
-    expectedSupportNames:[''],approachRoadId:'way/103495015',approachLabel:'东十一教学楼入口前道路',
+    width:1.8,height:.48,y:4.45,out:.04,along:-8,distance:8,surface:'east-eleven-entry-wall-band',
+    expectedSupportNames:['way/98867881:photo-main:0'],approachRoadId:'way/103495015',approachLabel:'东十一教学楼入口前道路',
   });
   return plan.sort((a,b)=>a.index-b.index);
 }

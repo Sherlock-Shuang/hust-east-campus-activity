@@ -30,7 +30,7 @@ export async function prepareLocal({assetSource=path.join(here,'../asset-source'
     if(!/^(library|wanyan|tasay)\//.test(file))throw new Error('Unexpected local work mapping');
     if(files.has(file)&&files.get(file).sha256!==entry.sha256)throw new Error('Conflicting local work mapping');
     files.set(file,entry);
-    if(!url.startsWith('/works/tasay/'))entries.push({url,file,bytes:entry.bytes,sha256:entry.sha256,contentType:entry.mime});
+    if(!url.startsWith('/works/tasay/'))entries.push({url,file,bytes:entry.bytes,sha256:entry.sha256,contentType:entry.mime,...(entry.immutable?{immutable:true}:{})});
   }
   for(const file of ['library/index.html','library/model.glb','wanyan/index.html','wanyan/Build/wanyan.data','tasay/index.html'])if(!files.has(file))throw new Error(`Required local work missing: ${file}`);
   await mkdir(workAssets,{recursive:true});const root=await realpath(workAssets);

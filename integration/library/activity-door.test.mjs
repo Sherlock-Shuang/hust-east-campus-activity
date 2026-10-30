@@ -90,7 +90,11 @@ test('activity conversion is repeatable and the entry document invalidates the o
   assert.throws(()=>openActivityLibraryDoor('unrecognized source'),/Library door source changed/);
   const html=await readFile(new URL('../../work-assets/library/index.html',import.meta.url),'utf8');
   assert.equal(openActivityLibraryDocument(html),html);
-  assert.match(html,/main\.mjs\?v=open-door-20261030/);
+  assert.match(html,/main\.mjs\?v=(?:open-door|assets-v2)-20261030/);
+  const legacy='<small>唯一的密钥是一个日期</small><script src="/works/library/hub/main.mjs?v=legacy"></script>';
+  assert.match(openActivityLibraryDocument(legacy),/main\.mjs\?v=open-door-20261030/);
+  const future=html.replace(/main\.mjs\?v=[^"\s]+/, 'main.mjs?v=reviewed-future-generation');
+  assert.equal(openActivityLibraryDocument(future),future, 'door pass must preserve newer runtime cache identifiers');
   assert(main.includes(ACTIVITY_DOOR_HINT));assert(html.includes(ACTIVITY_DOOR_HINT));
   assert(!main.includes('出口尚未打开'));
 });

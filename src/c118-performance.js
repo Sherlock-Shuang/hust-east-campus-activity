@@ -2,6 +2,10 @@ import {createPerformanceQuality} from './performance-quality.js';
 
 const audienceRates=[15,20,25];
 
+export function c118RenderRate({handheld=false,level=1,cinema=false,floodRunning=false}={}){
+  return handheld||level===0||(cinema&&!floodRunning)?30:60;
+}
+
 /** The hall shares the campus pixel/pressure policy, but its budgets only touch
  * authored visual work. Water height, swimmers and the host event clock never
  * depend on this quality level. */

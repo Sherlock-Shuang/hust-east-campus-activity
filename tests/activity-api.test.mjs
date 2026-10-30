@@ -18,11 +18,11 @@ function timerClock(){
   return {now:()=>now,setTimeout(fn,ms){const key=++id;tasks.set(key,{fn,at:now+ms});return key;},clearTimeout(key){tasks.delete(key);},get active(){return tasks.size;},
     async advance(ms){const end=now+ms;for(;;){const next=[...tasks].filter(([,task])=>task.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;tasks.delete(next[0]);now=next[1].at;await next[1].fn();await settle();}now=end;await settle();}};
 }
-async function fixture(t,{clock}={}){
+async function fixture(t,{clock,diagnostics}={}){
   const dir=await mkdtemp(path.join(tmpdir(),'campus-vercel-test-'));
   const url=pathToFileURL(path.join(dir,'activity.db')).href,clients=[createClient({url,intMode:'number'}),createClient({url,intMode:'number'})],dbs=clients.map(adaptLibsql),env={ADMIN_PASSWORD:PASSWORD};
   await dbs[0].batch(schema.split(';').map(s=>s.trim()).filter(Boolean).map(s=>dbs[0].prepare(s)));
-  let handlers=dbs.map(db=>createActivityHandler({env,db,streamClock:clock}));
+  let handlers=dbs.map(db=>createActivityHandler({env,db,streamClock:clock,diagnostics}));
   const readers=[];t.after(async()=>{await Promise.all(readers.map(r=>r.cancel().catch(()=>{})));clients.forEach(c=>c.close());await rm(dir,{recursive:true,force:true});});
   const origin='https://campus.example.test';
   const request=(url,init={},server=0)=>handlers[server](new Request(origin+url,{...init,headers:{Origin:origin,'Content-Type':'application/json','x-vercel-forwarded-for':'192.0.2.1',...init.headers}}));
@@ -93,9 +93,10 @@ test('100 audiences, 100 SSE connections and 340 events aggregate correctly acro
 test('SSE reaches its real 240-second lifecycle, removes both timers/lease and reconnects with a snapshot',async t=>{
   const clock=timerClock(),f=await fixture(t,{clock}),reader=await f.stream();assert.equal(f.api.STREAM_LIFETIME_MS,240000);
   assert.match(new TextDecoder().decode((await reader.read()).value),/event: snapshot/);await settle();
+  const consume=(async()=>{for(;;){if((await reader.read()).done)return;}})();
   assert.equal(clock.active,2);
   await clock.advance(239999);assert.equal((await f.dbs[0].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count,1);
-  await clock.advance(1);for(let i=0;i<30;i++){const result=await reader.read();if(result.done)break;if(i===29)throw Error('SSE did not close');}
+  await clock.advance(1);await consume;
   await settle();assert.equal(clock.active,0);assert.equal((await f.dbs[1].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count,0);
   const again=await f.stream(1);assert.match(new TextDecoder().decode((await again.read()).value),/event: snapshot/);await again.cancel();assert.equal(clock.active,0);
 });
@@ -204,4 +205,33 @@ test('public stream caches cannot cross database environments even when origins 
   assert.equal(snapshots[0].revision,state.revision);assert.equal(snapshots[0].paused,true);
   assert.equal(snapshots[1].revision,0);assert.equal(snapshots[1].paused,false);
   await Promise.all(readers.map(reader=>reader.cancel()));
+});
+
+test('clock renewals do not count viewers repeatedly and public counts remain fresh',async t=>{
+  const clock=timerClock(),f=await fixture(t,{clock});let counts=0;
+  const prepare=f.dbs[0].prepare.bind(f.dbs[0]);f.dbs[0].prepare=sql=>{if(sql.startsWith('SELECT COUNT'))counts++;return prepare(sql);};
+  const reader=await f.stream();await reader.read();await settle();const afterStart=counts;
+  await clock.advance(46000);assert.equal(counts,afterStart,'lease and clock need no repeated global COUNT');
+  await f.request('/api/live/state');assert.equal(counts,afterStart+2,'explicit public stats read fresh counts');
+  await reader.cancel();assert.equal(clock.active,0);
+});
+
+test('a transient stream database failure is classified, cleans its lease, and reconnects',async t=>{
+  const clock=timerClock(),diagnostics=[],f=await fixture(t,{clock,diagnostics:e=>diagnostics.push(e)});
+  const reader=await f.stream();await reader.read();await settle();
+  const prepare=f.dbs[0].prepare.bind(f.dbs[0]);let fail=true;
+  f.dbs[0].prepare=sql=>{if(fail&&sql.startsWith('SELECT revision'))throw Object.assign(Error('secret database URL must not be logged'),{code:'SQLITE_BUSY'});return prepare(sql);};
+  await clock.advance(1600);await assert.rejects(reader.read(),/活动连接暂时中断/);
+  assert.equal(diagnostics.length,1);assert.equal(diagnostics[0].phase,'state-read');assert.equal(diagnostics[0].code,'SQLITE_BUSY');
+  assert.ok(!JSON.stringify(diagnostics).includes('secret'));assert.equal(clock.active,0);
+  assert.equal((await prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count,0);
+  fail=false;const again=await f.stream();assert.match(new TextDecoder().decode((await again.read()).value),/snapshot/);await again.cancel();
+});
+
+test('a non-reading SSE client has a bounded queue and releases its lease',async t=>{
+  const clock=timerClock(),events=[],f=await fixture(t,{clock,diagnostics:e=>events.push(e)});
+  const reader=await f.stream();await settle();await clock.advance(170000);
+  assert.equal(events.at(-1)?.code,'SLOW_CONSUMER');assert.equal(clock.active,0);
+  assert.equal((await f.dbs[0].prepare('SELECT COUNT(*) AS count FROM activity_connections').first()).count,0);
+  await assert.rejects(reader.read(),/活动连接暂时中断/);
 });

@@ -1,3 +1,4 @@
+import {createPlanExclusionIndex} from './static-plan-index.js';
 import {waterFootprint} from './water-details.js';
 import {getRoadProfile} from './building-profiles.js';
 
@@ -14,16 +15,21 @@ function exclusions(model,existingTrees){
   const footprints=(model.records||[]).filter(r=>['road','building','water','sports'].includes(r.category)||r.feature?.properties?.tags?.amenity==='parking').map(r=>({footprint:waterFootprint(r),margin:r.category==='road'?.35:.2})).filter(o=>o.footprint);
   const segments=[];
   for(const road of model.roads||[]){const width=getRoadProfile(road.feature).width;road.group?.updateWorldMatrix(true,true);road.group?.traverse(o=>{if(!o.isLine||o.isLineSegments)return;const p=o.geometry.attributes.position,m=o.matrixWorld.elements,at=i=>({x:m[0]*p.getX(i)+m[4]*p.getY(i)+m[8]*p.getZ(i)+m[12],z:m[2]*p.getX(i)+m[6]*p.getY(i)+m[10]*p.getZ(i)+m[14]});for(let i=1;i<p.count;i++)segments.push({a:at(i-1),b:at(i),clearance:width/2+.35});});}
-  return(x,z,r)=>footprints.some(o=>o.footprint.contains(x,z)||o.footprint.distance(x,z)<r+o.margin)||segments.some(s=>distance(x,z,s.a,s.b)<r+s.clearance)||existingTrees.some(t=>Math.hypot(x-t.x,z-t.z)<r+.7);
+  const boundsIndex=createPlanExclusionIndex(footprints,o=>{const b=o.footprint.bounds;return{minX:b.minX-o.margin,maxX:b.maxX+o.margin,minZ:b.minZ-o.margin,maxZ:b.maxZ+o.margin};});
+  const roadIndex=createPlanExclusionIndex(segments,s=>({minX:Math.min(s.a.x,s.b.x)-s.clearance,maxX:Math.max(s.a.x,s.b.x)+s.clearance,minZ:Math.min(s.a.z,s.b.z)-s.clearance,maxZ:Math.max(s.a.z,s.b.z)+s.clearance}));
+  const treeIndex=createPlanExclusionIndex(existingTrees,t=>({minX:t.x-.7,maxX:t.x+.7,minZ:t.z-.7,maxZ:t.z+.7}));
+  const candidates=[];
+  return(x,z,r)=>boundsIndex.query(x,z,r,candidates).some(o=>o.footprint.contains(x,z)||o.footprint.distance(x,z)<r+o.margin)||roadIndex.query(x,z,r,candidates).some(s=>distance(x,z,s.a,s.b)<r+s.clearance)||treeIndex.query(x,z,r,candidates).some(t=>Math.hypot(x-t.x,z-t.z)<r+.7);
 }
 
 /** Reuses the accepted forecourt hedge path and accent-island centres. New
  * canopy/soil footprints are checked against the actual source and every road,
  * water/building/parking mask. A rejected object is omitted, never relocated. */
-export function planEastNinePlanting(model,forecourtPlan,{existingTrees=[]}={}){
+export function* buildEastNinePlantingPlan(model,forecourtPlan,{existingTrees=[]}={}){
   if(!model?.records||!forecourtPlan?.patches||!forecourtPlan?.plants)throw new TypeError('Source model and planEastNineForecourt plan required');
   const blocked=exclusions(model,existingTrees),patches=[],plants=[],soil=[],grass=[];
   for(const sourcePatch of forecourtPlan.patches){
+    yield {stage:"东九前场种植规划",featureId:sourcePatch.id};
     if(!SOURCE_IDS.has(sourcePatch.id))continue;const record=model.records.find(r=>r.id===sourcePatch.id),footprint=record&&waterFootprint(record);if(!footprint)continue;
     const patch={...sourcePatch,footprint};patches.push(patch);const safe=(x,z,r)=>footprint.contains(x,z)&&footprint.distance(x,z)>r+.15&&!blocked(x,z,r),rng=randomFrom(patch.id.endsWith('430')?102754430:102754452);
     const basis={sourceId:patch.id,positionStatus:'inferred within unchanged source green',dimensionsStatus:'photo-informed estimate'};
@@ -44,6 +50,7 @@ export function planEastNinePlanting(model,forecourtPlan,{existingTrees=[]}={}){
     // neither the existing lawn mesh nor the kerb is reproduced by this layer.
     const b=footprint.bounds;
     for(let attempt=0;attempt<1000&&grass.filter(p=>p.sourceId===patch.id).length<100;attempt++){
+      if(attempt%128===0)yield {stage:"东九前场草簇规划",featureId:patch.id,attempt};
       const x=b.minX+rng()*(b.maxX-b.minX),z=b.minZ+rng()*(b.maxZ-b.minZ),radius=.08+rng()*.08;
       if(!safe(x,z,radius)||plants.some(p=>Math.hypot(p.x-x,p.z-z)<p.radius+.15))continue;
       grass.push({x,z,radius,height:.07+rng()*.10,seed:rng(),...basis});
@@ -53,10 +60,14 @@ export function planEastNinePlanting(model,forecourtPlan,{existingTrees=[]}={}){
   return{patches,plants,soil,grass,blocked,evidence:EAST_NINE_PLANTING_EVIDENCE};
 }
 
-function foliageTexture(THREE){
+export function planEastNinePlanting(model,plan,options={}){const iterator=buildEastNinePlantingPlan(model,plan,options);let step;do{step=iterator.next();}while(!step.done);return step.value;}
+
+function* foliageTexture(THREE){
   const size=128,pixels=new Uint8Array(size*size*4),rng=randomFrom(438941),leaves=[];
   for(let i=0;i<108;i++){const a=rng()*Math.PI*2,r=Math.sqrt(rng())*.43;leaves.push({x:.5+Math.cos(a)*r,y:.5+Math.sin(a)*r,rx:.028+rng()*.036,ry:.022+rng()*.023,a:rng()*Math.PI,shade:.78+rng()*.22});}
-  for(let y=0;y<size;y++)for(let x=0;x<size;x++){const u=(x+.5)/size,v=(y+.5)/size;let alpha=0,shade=1;for(const l of leaves){const dx=u-l.x,dy=v-l.y,c=Math.cos(l.a),s=Math.sin(l.a),d=((dx*c+dy*s)/l.rx)**2+((-dx*s+dy*c)/l.ry)**2;if(d<1){alpha=255;shade=l.shade*(.90+.10*Math.sqrt(1-d));}}const value=Math.round(shade*255);pixels.set([value,value,value,alpha],(y*size+x)*4);}
+  for(const leaf of leaves){leaf.cos=Math.cos(leaf.a);leaf.sin=Math.sin(leaf.a);}
+  for(let y=0;y<size;y++){if(y%16===0)yield {stage:"东九绿篱叶片材质",row:y};for(let x=0;x<size;x++){const u=(x+.5)/size,v=(y+.5)/size;let alpha=0,shade=1;for(const l of leaves){const dx=u-l.x,dy=v-l.y,c=l.cos,s=l.sin,d=((dx*c+dy*s)/l.rx)**2+((-dx*s+dy*c)/l.ry)**2;if(d<1){alpha=255;shade=l.shade*(.90+.10*Math.sqrt(1-d));}}const value=Math.round(shade*255);pixels.set([value,value,value,alpha],(y*size+x)*4);}
+  }
   const texture=new THREE.DataTexture(pixels,size,size,THREE.RGBAFormat);texture.magFilter=THREE.LinearFilter;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.generateMipmaps=true;texture.needsUpdate=true;return texture;
 }
 function makeGeometry(THREE,positions,colors,uvs){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));if(colors)g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));if(uvs)g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.computeVertexNormals();g.computeBoundingSphere();return g;}
@@ -86,16 +97,26 @@ function grassGeometry(THREE){const positions=[],colors=[],color=new THREE.Color
 
 /** Replaces only the old hedge/accent visuals. No hardscape, kerbs, parking,
  * people or tall trees are added; all foliage uses a bounded instance budget. */
-export function createEastNinePlanting(THREE,model,{plan:forecourtPlan,existingTrees=[]}={}){
-  const plan=planEastNinePlanting(model,forecourtPlan,{existingTrees}),group=new THREE.Group();group.name='东九前场 · 低绿篱、紫叶圆丘与苏铁';group.userData={component:'east-nine-photo-planting',...EAST_NINE_PLANTING_EVIDENCE,sourceIds:plan.patches.map(p=>p.id),plantCount:plan.plants.length};
-  const texture=foliageTexture(THREE),foliage=new THREE.MeshStandardMaterial({color:'#ffffff',map:texture,alphaTest:.43,alphaToCoverage:true,roughness:.96,side:THREE.DoubleSide,vertexColors:true}),solid=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.95,side:THREE.DoubleSide,vertexColors:true}),soilMat=new THREE.MeshStandardMaterial({color:'#5b5940',roughness:1,side:THREE.DoubleSide}),geometries=[],materials=[foliage,solid,soilMat],meshes=[],dummy=new THREE.Object3D(),color=new THREE.Color();
+export function* buildEastNinePlanting(THREE,model,{plan:forecourtPlan,existingTrees=[]}={}){
+  const plan=yield* buildEastNinePlantingPlan(model,forecourtPlan,{existingTrees}),group=new THREE.Group();group.name='东九前场 · 低绿篱、紫叶圆丘与苏铁';group.userData={component:'east-nine-photo-planting',...EAST_NINE_PLANTING_EVIDENCE,sourceIds:plan.patches.map(p=>p.id),plantCount:plan.plants.length};
+  const geometries=[],materials=[],meshes=[],dummy=new THREE.Object3D(),color=new THREE.Color();let texture=null,disposed=false,completed=false;
+  function dispose(){if(disposed)return;disposed=true;meshes.forEach(m=>m.dispose());geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());texture?.dispose();group.removeFromParent();group.clear();}
+  try{
+  texture=yield* foliageTexture(THREE);
+  const foliage=new THREE.MeshStandardMaterial({color:'#ffffff',map:texture,alphaTest:.43,alphaToCoverage:true,roughness:.96,side:THREE.DoubleSide,vertexColors:true}),solid=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.95,side:THREE.DoubleSide,vertexColors:true}),soilMat=new THREE.MeshStandardMaterial({color:'#5b5940',roughness:1,side:THREE.DoubleSide});materials.push(foliage,solid,soilMat);
   const metadata={...group.userData,dimensionsStatus:'photo-informed estimate',positionsStatus:'accepted forecourt layout within source geometry'};
   function batch(items,geometry,material,name,{ground=false}={}){geometries.push(geometry);if(!items.length)return;const mesh=new THREE.InstancedMesh(geometry,material,items.length);mesh.name=name;items.forEach((p,i)=>{dummy.position.set(p.x,ground?p.y||.046:.055,p.z);dummy.rotation.set(0,p.yaw??p.seed*Math.PI*2,0);dummy.scale.set(p.radius,ground?1:p.height,p.radius);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);color.setHSL(.08,.015,.88+(p.seed||0)*.12);mesh.setColorAt(i,color);});mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;mesh.computeBoundingSphere();mesh.castShadow=!ground;mesh.receiveShadow=true;mesh.renderOrder=ground?202:205;mesh.raycast=()=>{};mesh.userData={...metadata,component:name,instanceSourceIds:items.map(p=>p.sourceId),instanceFootprints:items.map(p=>({x:p.x,z:p.z,radius:p.radius,height:p.height||0}))};meshes.push(mesh);group.add(mesh);}
+  yield {stage:'东九绿篱几何'};
   batch(plan.plants.filter(p=>p.kind==='hedge'),moundGeometry(THREE),foliage,'east-nine-leafy-hedge');
+  yield {stage:'东九紫叶圆丘几何'};
   batch(plan.plants.filter(p=>p.kind==='purple-mound'),moundGeometry(THREE,{purple:true,seed:42}),foliage,'east-nine-purple-mound');
+  yield {stage:'东九苏铁几何'};
   batch(plan.plants.filter(p=>p.kind==='cycad'),cycadGeometry(THREE),solid,'east-nine-radial-cycad');
   batch(plan.grass,grassGeometry(THREE),solid,'east-nine-sparse-grass');
   const soilGeometry=new THREE.CircleGeometry(1,13);soilGeometry.rotateX(-Math.PI/2);batch(plan.soil,soilGeometry,soilMat,'east-nine-thin-soil',{ground:true});
   plan.counts={plants:plan.plants.length,hedges:plan.plants.filter(p=>p.kind==='hedge').length,purpleMounds:plan.plants.filter(p=>p.kind==='purple-mound').length,cycads:plan.plants.filter(p=>p.kind==='cycad').length,grass:plan.grass.length,soil:plan.soil.length,drawCalls:meshes.length,triangles:meshes.reduce((n,m)=>n+(m.geometry.index?.count||m.geometry.attributes.position.count)/3*m.count,0)};
-  let disposed=false;return{group,plan,dispose(){if(disposed)return;disposed=true;meshes.forEach(m=>m.dispose());geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());texture.dispose();group.removeFromParent();group.clear();}};
+  completed=true;return{group,plan,dispose};
+  }finally{if(!completed)dispose();}
 }
+
+export function createEastNinePlanting(THREE,model,options={}){const iterator=buildEastNinePlanting(THREE,model,options);let step;do{step=iterator.next();}while(!step.done);return step.value;}

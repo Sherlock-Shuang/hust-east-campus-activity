@@ -607,16 +607,16 @@
     "/works/library/": {
       "chunks": [
         {
-          "url": "/_activity_assets/b3917f4b9402ab9e8d70fc682a5de95a324c58e083258d2f29e32a8c3f281830.bin",
+          "url": "/_activity_assets/e7de46ed230ecf5aab4d50cb2ad903cb0c28ca604d9ce338357ed85e7c6bed6b.bin",
           "encoding": "gzip",
           "bytes": 4321,
-          "storedBytes": 1873,
-          "sha256": "25ae0f841bd4e7ae893611eeca1e8e9b1375df1244dee3a7c7c979f30e732fdb"
+          "storedBytes": 1869,
+          "sha256": "ec35e0e37bf27a64db2bec7733cbdeeab1db3958fb3550e53aa5fe67d1b3d9cb"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 4321,
-      "sha256": "25ae0f841bd4e7ae893611eeca1e8e9b1375df1244dee3a7c7c979f30e732fdb"
+      "sha256": "ec35e0e37bf27a64db2bec7733cbdeeab1db3958fb3550e53aa5fe67d1b3d9cb"
     },
     "/works/library/activity-adapter.js": {
       "chunks": [
@@ -810,16 +810,16 @@
     "/works/library/hub/main.mjs": {
       "chunks": [
         {
-          "url": "/_activity_assets/be70c60bd0c83f35dc4aeb56dc352e61c5ab5421f8aef0e92a9e270e795229c7.bin",
+          "url": "/_activity_assets/0ac40ea79449c333d7bedd514edca6ccfd0663c3a93570bc994d1e158235977f.bin",
           "encoding": "gzip",
-          "bytes": 37138,
-          "storedBytes": 11943,
-          "sha256": "bc414bdbdd4562a4bf445c2388f58556d337475c388fdd29667d0b734eafe394"
+          "bytes": 38991,
+          "storedBytes": 12486,
+          "sha256": "648db086e4c30f09bb9b9daaea20007b3852e626e3fb8ca3ffd2c9dd577b29bd"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 37138,
-      "sha256": "bc414bdbdd4562a4bf445c2388f58556d337475c388fdd29667d0b734eafe394"
+      "bytes": 38991,
+      "sha256": "648db086e4c30f09bb9b9daaea20007b3852e626e3fb8ca3ffd2c9dd577b29bd"
     },
     "/works/library/hub/phone.css": {
       "chunks": [
@@ -950,16 +950,16 @@
     "/works/library/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/b3917f4b9402ab9e8d70fc682a5de95a324c58e083258d2f29e32a8c3f281830.bin",
+          "url": "/_activity_assets/e7de46ed230ecf5aab4d50cb2ad903cb0c28ca604d9ce338357ed85e7c6bed6b.bin",
           "encoding": "gzip",
           "bytes": 4321,
-          "storedBytes": 1873,
-          "sha256": "25ae0f841bd4e7ae893611eeca1e8e9b1375df1244dee3a7c7c979f30e732fdb"
+          "storedBytes": 1869,
+          "sha256": "ec35e0e37bf27a64db2bec7733cbdeeab1db3958fb3550e53aa5fe67d1b3d9cb"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 4321,
-      "sha256": "25ae0f841bd4e7ae893611eeca1e8e9b1375df1244dee3a7c7c979f30e732fdb"
+      "sha256": "ec35e0e37bf27a64db2bec7733cbdeeab1db3958fb3550e53aa5fe67d1b3d9cb"
     },
     "/works/library/isaac-source/SWF运行样本/The Binding of Isaac.swf": {
       "chunks": [
@@ -1391,16 +1391,16 @@
     "/works/tasay/": {
       "chunks": [
         {
-          "url": "/_activity_assets/a8e83117d84ec95551ae4a721626b4c9b4d45dcf0b91b5640572da047d84c40e.bin",
+          "url": "/_activity_assets/38e1605ee3f9481dcd129d9e2ee66d4c8794000b0643ca7a974901d1f788752f.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 333,
-          "sha256": "3a81173b8cae7f9b5619dc6d8ef39b18aa9bde00d8e63b0e4ab40281d2b79dae"
+          "storedBytes": 332,
+          "sha256": "a25f57b0c88dd838df41d0c0103d12e580cb30d178f9987ea87e0fd5e6557974"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "3a81173b8cae7f9b5619dc6d8ef39b18aa9bde00d8e63b0e4ab40281d2b79dae"
+      "sha256": "a25f57b0c88dd838df41d0c0103d12e580cb30d178f9987ea87e0fd5e6557974"
     },
     "/works/tasay/assets/66c8ec9cf7b1f1e882d92c7f0c2e8d73-B7Cr3f9M.png": {
       "chunks": [
@@ -1461,30 +1461,30 @@
     "/works/tasay/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/a8e83117d84ec95551ae4a721626b4c9b4d45dcf0b91b5640572da047d84c40e.bin",
+          "url": "/_activity_assets/38e1605ee3f9481dcd129d9e2ee66d4c8794000b0643ca7a974901d1f788752f.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 333,
-          "sha256": "3a81173b8cae7f9b5619dc6d8ef39b18aa9bde00d8e63b0e4ab40281d2b79dae"
+          "storedBytes": 332,
+          "sha256": "a25f57b0c88dd838df41d0c0103d12e580cb30d178f9987ea87e0fd5e6557974"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "3a81173b8cae7f9b5619dc6d8ef39b18aa9bde00d8e63b0e4ab40281d2b79dae"
+      "sha256": "a25f57b0c88dd838df41d0c0103d12e580cb30d178f9987ea87e0fd5e6557974"
     },
     "/works/wanyan/": {
       "chunks": [
         {
-          "url": "/_activity_assets/25e345e3f38888e06866ef44d1523af94018d91c6b536c26685a0118c845f2e5.bin",
+          "url": "/_activity_assets/dbaabdb006f2efcd3505fe8d13dcfebffc0312e7479db7fc647c82aabf5acf04.bin",
           "encoding": "gzip",
-          "bytes": 11652,
-          "storedBytes": 4155,
-          "sha256": "abb124cc4024ab4b4b0da076519f90a9cf5ccdc55c31fc5b0f916969a269b637"
+          "bytes": 12360,
+          "storedBytes": 4363,
+          "sha256": "b0e5affaf8d94d26ba22b90ee930c16bd9705af37c479090b7a238909792a0a4"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 11652,
-      "sha256": "abb124cc4024ab4b4b0da076519f90a9cf5ccdc55c31fc5b0f916969a269b637"
+      "bytes": 12360,
+      "sha256": "b0e5affaf8d94d26ba22b90ee930c16bd9705af37c479090b7a238909792a0a4"
     },
     "/works/wanyan/activity-adapter.js": {
       "chunks": [
@@ -1615,16 +1615,16 @@
     "/works/wanyan/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/25e345e3f38888e06866ef44d1523af94018d91c6b536c26685a0118c845f2e5.bin",
+          "url": "/_activity_assets/dbaabdb006f2efcd3505fe8d13dcfebffc0312e7479db7fc647c82aabf5acf04.bin",
           "encoding": "gzip",
-          "bytes": 11652,
-          "storedBytes": 4155,
-          "sha256": "abb124cc4024ab4b4b0da076519f90a9cf5ccdc55c31fc5b0f916969a269b637"
+          "bytes": 12360,
+          "storedBytes": 4363,
+          "sha256": "b0e5affaf8d94d26ba22b90ee930c16bd9705af37c479090b7a238909792a0a4"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 11652,
-      "sha256": "abb124cc4024ab4b4b0da076519f90a9cf5ccdc55c31fc5b0f916969a269b637"
+      "bytes": 12360,
+      "sha256": "b0e5affaf8d94d26ba22b90ee930c16bd9705af37c479090b7a238909792a0a4"
     },
     "/works/wanyan/pointer-lock-compat.js": {
       "chunks": [
@@ -1877,6 +1877,344 @@
       ],
       "bytes": 1807,
       "sha256": "cafb51ea92aff5e4de90bf7d980b48dd36ca57e851a4dceffc60125bad39b6cb"
+    },
+    "/works/library/assets/e18af03f7e27067225f404099758f0220e2d69386af6f2ee90de070e8b33cea3/hero.glb": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/4ca9891b5f0e95564b50576d78907dcb241963ad288880a00506b2bee4e22748.bin",
+          "encoding": "gzip",
+          "bytes": 12987388,
+          "storedBytes": 12345008,
+          "sha256": "e18af03f7e27067225f404099758f0220e2d69386af6f2ee90de070e8b33cea3"
+        }
+      ],
+      "mime": "model/gltf-binary",
+      "bytes": 12987388,
+      "sha256": "e18af03f7e27067225f404099758f0220e2d69386af6f2ee90de070e8b33cea3",
+      "immutable": true
+    },
+    "/works/library/assets/73ad8244a874564c0685fab18c17b644cac3c5ac99c183bcb3f16302cdeee1e1/meshopt-decoder.mjs": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/97c80d4c70e1f5468affd08391c1e75994634b7fd2eadc5daa651f0535d6ebcc.bin",
+          "encoding": "gzip",
+          "bytes": 29638,
+          "storedBytes": 7455,
+          "sha256": "73ad8244a874564c0685fab18c17b644cac3c5ac99c183bcb3f16302cdeee1e1"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 29638,
+      "sha256": "73ad8244a874564c0685fab18c17b644cac3c5ac99c183bcb3f16302cdeee1e1",
+      "immutable": true
+    },
+    "/works/library/assets/e4a26033e3551fb2722888949fbb41e77aee628e8e8f04dcffeee301aa7e5634/meshopt-LICENSE.txt": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/28d7bdba836f2f926583d1eca20bc2757e9f20a4a5d0987ec63014dfd76a020b.bin",
+          "encoding": "gzip",
+          "bytes": 1079,
+          "storedBytes": 658,
+          "sha256": "e4a26033e3551fb2722888949fbb41e77aee628e8e8f04dcffeee301aa7e5634"
+        }
+      ],
+      "mime": "text/plain; charset=utf-8",
+      "bytes": 1079,
+      "sha256": "e4a26033e3551fb2722888949fbb41e77aee628e8e8f04dcffeee301aa7e5634",
+      "immutable": true
+    },
+    "/works/library/performance-assets.json": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/2f1b24b7c344cbcf5b9c3a2b5a4043a0d59623186b6d6a6da393d1bde151d207.bin",
+          "encoding": "gzip",
+          "bytes": 498,
+          "storedBytes": 282,
+          "sha256": "5ebc08f0febb2459f5ad7e5e7daf0db1469a0b2fcff3714b79803eb94cfac515"
+        }
+      ],
+      "mime": "application/json; charset=utf-8",
+      "bytes": 498,
+      "sha256": "5ebc08f0febb2459f5ad7e5e7daf0db1469a0b2fcff3714b79803eb94cfac515"
+    },
+    "/works/library/library-asset-runtime.mjs": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/95dc8bbddd1db32bb94de359fec29cf2dbb68a9f5f03045f3a5559d7fc1e0a25.bin",
+          "encoding": "gzip",
+          "bytes": 2463,
+          "storedBytes": 1049,
+          "sha256": "95d8a2e8765bb08475a702043429cf843b28d657df3fd09c5dc57e5a76e6fc38"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 2463,
+      "sha256": "95d8a2e8765bb08475a702043429cf843b28d657df3fd09c5dc57e5a76e6fc38"
+    },
+    "/works/wanyan/assets/51913a5fe87140c62e0b4aa30da3e8585331152d4c6b27f8f5c59093017a9ea8/wanyan.loader.js": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/d2bff6edaeacf0841daf52f28b4f82f9e1c67b8acb2d162dfb623e50477433aa.bin",
+          "encoding": "gzip",
+          "bytes": 27675,
+          "storedBytes": 9557,
+          "sha256": "51913a5fe87140c62e0b4aa30da3e8585331152d4c6b27f8f5c59093017a9ea8"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 27675,
+      "sha256": "51913a5fe87140c62e0b4aa30da3e8585331152d4c6b27f8f5c59093017a9ea8",
+      "immutable": true
+    },
+    "/works/wanyan/assets/8456441d652207d508a93211e6bbd2380852a83093cc91ff548870bf5b3a8e63/wanyan.framework.js": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/daee4b2c6ec2ab553c3b9b1062ece694f49f3ceb08a99275fc7ec0e643cd6ddc.bin",
+          "encoding": "gzip",
+          "bytes": 442960,
+          "storedBytes": 94730,
+          "sha256": "8456441d652207d508a93211e6bbd2380852a83093cc91ff548870bf5b3a8e63"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 442960,
+      "sha256": "8456441d652207d508a93211e6bbd2380852a83093cc91ff548870bf5b3a8e63",
+      "immutable": true
+    },
+    "/works/wanyan/assets/d240f7273266bad8ad14e3f548cc69518b6c689d95e14986f0d322069156dffc/wanyan.wasm": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/f3200a4a3fd822f6f8c8992931f30253efe1cf79be4eae78b99ded69e3d51acb.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 3747711,
+          "sha256": "fee8b0f7e672cf1002c2704a8488bf0dc18ccf710e3716d3ba53a604240a6c2a"
+        },
+        {
+          "url": "/_activity_assets/b1d9a486cbf401976ce707d19eb1d7b6a681c705102b8033e05fdd778af43673.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 4996498,
+          "sha256": "a0c300f29f2aa8424cecd7b0a2baae7331da4d8e08a99f549492930289823948"
+        },
+        {
+          "url": "/_activity_assets/73443fd78eee9abbce4f073eef9bd4e86c8bf07a628be63656fad1a57a49c649.bin",
+          "encoding": "gzip",
+          "bytes": 9007608,
+          "storedBytes": 2992608,
+          "sha256": "7f219254ade3d36a7e4870d6e5514d3075c7250c7064d7ac0e8ea10f20ca4fe7"
+        }
+      ],
+      "mime": "application/wasm",
+      "bytes": 42562040,
+      "sha256": "d240f7273266bad8ad14e3f548cc69518b6c689d95e14986f0d322069156dffc",
+      "immutable": true
+    },
+    "/works/wanyan/assets/339ab77e8087d4af29131263cca279f441a0343b102302d1b95c7b1fa5473310/wanyan.data": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/8703c568d508a0df52b9b720ada51505babc74cb7e8ee37857b53bdc48b9a45b.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 15451989,
+          "sha256": "458a9ba031eb1b3e46f8d5e698620edec3bc781a786176bb40043d7d799981cc"
+        },
+        {
+          "url": "/_activity_assets/4417a56b46a94f86f683b1bcbcb776913084095796756ec6248f4fd3cb7db52f.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 15367326,
+          "sha256": "70bfbfe9a5835520c3892f768ed56ba66f970546bf544fcdd54617753cae52a0"
+        },
+        {
+          "url": "/_activity_assets/44b1f75dfe4f90b4f09dcdf69c6054bd143fafca4248dc4a0f4cc66cb73505f3.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 14819818,
+          "sha256": "9653fcaeed8a26dcbca02c9711023ea4cbe034a23639fef38255cb0c9423c1d2"
+        },
+        {
+          "url": "/_activity_assets/dec24cdf073b7c22e34015728810ace0e5f43281557fd3bb5ff7561c78fafc57.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 15595926,
+          "sha256": "66534c9bcc030ae124b9eb42f52ed54f56aa95fd0850359f6a57f7a2dbfaf2d2"
+        },
+        {
+          "url": "/_activity_assets/99659b41f3bc696e22bb17e33adb766d7301559bef85fa34eaa0aff12447d4d7.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 15296951,
+          "sha256": "b6af6eb9dced176d9bb48ad7475c08cf42814f6e1556d0aad00513c843d5da7b"
+        },
+        {
+          "url": "/_activity_assets/187e7a2308ed30acedcfdac642fee019ead2f53a12f0b2cdddf3e2aa1866fb1b.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 11858825,
+          "sha256": "f6faf2c795dc084621bad3f418ec70c97ac7ba752d1c72a756e265a972d6a4b2"
+        },
+        {
+          "url": "/_activity_assets/033789ea5a26582fcfa7971be117775ca17a9de7575595835c33cbfbeccc444b.bin",
+          "encoding": "gzip",
+          "bytes": 2736670,
+          "storedBytes": 743439,
+          "sha256": "dd4301dc7e9bcf637d8af00f9d998ea354d1d056de89d9d72706947fa3222784"
+        }
+      ],
+      "mime": "application/octet-stream",
+      "bytes": 103399966,
+      "sha256": "339ab77e8087d4af29131263cca279f441a0343b102302d1b95c7b1fa5473310",
+      "immutable": true
+    },
+    "/works/wanyan/assets/cde3ca325bdb57ca3da2cbbe8e4af28444d486a80118882040318e333a774df0/wanyan.data": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/13c0c817bc49a3cb17709e1c1c23224939340a541d544ee4b08872c592dc701f.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 15794488,
+          "sha256": "a73c974b70acec9483c7644f2140652eaf1a6e06f18ab5b09d07aafab0a98e10"
+        },
+        {
+          "url": "/_activity_assets/3e5bce6e537c59e3d31e9c87596f2357e98f25881c985758210a8cbf914ad8ea.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 16085950,
+          "sha256": "0efdd66881736794d425bb6c57e324e3ae8c156294857f50c192b199006089b3"
+        },
+        {
+          "url": "/_activity_assets/2fb227ac734a1685b61a20f2137855df34f7f8c509a45c7dc8c88a1043bb6362.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 15048674,
+          "sha256": "226514163f5dc48ce80f0b736f5f11cc9a7959db6bc09261f9e3036ea949b7e5"
+        },
+        {
+          "url": "/_activity_assets/b5352f07926c07246b2463140429492be7348f1806c970925a11b5244116be47.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 15797180,
+          "sha256": "fcdf47b45778515eff43d82e248f98ec24cded48122e01339b0c70532c94fb00"
+        },
+        {
+          "url": "/_activity_assets/7d786a3eaa7b2855ecc380fef2ee2e816296356e6f3df1eb31b9ef6645fd88e2.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 16412517,
+          "sha256": "7daaff18421700dcebfbf1abcbc942b90de5ae05dfd35d0e89730ccb8d9883e0"
+        },
+        {
+          "url": "/_activity_assets/d2f4b9bf744cd7ec4967a1102dac36a7c7089f705b412abef02e2b54ed277f1c.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 16192782,
+          "sha256": "411d697f579db72533cbb05e6647a0177e9d50db9c480f34f3cb80fa2a24c648"
+        },
+        {
+          "url": "/_activity_assets/f39bba06178d0cfc99bb34447946637bd5c94276716ebe46ed9ab826b5f52c68.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 15566976,
+          "sha256": "837c8ab866533bb2251e450663bf9cd8b22fade6d9fbdd23f46bb530efb16c70"
+        },
+        {
+          "url": "/_activity_assets/eed327ac92cc5918279f0c6e88e3be3237fad6bd1612e13f0d8bf63fa094940d.bin",
+          "encoding": "gzip",
+          "bytes": 11344108,
+          "storedBytes": 4800764,
+          "sha256": "bf61e5a79973947341f05371559dffb32fa959ed42cfb7f6c5bb094873929d79"
+        }
+      ],
+      "mime": "application/octet-stream",
+      "bytes": 128784620,
+      "sha256": "cde3ca325bdb57ca3da2cbbe8e4af28444d486a80118882040318e333a774df0",
+      "immutable": true
+    },
+    "/works/wanyan/performance-builds.json": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/5a69c1f58e09ce4385e3a4902d2903eca8e7889596e0f642088b614de40c75dc.bin",
+          "encoding": "gzip",
+          "bytes": 1562,
+          "storedBytes": 615,
+          "sha256": "40f86db0dc68067264f41c31fe07a213da055ff1e5e24a89bb469936863efee0"
+        }
+      ],
+      "mime": "application/json; charset=utf-8",
+      "bytes": 1562,
+      "sha256": "40f86db0dc68067264f41c31fe07a213da055ff1e5e24a89bb469936863efee0"
+    },
+    "/works/wanyan/wanyan-quality.mjs": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/242bd05308a291cbd279ebfb84af62203ae1caf324dfa1e7bf14ff470dab0cf0.bin",
+          "encoding": "gzip",
+          "bytes": 3052,
+          "storedBytes": 1481,
+          "sha256": "8bde47e2ae8ecae1867393dc3afa67cc9f50e12b7c4c0b23870388729ee3238e"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 3052,
+      "sha256": "8bde47e2ae8ecae1867393dc3afa67cc9f50e12b7c4c0b23870388729ee3238e"
+    },
+    "/works/library/assets/e55afd1e0a4cdb935782540cc59c98120c5a2bf86c98cfc6b2fff9e443678026/model.glb": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/53261c62156d64abf1366247ee020b2536fc7ad74b4b8c0c97963af74282031b.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 7901360,
+          "sha256": "52d38ae1933f214a76d66adca7fc3619ea9c40980035f1bd5e7d83349e958859"
+        },
+        {
+          "url": "/_activity_assets/b32602b7fc9a0e08fe3fe5bae7857cfdf5d58fcb99835eb8d97e370db1b05389.bin",
+          "encoding": "gzip",
+          "bytes": 16777216,
+          "storedBytes": 5220109,
+          "sha256": "1222645a30b1151c0d08857498e18a16431dcad14fd8744fc7cbe811db7c1517"
+        },
+        {
+          "url": "/_activity_assets/5f02cbd6dec30cc93876f6396b53965567560e7f18983bff5e7bf924c6e71b6b.bin",
+          "encoding": "gzip",
+          "bytes": 5054408,
+          "storedBytes": 2037449,
+          "sha256": "d90e7285ab151c9b58e788b08d9ef816991bddbbebbd962e1e7596d26b7a9e9a"
+        }
+      ],
+      "mime": "model/gltf-binary",
+      "bytes": 38608840,
+      "sha256": "e55afd1e0a4cdb935782540cc59c98120c5a2bf86c98cfc6b2fff9e443678026",
+      "immutable": true
+    },
+    "/works/tasay/activity-build.json": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/38123090091e2c152571ba07df36f7c5745b41925e0fc58012ddbd63818aebae.bin",
+          "encoding": "gzip",
+          "bytes": 263,
+          "storedBytes": 213,
+          "sha256": "cc83f3a92f963e98ec52e074c880860be451486ff2ecc0129b95655b7603a959"
+        }
+      ],
+      "mime": "application/json; charset=utf-8",
+      "bytes": 263,
+      "sha256": "cc83f3a92f963e98ec52e074c880860be451486ff2ecc0129b95655b7603a959"
+    },
+    "/works/tasay/assets/index-CrDQGr40.js": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/378f4b092f183edfc6422722f421a4f70b4777de376edfaf4b647941cb77c389.bin",
+          "encoding": "gzip",
+          "bytes": 252569,
+          "storedBytes": 81877,
+          "sha256": "1f31c8ac0c0cef9ca9378e3ff4dcababcbb72a041ccef4ff08bb18e6356bca74"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 252569,
+      "sha256": "1f31c8ac0c0cef9ca9378e3ff4dcababcbb72a041ccef4ff08bb18e6356bca74"
     }
   },
   "spa": [

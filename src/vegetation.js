@@ -1,4 +1,6 @@
+import {createResidentInstanceBatch} from './resident-instance-batch.js';
 import {createStaticInstanceSelection,createDistanceLodSelection} from './static-instance-lod.js';
+import {createStaticFrustumIndex} from './static-frustum-index.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 
 function randomFrom(seed) {
@@ -54,10 +56,13 @@ function sprayGeometry(THREE,clumps,{random,count,folded=false,scale=1}={}){
  * height/crown bounds, instancing, frustum filtering and distance LOD.
  * Species, individual shapes and dimensions remain reconstruction estimates.
  */
-export function createTreeLayer(THREE, trees, {name='photo-informed-trees',detail='street',whitewash=true,barkMaterial,foliageMaterial}={}) {
+export function* buildTreeLayer(THREE, trees, {name='photo-informed-trees',detail='street',whitewash=true,barkMaterial,foliageMaterial,resident=false}={}) {
   const group=new THREE.Group();group.name=name;
   group.userData={component:name,geometryEvidence:'photo-informed forked broadleaf trees; species, individual form and dimensions inferred',individualPositions:'supplied source coverage or inferred roadside planting, not surveyed'};
-  const geometries=new Set(),ownedMaterials=new Set(),textures=new Set(),models=[],farModels=[],horizonModels=[],modelBounds=[];
+  const residentBatches=[],geometries=new Set(),ownedMaterials=new Set(),textures=new Set(),models=[],farModels=[],horizonModels=[],modelBounds=[];
+  let disposed=false,completed=false;
+  function dispose(){if(disposed)return;disposed=true;residentBatches.forEach(batch=>batch.dispose());group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});group.removeFromParent();geometries.forEach(g=>g.dispose());ownedMaterials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.clear();}
+  try{
   const own=m=>{ownedMaterials.add(m);return m;};
   const bark=barkMaterial||own(new THREE.MeshStandardMaterial({color:'#706c56',roughness:.98}));
   const canopyTexture=createSprayTexture(THREE);textures.add(canopyTexture);
@@ -68,6 +73,7 @@ export function createTreeLayer(THREE, trees, {name='photo-informed-trees',detai
   const leafCount=detail==='forest'?240:420,sprayCount=detail==='forest'?120:160,variantCount=6,farLeafCount=64;
   const distantFoliage=own(new THREE.MeshStandardMaterial({color:'#ffffff',map:canopyTexture,alphaTest:.43,alphaToCoverage:true,roughness:.92,side:THREE.DoubleSide,vertexColors:true}));
   for(let variant=0;variant<variantCount;variant++) {
+    yield {stage:`树冠形态 ${variant+1}/${variantCount}`};
     const random=randomFrom(17339+variant*7717),branches=[],painted=[];
     const crownWidth=[1.16,.94,.73][variant%3],crownRise=[.83,1,1.13][variant%3];
     function branch(a,b,ra,rb,parts=branches) {
@@ -125,41 +131,59 @@ export function createTreeLayer(THREE, trees, {name='photo-informed-trees',detai
   }
   const transform=new THREE.Object3D(),color=new THREE.Color(),batches=[];
   for(let v=0;v<variantCount;v++) {
+    yield {stage:`树木实例 ${v+1}/${variantCount}`};
     const samples=trees.map((p,i)=>({...p,index:i})).filter(p=>{const formIndex={spreading:0,oval:1,upright:2}[p.form];return (formIndex===undefined?p.index%variantCount:formIndex+(p.index%2)*3)===v;});if(!samples.length)continue;
     for(const part of [...models[v],...farModels[v],...horizonModels[v]]) {
-      const mesh=new THREE.InstancedMesh(part.geometry,part.material,samples.length);mesh.name=`${name}-${part.part}-${v}`;mesh.castShadow=!part.part.endsWith('distant')&&part.part!=='horizon-canopy';mesh.receiveShadow=true;mesh.renderOrder=205;
+      const mesh=new THREE.InstancedMesh(part.geometry,part.material,resident?0:samples.length);mesh.name=`${name}-${part.part}-${v}`;mesh.castShadow=!part.part.endsWith('distant')&&part.part!=='horizon-canopy';mesh.receiveShadow=true;mesh.renderOrder=205;
       mesh.userData={...group.userData,part:part.part,variant:v,instanceFeatureIds:samples.map(p=>p.featureId||p.sourceRoadId||null)};mesh.raycast=()=>{};
       const matrices=[],tints=[];samples.forEach((tree,i)=>{const seed=Number.isFinite(tree.seed)?tree.seed:(tree.index*.6180339)%1,h=tree.height||9,shape=modelBounds[v],spread=(tree.radius||h*.36)/shape.radius;
-        transform.position.set(tree.x,tree.y||.1,tree.z);transform.rotation.set(0,seed*Math.PI*2,0);transform.scale.set(spread,h/shape.height,spread);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);matrices.push(transform.matrix.clone());
-        color.setHSL(.08,.015,.83+(seed-.5)*.16);mesh.setColorAt(i,color);tints.push(color.clone());
-      });mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;mesh.computeBoundingSphere();group.add(mesh);batches.push({mesh,samples,matrices,tints,variant:v,lod:part.part==='horizon-canopy'?'horizon':part.part.endsWith('distant')?'far':'near',selection:createStaticInstanceSelection(mesh,{matrices,colors:tints,ids:samples.map(p=>p.featureId||p.sourceRoadId||null)})});
+        transform.position.set(tree.x,tree.y||.1,tree.z);transform.rotation.set(0,seed*Math.PI*2,0);transform.scale.set(spread,h/shape.height,spread);transform.updateMatrix();if(!resident)mesh.setMatrixAt(i,transform.matrix);matrices.push(transform.matrix.clone());
+        color.setHSL(.08,.015,.83+(seed-.5)*.16);if(!resident)mesh.setColorAt(i,color);tints.push(color.clone());
+      });
+      const ids=samples.map(p=>p.featureId||p.sourceRoadId||null),batch={mesh,samples,matrices,tints,variant:v,lod:part.part==='horizon-canopy'?'horizon':part.part.endsWith('distant')?'far':'near'};
+      if(resident){
+        batch.resident=createResidentInstanceBatch(THREE,{parent:group,name:mesh.name,geometry:part.geometry,material:part.material,matrices,colors:tints,ids,configure:target=>{target.castShadow=mesh.castShadow;target.receiveShadow=true;target.renderOrder=205;target.userData={...mesh.userData};target.raycast=()=>{};}});residentBatches.push(batch.resident);mesh.dispose();
+      }else{mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;mesh.computeBoundingSphere();group.add(mesh);batch.selection=createStaticInstanceSelection(mesh,{matrices,colors:tints,ids});}
+      batches.push(batch);
     }
   }
-  let disposed=false,lastView=null,lastDetailScale=-1;
+  let lastView=null,lastDetailScale=-1;
   const frustum=new THREE.Frustum(),view=new THREE.Matrix4(),sphere=new THREE.Sphere(),cameraPosition=new THREE.Vector3(),visibleByVariant=Array.from({length:variantCount},()=>({near:[],far:[],horizon:[]}));
   const variantBatches=[...new Map(batches.map(batch=>[batch.variant,batch])).values()];
   const treeLod=createDistanceLodSelection(trees.length,[detail==='forest'?70:100,280]),treeLodNames=['near','far','horizon'];
+  const treeSlots=[],candidates=[];
+  for(const batch of variantBatches)batch.samples.forEach((tree,index)=>{treeSlots[tree.index]={tree,index,variant:batch.variant};});
+  const treeSphere=(tree,target)=>{const height=tree.height||9;target.center.set(tree.x,(tree.y||.1)+height*.5,tree.z);target.radius=Math.max(height*.65,(tree.radius||3.3)*1.6);};
+  const spatial=createStaticFrustumIndex(THREE,trees,treeSphere);
+  let active=true;
+  function releaseDecorativeResources(){active=false;residentBatches.forEach(batch=>batch.release());lastView=null;}
+  function resumeDecorativeResources(){active=true;lastView=null;}
+  function upload(camera){for(const batch of batches){const visible=visibleByVariant[batch.variant][batch.lod];if(batch.resident)batch.resident.update(visible,{forceFull:!camera});else{batch.selection.update(visible);batch.mesh.frustumCulled=false;}}}
   function update(camera,{detailDistanceScale=1}={}) {
     const detailScale=Number.isFinite(detailDistanceScale)?Math.max(.35,Math.min(1.5,detailDistanceScale)):1;
-    if(disposed)return;
+    if(disposed||!active&&camera)return;
     if(camera) {
       camera.updateMatrixWorld();camera.getWorldPosition(cameraPosition);
       const stamp=[...cameraPosition.toArray(),...camera.quaternion.toArray(),camera.projectionMatrix.elements[0],camera.projectionMatrix.elements[5]];
-      if(lastView&&lastDetailScale===detailScale&&stamp.every((v,i)=>Math.abs(v-lastView[i])<(i<3?.25:.0005)))return;
+      if(lastView&&lastDetailScale===detailScale&&stamp.every((v,i)=>Math.abs(v-lastView[i])<(i<3?.25:.0005))){if(resident)upload(camera);return;}
       lastView=stamp;lastDetailScale=detailScale;view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(view);
     } else {lastView=null;treeLod.reset();}
     treeLod.setScale(detailScale);
     // Visibility is classified once per tree and reused by its trunk, leaf and
     // paint batches. This avoids 4–5 repeated spatial checks per moving frame.
-    for(const batch of variantBatches){const visible=visibleByVariant[batch.variant];visible.near.length=0;visible.far.length=0;visible.horizon.length=0;
-      batch.samples.forEach((tree,i)=>{const height=tree.height||9;sphere.center.set(tree.x,(tree.y||.1)+height*.5,tree.z);sphere.radius=Math.max(height*.65,(tree.radius||3.3)*1.6);if(camera&&!frustum.intersectsSphere(sphere))return;const distanceSq=camera?sphere.center.distanceToSquared(cameraPosition):0;const lod=camera?treeLodNames[treeLod.levelAt(tree.index,distanceSq)]:'near';visible[lod].push(i);});
+    for(const visible of visibleByVariant){visible.near.length=0;visible.far.length=0;visible.horizon.length=0;}
+    for(const id of spatial.query(camera?frustum:null,candidates)){
+      const {tree,index,variant}=treeSlots[id];treeSphere(tree,sphere);if(camera&&!frustum.intersectsSphere(sphere))continue;
+      const lod=camera?treeLodNames[treeLod.levelAt(id,sphere.center.distanceToSquared(cameraPosition))]:'near';visibleByVariant[variant][lod].push(index);
     }
-    for(const batch of batches){batch.selection.update(visibleByVariant[batch.variant][batch.lod]);batch.mesh.frustumCulled=false;}
+    group.userData.visibilityStats={...spatial.stats,detailDistanceScale:detailScale};
+    upload(camera);
 
 
   }
-  update(null);
-  return{group,update,counts:{trees:trees.length,leavesPerTree:leafCount,spraysPerTree:sprayCount,variants:variantCount,nearCanopyTrianglesPerTree:leafCount*4+sprayCount*4,distantCanopyTrianglesPerTree:farLeafCount*2,horizonCanopyTrianglesPerTree:24,drawCalls:group.children.length},dispose(){if(disposed)return;disposed=true;group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});group.removeFromParent();geometries.forEach(g=>g.dispose());ownedMaterials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.clear();}};
+  if(!resident)update(null);completed=true;
+  return{group,update,releaseDecorativeResources,resumeDecorativeResources,get residency(){return residentBatches.map(batch=>({...batch.stats}));},counts:{trees:trees.length,leavesPerTree:leafCount,spraysPerTree:sprayCount,variants:variantCount,nearCanopyTrianglesPerTree:leafCount*4+sprayCount*4,distantCanopyTrianglesPerTree:farLeafCount*2,horizonCanopyTrianglesPerTree:24,drawCalls:batches.length},dispose};
+  }finally{if(!completed)dispose();}
 }
 
 /** Low leafy shrubs use intersecting cutout branch sprays, never solid rock-like
@@ -176,15 +200,21 @@ export function createShrubLayer(THREE,shrubs,{name='source-low-shrub-clusters'}
   const meshes=[near,far].map((geometry,i)=>{const mesh=new THREE.InstancedMesh(geometry,material,shrubs.length);mesh.name=`${name}-${i?'distant':'near'}`;mesh.castShadow=!i;mesh.receiveShadow=true;mesh.renderOrder=204;mesh.raycast=()=>{};mesh.userData={component:name,dimensionsStatus:'photo-informed estimate',positionsStatus:'sampled within explicit planting sources',foliage:'alpha-cutout leaf sprays'};matrices.forEach((matrix,n)=>{mesh.setMatrixAt(n,matrix);mesh.setColorAt(n,tints[n]);});group.add(mesh);return mesh;});
   const selections=meshes.map(mesh=>createStaticInstanceSelection(mesh,{matrices,colors:tints,ids:shrubs.map(s=>s.featureId)})),visible=[[],[]];
   const shrubLod=createDistanceLodSelection(shrubs.length,[65,260]);
+  const shrubSphere=(s,target)=>{target.center.set(s.x,(s.y||.035)+s.height*.5,s.z);target.radius=Math.max(s.radius,s.height);};
+  const spatial=createStaticFrustumIndex(THREE,shrubs,shrubSphere),candidates=[];
   const cameraPosition=new THREE.Vector3(),frustum=new THREE.Frustum(),view=new THREE.Matrix4(),sphere=new THREE.Sphere();let disposed=false,lastView=null,lastDetailScale=-1;
   function update(camera,{detailDistanceScale=1}={}){
     const detailScale=Number.isFinite(detailDistanceScale)?Math.max(.35,Math.min(1.5,detailDistanceScale)):1;
     if(disposed)return;if(camera){camera.updateMatrixWorld();camera.getWorldPosition(cameraPosition);const stamp=[...cameraPosition.toArray(),...camera.quaternion.toArray(),camera.projectionMatrix.elements[0],camera.projectionMatrix.elements[5]];if(lastView&&lastDetailScale===detailScale&&stamp.every((v,i)=>Math.abs(v-lastView[i])<(i<3?.25:.0005)))return;lastView=stamp;lastDetailScale=detailScale;view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(view);}else {lastView=null;shrubLod.reset();}
     shrubLod.setScale(detailScale);
     visible[0].length=0;visible[1].length=0;
-    if(!camera||cameraPosition.y<420)shrubs.forEach((s,i)=>{sphere.center.set(s.x,(s.y||.035)+s.height*.5,s.z);sphere.radius=Math.max(s.radius,s.height);if(camera&&!frustum.intersectsSphere(sphere))return;const distanceSq=camera?sphere.center.distanceToSquared(cameraPosition):0,lod=camera?shrubLod.levelAt(i,distanceSq):0;if(lod<2)visible[lod].push(i);});
+    if(!camera||cameraPosition.y<420)for(const i of spatial.query(camera?frustum:null,candidates)){shrubSphere(shrubs[i],sphere);if(camera&&!frustum.intersectsSphere(sphere))continue;const distanceSq=camera?sphere.center.distanceToSquared(cameraPosition):0,lod=camera?shrubLod.levelAt(i,distanceSq):0;if(lod<2)visible[lod].push(i);}
+    group.userData.visibilityStats={...spatial.stats,detailDistanceScale:detailScale};
     meshes.forEach((mesh,lod)=>{selections[lod].update(visible[lod]);mesh.frustumCulled=false;});
   }
   update(null);
   return{group,update,counts:{shrubs:shrubs.length,nearTrianglesPerShrub:256,distantTrianglesPerShrub:48,drawCalls:2},dispose(){if(disposed)return;disposed=true;meshes.forEach(m=>m.dispose());near.dispose();far.dispose();material.dispose();texture.dispose();group.removeFromParent();group.clear();}};
 }
+
+/** Synchronous authoring/export entry shares the exact staged generator. */
+export function createTreeLayer(THREE,trees,options={}){const iterator=buildTreeLayer(THREE,trees,options);let step;do{step=iterator.next();}while(!step.done);return step.value;}

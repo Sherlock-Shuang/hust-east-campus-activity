@@ -1,0 +1,13 @@
+import * as THREE from 'three';
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {createCampus3DProgressive} from '../src/campus-3d.js';
+import {createGeoScene} from '../src/geo-scene.js';
+import {createLocalFrame,geoToLocal} from '../src/geospatial.js';
+import {mergeCampusExtension} from '../src/campus-data-merge.js';
+import {getCampusPlayerSpawn} from '../src/player-experience.js';
+const read=name=>JSON.parse(readFileSync(new URL(`../public/data/${name}`,import.meta.url)));
+const data=mergeCampusExtension(read('east-campus.geojson'),read('opto-southeast.geojson')),frame=createLocalFrame({longitude:114.42123985,latitude:30.51575845,coordinateSystem:'EPSG:4326'}),model=createGeoScene(THREE,new THREE.Scene(),data,frame,geoToLocal),tasks=[];
+const started=performance.now();const campus=await createCampus3DProgressive(THREE,model,{frame,geoToLocal},{initialPosition:getCampusPlayerSpawn(model),yieldTask:()=>new Promise(resolve=>setImmediate(resolve)),onTask:({stage,featureId,durationMs})=>tasks.push({stage,featureId,durationMs})});
+const readyMs=performance.now()-started;await campus.whenDetailedReady;const detailedMs=performance.now()-started;
+const report={readyMs,detailedMs,tasks:tasks.sort((a,b)=>b.durationMs-a.durationMs)};
+const output=new URL('../artifacts/performance-phase2-2026-10-30/',import.meta.url);mkdirSync(output,{recursive:true});writeFileSync(new URL(process.argv[2]||'stage-profile.json',output),JSON.stringify(report,null,2));console.log(JSON.stringify({...report,tasks:report.tasks.slice(0,20)},null,2));campus.dispose();model.dispose();
