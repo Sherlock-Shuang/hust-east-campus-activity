@@ -177,7 +177,7 @@ if(!disposed)try{
     document.querySelector('#hall-swim-controls').hidden=!swimming.state.active;
     document.body.dataset.cinema=String(cinema);document.body.dataset.swimming=String(swimming.state.active);
     seatStatus.textContent=seatedSeat?`${seatedSeat.label} · ${cinema?'沉浸观影':'已入座'}`:'入座，欣赏舞台与大屏';
-    document.querySelector('#hall-input-hint').textContent=swimming.state.active?'WASD 游动 · 空格上浮 · C 下潜 · 可潜到侧门游出':seatedSeat?'鼠标或右侧滑动环视 · E 起身 · 看大屏':inHall?'WASD 移动 · E 就近入座 · 鼠标环视 · L 锁定':'WASD 移动 · 鼠标环视 · L 锁定';
+    document.querySelector('#hall-input-hint').textContent=swimming.state.active?'WASD 游动 · 空格上浮 · C 下潜 · 可潜到门口游出':seatedSeat?'鼠标或右侧滑动环视 · E 起身 · 看大屏':inHall?'WASD 移动 · E 就近入座 · 鼠标环视 · L 锁定':'WASD 移动 · 鼠标环视 · L 锁定';
     canvas.dataset.seated=String(Boolean(seatedSeat));canvas.dataset.seatId=seatedSeat?.id||'';
     audience.setHiddenSeat(seatedSeat?.id||null);
   }
@@ -238,9 +238,9 @@ if(!disposed)try{
     const frameStart=performance.now();activeRafCallbacks++;
     const serverNow=activitySync.now(),floodElapsed=getC118FloodElapsed(floodEvent,serverNow);
     floodRunning=floodElapsed!==null&&floodElapsed>=0;
-    if(floodRunning&&inHall&&!floodReturn)floodReturn={seatId:seatedSeat?.id,cinema,heading,pitch,pose:{...motion.state}};
+    if(floodRunning&&!floodReturn)floodReturn={seatId:seatedSeat?.id,cinema,heading,pitch,pose:{...motion.state}};
     if(floodRunning&&cinema)lookAround();
-    if(floodRunning&&inHall&&!swimming.state.active){
+    if(floodRunning&&!swimming.state.active){
       const body=seatView||{x:motion.state.x,y:motion.state.y+1.65,z:motion.state.z};
       if(floodEffect.sampleAt(body,floodElapsed).waterY>=body.y-.55){
         swimming.enter(body);seatedSeat=seatView=cinemaView=null;cinema=false;seatTransition=null;pitch=Math.min(pitch,.05);resetInput();updateSeatControls();
@@ -253,11 +253,11 @@ if(!disposed)try{
     if(swimming.state.active){
       const direction=indoorMovement(heading,forward,sideways);
       swimming.step(dt,{moveX:direction.moveX,moveZ:direction.moveZ,vertical:swimVertical+Number(Boolean(pressed('Space')||pad?.buttons[0]?.pressed))-Number(Boolean(pressed('KeyC','ControlLeft','ControlRight')||pad?.buttons[1]?.pressed)),elapsed:floodElapsed,reducedMotion:calmMotion()});
-      if(swimming.state.exitDoorId){exit();return;}
+      if(swimming.state.exitDoorId){exit(swimming.state.exitDoorId);return;}
     }else if(!seatedSeat)motion.step(dt,{...indoorMovement(heading,forward,sideways),fast:pressed('ShiftLeft','ShiftRight')});
     if(!swimming.state.active&&crossedC118Door(interior.plan,motion.state)){exit();return;}
     if(!swimming.state.active){const destination=optoFoyerExit(interior.plan,motion.state);if(destination){exit(destination);return;}}
-    const nextInHall=swimming.state.active||isInsideC118(interior.plan,motion.state);
+    const nextInHall=isInsideC118(interior.plan,swimming.state.active?swimming.state:motion.state);
     if(nextInHall!==inHall){inHall=nextInHall;updateSeatControls();}
     canvas.dataset.location=inHall?'c118':'foyer';
     eyeY=THREE.MathUtils.damp(eyeY,motion.state.y+1.65,16,dt);
@@ -274,19 +274,19 @@ if(!disposed)try{
     if(Math.abs(camera.fov-desiredFov)>.01){camera.fov=desiredFov;camera.updateProjectionMatrix();}
     audience.update?.({time:floodEvent?floodEvent.startAt/1000+floodElapsed:serverNow/1000,elapsed:floodElapsed,active:true,reducedMotion:calmMotion()});
     floodEffect.update({active:floodRunning,elapsed:floodElapsed??0,reducedMotion:calmMotion()});
-    const floodSample=floodRunning&&inHall?floodEffect.sampleAt(camera.position,floodElapsed):{waterY:-10,impact:0};
+    const floodSample=floodRunning?floodEffect.sampleAt(camera.position,floodElapsed):{waterY:-10,impact:0};
     const depth=floodSample.waterY-camera.position.y;
     if(floodRunning&&!calmMotion()){
       const t=floodElapsed,hit=floodSample.impact||0,bob=depth>-.2?.018:0;
       camera.position.x+=hit*.10*Math.sin(t*24.1);camera.position.y+=hit*.075*Math.sin(t*31.7)+bob*Math.sin(t*2.1);
       camera.rotation.x+=hit*.055*Math.sin(t*19.3);camera.rotation.z=hit*.065*Math.sin(t*15.7)+bob*.25*Math.sin(t*1.7);
     }
-    floodSensory.update({active:floodRunning&&inHall,elapsed:floodElapsed??0,waterDepth:depth,impact:floodSample.impact||0,reducedMotion:calmMotion()});
+    floodSensory.update({active:floodRunning,elapsed:floodElapsed??0,waterDepth:depth,impact:floodSample.impact||0,reducedMotion:calmMotion()});
     scene.fog=floodRunning&&depth>.05?underwaterFog:null;
     if(scene.fog)underwaterFog.density=Math.min(.045,.018+depth*.004);
-    floodStatus.hidden=!floodEvent||!inHall;
+    floodStatus.hidden=!floodEvent;
     if(floodEvent){
-      const message=floodElapsed<0?'门外传来低沉的轰鸣…':floodElapsed<3?'海浪正在冲破门口':floodElapsed<10?'海水猛烈涌入报告厅':floodElapsed<18?'水位正在迅速上涨':'急流持续翻涌';
+      const message=floodElapsed<0?'门外传来低沉的轰鸣…':floodElapsed<3?'海浪正在冲破门口':floodElapsed<10?'海水猛烈涌入大楼':floodElapsed<18?'水位正在迅速上涨':'急流持续翻涌';
       if(floodStatus.firstElementChild.textContent!==message)floodStatus.firstElementChild.textContent=message;
       floodStatus.lastElementChild.textContent=swimming.state.active?'WASD 游动 · 空格上浮 · C 下潜':'点击画面开启音效 · 海水上涨后可游泳';
     }

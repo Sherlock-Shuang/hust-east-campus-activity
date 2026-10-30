@@ -156,21 +156,21 @@ export function addOptoPhotoDetails(THREE, { plan, group, entranceLocal: local, 
   }
 
   // C2 court: photographed Y-branches and a fine translucent canopy grid.
-  // Keep the pre-existing college stairs/landing and source-hole roof intact.
+  // Fit the narrow recessed court; the southern source-hole roof stays separate.
   const cs = plan.groundFloor.collegeSteps;
-  for (let u = -10; u <= 10; u += .62) frameBox(cs, u, 8.35, 2.3, .045, .09, 5.8);
-  for (const v of [-.5, 1.35, 3.2, 5.1]) whiteBox(cs, 0, 8.38, v, 20.8, .12, .09);
+  for (let u = -6; u <= 6; u += .62) frameBox(cs, u, 8.35, 2.3, .045, .09, 5.8);
+  for (const v of [-.5, 1.35, 3.2, 5.1]) whiteBox(cs, 0, 8.38, v, 12.8, .12, .09);
   for (const side of [-1, 1]) {
-    const stem = at(cs, side * 8.8, 5.3, 4);
-    beam('opto-tree-column-branches', at(cs, side * 8.8, .12, 4), stem, .30, white);
-    beam('opto-tree-column-branches', stem, at(cs, side * 8.8 - 2.15, 8.35, 2.3), .20, white);
-    beam('opto-tree-column-branches', stem, at(cs, side * 8.8 + 2.15, 8.35, 2.3), .20, white);
+    const stem = at(cs, side * 5.3, 5.3, 4);
+    beam('opto-tree-column-branches', at(cs, side * 5.3, .12, 4), stem, .30, white);
+    beam('opto-tree-column-branches', stem, at(cs, side * 5.3 - 1.1, 8.35, 2.3), .20, white);
+    beam('opto-tree-column-branches', stem, at(cs, side * 5.3 + 1.1, 8.35, 2.3), .20, white);
   }
-  // Ball shrubs are kept outside the 12 m stair / access width. One instanced
+  // Ball shrubs flank the level entrance and leave its central approach clear. One instanced
   // draw with per-instance colors represents both green and burgundy planting.
   const shrubGeo = geometry(new THREE.SphereGeometry(1, 10, 6)), shrubMat = material('#ffffff', .98);
   const placements = [];
-  for (const side of [-1, 1]) for (let i = 0; i < 6; i++) placements.push({ ...at(cs, side * (7.1 + i * 1.45), .67 + (i % 2) * .15, 8.6 + (i % 2) * .4), radius: .72 + (i % 3) * .15, purple: i % 3 === 1 });
+  for (const side of [-1, 1]) for (let i = 0; i < 6; i++) placements.push({ ...at(cs, side * (5.1 + (i % 2) * .5), .67 + (i % 2) * .15, 8 + i * 1.6), radius: .72 + (i % 3) * .15, purple: i % 3 === 1 });
   const shrubs = new THREE.InstancedMesh(shrubGeo, shrubMat, placements.length), dummy = new THREE.Object3D();
   placements.forEach((p, i) => { dummy.position.set(p.x, p.y, p.z); dummy.scale.set(p.radius, p.radius * .84, p.radius); dummy.updateMatrix(); shrubs.setMatrixAt(i, dummy.matrix); shrubs.setColorAt(i, new THREE.Color(p.purple ? '#654657' : i % 2 ? '#69893a' : '#7d983c')); });
   shrubs.name = 'opto-photo-court-shrubs'; shrubs.instanceMatrix.needsUpdate = true; shrubs.instanceColor.needsUpdate = true; shrubs.computeBoundingSphere(); shrubs.castShadow = true; shrubs.receiveShadow = true; shrubs.userData = { photoReference: OPTO_PHOTO_REFERENCE.c2, estimate: true }; group.add(shrubs);

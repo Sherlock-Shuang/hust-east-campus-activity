@@ -138,7 +138,8 @@ test('left ground entry matches the user main-courtyard screenshot, while the so
   assert.ok(g.college.z < building.plan.main.z && g.college.x < building.plan.main.x, 'ground entry is left/north of the main stair portal');
   assert.ok(g.college.x > 687 && g.college.x < 691 && g.college.z > 687 && g.college.z < 691, 'left-wing door is west of the obstructing canopy column');
   assert.equal(g.skylight, building.plan.polygons[0][3]);
-  assert.ok(g.collegeSteps.z > 760);
+  assert.ok(g.collegeSteps.x>645&&g.collegeSteps.x<648&&g.collegeSteps.z>634&&g.collegeSteps.z<638, 'C2 is in the circled northern inner court');
+  assert.ok(g.collegeSteps.nx>.98, 'C2 faces east into the court');
   assert.ok(building.viewpoints.collegeEntrance && building.viewpoints.eastEntrance);
   assert.ok(building.group.getObjectByName('opto-college-pyramid-skylights'));
   assert.ok(building.entries.every(e => e.y < .2 && e.accessPath.length >= 2));

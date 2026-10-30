@@ -132,8 +132,8 @@ export function sampleC118AudiencePose(plan,person,{time=0,elapsed=null,reducedM
     const targetDepth=.04+diveEnvelope*(1.5+(person.seed%101)/100*2-.04);
     // One metre of body clearance covers the entire transition from upright
     // to prone, including hands/feet, over chairs, tables and the stage.
-    const swimY=Math.max(swimObstacle+1.05,water.waterY-targetDepth);
-    y=Math.max(swimObstacle+1.05,mix(y,swimY,swimming));
+    const swimY=Math.max(swimObstacle+1.05,Math.min(water.waterY,plan.config.floorY+plan.config.height-1.08)-targetDepth);
+    y=clamp(mix(y,swimY,swimming),swimObstacle+1.05,plan.config.floorY+plan.config.height-1.08);
     const nosePitch=-Math.PI/2+.08*(1-diveEnvelope)+.04*Math.sin(waveTime*1.3+phase)*motion;
     // Convert Y-heading / X-prone rotation to the same XYZ convention used by
     // the instance batches. Keep the route heading unwrapped: interpolating

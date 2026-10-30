@@ -1,3 +1,8 @@
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import {CAMPUS_FLOOD_WATER,CAMPUS_FLOOD_WAVES,sampleCampusFloodwater} from './campus-floodwater.js';
+import {campusTsunamiFront} from './campus-tsunami-timeline.js';
+import {optoFloodRegistration,optoFloodPatches} from './opto-flood-registration.js';
+
 /** Deterministic, time-authored disaster staging, not a hydraulic simulation.
  * Door positions, floor heights and room bounds come from the current hall plan.
  * All geometry is allocated once; clients seek by the same elapsed server time.
@@ -23,7 +28,7 @@ function configuration(plan){
   // Older plans had only the two front doors. Repeat inert slots for the shader.
   while(doors.length<4)doors.push({...doors[0],delay:100000});
   const rearY=Math.max(c.floorY,...plan.seatRows.map(r=>r.y));
-  return {width:c.width,depth:c.depth,floorY:c.floorY,
+  return {registration:optoFloodRegistration(plan),width:c.width,depth:c.depth,floorY:c.floorY,
     peak:Math.min(c.floorY+c.height-1.4,Math.max(c.floorY+6.5,rearY+1.9)),doors};
 }
 
@@ -49,20 +54,35 @@ function sample(c,position,elapsed,rippleScale=1){
   currentX+=turbulence*(.95*Math.sin(z*.3-t*.85)+.45*Math.cos(x*.45+z*.13+t*.4));
   currentZ+=turbulence*(.8*Math.cos(x*.32+t*.72)+.38*Math.sin(z*.4-t*.6));
   height=Math.min(c.peak+.55,height);
+  if(c.registration){
+    const world=c.registration.toCampus(position);
+    const field=sampleCampusFloodwater(world,{elapsed:t,front:campusTsunamiFront(t),reducedMotion:rippleScale<1});
+    // Fill the deeper hall as the same advancing front reaches the building.
+    height=field.waterY+c.registration.datum*smooth(0,.08,field.fill);
+  }
   const depth=Math.max(0,height-(position.y??c.floorY+1.65));
   return {waterY:height,impact,depth,submerged:depth>.02,phase:t<8?'rush':t<18?'rising':'flooded',currentX:clamp(currentX,-2.6,2.6),currentZ};
 }
 
-export function sampleC118Flood(plan,position,elapsed){return sample(configuration(plan),position,elapsed);}
+export function sampleC118Flood(plan,position,elapsed,{reducedMotion=false}={}){return sample(configuration(plan),position,elapsed,reducedMotion?.35:1);}
 
+const campusSpectrum=CAMPUS_FLOOD_WAVES.map(([a,x,z,t,p])=>`${glslFloat(a)}*sin(w.x*${glslFloat(x)}+w.y*${glslFloat(z)}+uCampusTime*${glslFloat(t)}+${glslFloat(p)})`).join('+');
 const waterField=/* glsl */`
 uniform float uTime;
 uniform float uFloor;
 uniform float uPeak;
 uniform float uRipple;
 uniform vec4 uDoors[4];
+uniform float uConnected,uDatum,uCampusFront,uCampusTime,uCampusRipple;
+uniform vec2 uWorldOrigin,uWorldX,uWorldZ;
 float saturate1(float x){return clamp(x,0.,1.);}
 float waterHeight(vec2 p){
+  if(uConnected>.5){
+    vec2 w=uWorldOrigin+uWorldX*p.x+uWorldZ*p.y;
+    float u=(w.x-${glslFloat(CAMPUS_FLOOD_WATER.x)})/${glslFloat(CAMPUS_FLOOD_WATER.width/2)};
+    float fill=smoothstep(0.,${glslFloat(CAMPUS_FLOOD_WATER.fillDistance)},w.y-uCampusFront-u*u*${glslFloat(CAMPUS_FLOOD_WATER.arcDepth)});
+    return -1.+${glslFloat(CAMPUS_FLOOD_WATER.level+1)}*fill+fill*uCampusRipple*(${campusSpectrum})+uDatum*smoothstep(0.,.08,fill);
+  }
   float t=uTime;
   float level=uFloor-.35+(uPeak-uFloor+.35)*pow(saturate1((t-2.8)/15.2),.85);
   for(int i=0;i<4;i++){
@@ -103,10 +123,20 @@ export function createC118FloodEffect(THREE,{plan,level=2}){
   const geometries=new Set(),materials=[];let disposed=false,rippleScale=1,lastElapsed=-1,qualityLevel=safeLevel(level);
   const [columns,rows,jetColumns,jetRows,particles]=meshBudgets[qualityLevel];
   const ownGeometry=g=>(geometries.add(g),g),ownMaterial=m=>(materials.push(m),m);
-  const uniforms={uTime:{value:0},uFloor:{value:c.floorY},uPeak:{value:c.peak},uRipple:{value:1},
+  const registration=c.registration,vec=p=>new THREE.Vector2(p?.x||0,p?.z||0);
+  const uniforms={uConnected:{value:registration?1:0},uDatum:{value:registration?.datum||0},
+    uWorldOrigin:{value:vec(registration?.origin)},uWorldX:{value:vec(registration?.xAxis)},uWorldZ:{value:vec(registration?.zAxis)},
+    uCampusFront:{value:campusTsunamiFront(0)},uCampusTime:{value:0},uCampusRipple:{value:1},uTime:{value:0},uFloor:{value:c.floorY},uPeak:{value:c.peak},uRipple:{value:1},
     uRoom:{value:new THREE.Vector4(c.width/2,c.depth/2,c.floorY,c.floorY+plan.config.height)},
     uDoors:{value:c.doors.map(d=>new THREE.Vector4(d.x,d.z,d.y,d.delay))}};
-  const geometry=ownGeometry(new THREE.PlaneGeometry(c.width-.06,c.depth-.06,columns,rows));geometry.rotateX(-Math.PI/2);
+  function surfaceGeometry(columns,rows){
+    if(!registration)return new THREE.PlaneGeometry(c.width-.06,c.depth-.06,columns,rows).rotateX(-Math.PI/2);
+    const patches=optoFloodPatches(plan).map(([x0,x1,z0,z1])=>new THREE.PlaneGeometry(x1-x0,z1-z0,
+      Math.max(1,Math.ceil(columns*(x1-x0)/c.width)),Math.max(1,Math.ceil(rows*(z1-z0)/c.depth)))
+      .rotateX(-Math.PI/2).translate((x0+x1)/2,0,(z0+z1)/2));
+    const merged=mergeGeometries(patches);patches.forEach(g=>g.dispose());return merged;
+  }
+  const geometry=ownGeometry(surfaceGeometry(columns,rows));
   const waterMaterial=ownMaterial(new THREE.ShaderMaterial({uniforms,defines:{EFFECT_DETAIL:qualityLevel},transparent:true,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,
     vertexShader:waterField+/* glsl */`
       varying vec3 vWorld;varying vec3 vNormal;varying float vCrest;
@@ -140,7 +170,7 @@ export function createC118FloodEffect(THREE,{plan,level=2}){
   const jetGeometry=ownGeometry(new THREE.PlaneGeometry(1,1,jetColumns,jetRows));
   const jetUniforms=[],jets=[];
   for(const door of c.doors){
-    const u={uTime:uniforms.uTime,uOrigin:{value:new THREE.Vector3(door.x,door.y,door.z)},uSide:{value:door.side},
+    const u={...uniforms,uOrigin:{value:new THREE.Vector3(door.x,door.y,door.z)},uSide:{value:door.side},
       uDoorWidth:{value:door.width},uDelay:{value:door.delay},uFloor:uniforms.uFloor,uPeak:uniforms.uPeak,uRipple:uniforms.uRipple,uDoors:uniforms.uDoors};jetUniforms.push(u);
     const material=ownMaterial(new THREE.ShaderMaterial({uniforms:u,defines:{EFFECT_DETAIL:qualityLevel},transparent:true,depthWrite:false,side:THREE.DoubleSide,
       vertexShader:waterField+/* glsl */`
@@ -220,7 +250,7 @@ export function createC118FloodEffect(THREE,{plan,level=2}){
     // Only one set is resident; changing quality replaces two immutable meshes,
     // not the shader, shared clock or CPU collision/water sampler.
     const oldSurface=water.geometry,oldJet=jets[0].geometry;
-    water.geometry=ownGeometry(new THREE.PlaneGeometry(c.width-.06,c.depth-.06,columns,rows).rotateX(-Math.PI/2));
+    water.geometry=ownGeometry(surfaceGeometry(columns,rows));
     const nextJet=ownGeometry(new THREE.PlaneGeometry(1,1,jetColumns,jetRows));
     for(const jet of jets)jet.geometry=nextJet;
     geometries.delete(oldSurface);geometries.delete(oldJet);oldSurface.dispose();oldJet.dispose();
@@ -233,6 +263,8 @@ export function createC118FloodEffect(THREE,{plan,level=2}){
       if(disposed)return;lastElapsed=Number.isFinite(elapsed)?elapsed:-1;
       group.visible=Boolean(active)&&lastElapsed>=1.5;
       rippleScale=reducedMotion ? .35 : 1;uniforms.uRipple.value=rippleScale;uniforms.uTime.value=Math.max(0,lastElapsed);
+      uniforms.uCampusFront.value=campusTsunamiFront(lastElapsed);
+      uniforms.uCampusTime.value=reducedMotion?0:lastElapsed;uniforms.uCampusRipple.value=reducedMotion?.25:1;
       spray.visible=!reducedMotion;
     },
     sampleAt(position,elapsed=lastElapsed){return sample(c,position,elapsed,rippleScale);},

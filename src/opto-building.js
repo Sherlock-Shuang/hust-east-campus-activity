@@ -30,16 +30,8 @@ export const OPTO_BUILDING_EVIDENCE = Object.freeze({
 // steps in the main courtyard, straight corridor then a hall door on the left;
 // the northern exterior door leads to an opposite inner hall door. Keep the
 // prior east-side entry available. Coordinates remain source-edge estimates.
-export const OPTO_ACCESS = Object.freeze({
-  main: Object.freeze({ longitude: 114.42860685, latitude: 30.5093796 }),
-  // Keep the door's straight approach west of the existing canopy column.
-  c118: Object.freeze({ longitude: 114.42841772, latitude: 30.50954452 }),
-  east: Object.freeze({ longitude: 114.42887397, latitude: 30.50894790 }),
-  northPassage: Object.freeze({ longitude: 114.42784825, latitude: 30.51076485 }),
-  rear: Object.freeze({ longitude: 114.42831535, latitude: 30.51058795 }),
-  collegeSteps: Object.freeze({ longitude: 114.42818118, latitude: 30.50878107 }),
-  c118Status: 'user-confirmed-route-coordinate-estimated',
-});
+export {OPTO_ACCESS} from './opto-access.js';
+import {OPTO_ACCESS} from './opto-access.js';
 
 const points = path => {
   const r = path.getPoints().map(p => ({ x: p.x, z: -p.y }));
@@ -445,17 +437,15 @@ export function createOptoBuilding(THREE, record, options = {}) {
     box('opto-courtyard-curbs', stone, (a.x + b.x) / 2, .14, (a.z + b.z) / 2, Math.hypot(dx, dz), .16, .18, -Math.atan2(dz, dx));
   }
   for (const side of [-1, 1]) for (let v = 23; v < 63; v += 7) mainBox('opto-courtyard-lane-markings', white, side * 12.8, .085, v * out, .12, .012, 3.8);
-  // The college atrium is the SOUTH courtyard, distinct from the national
-  // research centre portal. Public ground photos and an orthophoto repost show
-  // a grid of low glass pyramids; source-hole proportions locate the roof.
-  // This is a thin canopy layer, not invented solid rooms inside the courtyard.
+  // C2 faces the east-facing recessed court marked in the user aerial.
+  // The separate southern pyramid skylight below keeps its source-hole location.
   const cs = ground.collegeSteps;
   // The C2 photographs show a level glass threshold, not a raised stair portal.
-  entranceLocal(cs, 'opto-college-canopy-frame', white, 0, 8.6, 2.3, 21, .45, 6);
-  entranceLocal(cs, 'opto-college-name-band', wayfinding, 0, 8.9, 1.2, 20, 1.2, .18);
+  entranceLocal(cs, 'opto-college-canopy-frame', white, 0, 8.6, 2.3, 13, .45, 6);
+  entranceLocal(cs, 'opto-college-name-band', wayfinding, 0, 8.9, 1.2, 12, 1.2, .18);
   for (const side of [-1, 1]) {
-    const foot = { x: cs.x + cs.tx * side * 8.8 + cs.nx * 4, z: cs.z + cs.tz * side * 8.8 + cs.nz * 4, y: .12 };
-    const top = { x: cs.x + cs.tx * side * 8.8 + cs.nx * 1.8, z: cs.z + cs.tz * side * 8.8 + cs.nz * 1.8, y: 8.5 };
+    const foot = { x: cs.x + cs.tx * side * 5.3 + cs.nx * 4, z: cs.z + cs.tz * side * 5.3 + cs.nz * 4, y: .12 };
+    const top = { x: cs.x + cs.tx * side * 5.3 + cs.nx * 1.8, z: cs.z + cs.tz * side * 5.3 + cs.nz * 1.8, y: 8.5 };
     beam('opto-tree-column-branches', foot, top, .26, white);
   }
   const skylight = ground.skylight;

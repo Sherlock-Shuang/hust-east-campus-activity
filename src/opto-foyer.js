@@ -33,6 +33,8 @@ export function connectOptoFoyer(plan){
   solid('foyer-c2-right-glass',2.8,f.front-.1,f.right,f.front+.1);
   solid('foyer-c1-left-glass',f.end-.1,f.near,f.end+.1,f.near+1.3);
   solid('foyer-c1-right-glass',f.end-.1,f.far-1.3,f.end+.1,f.far);
+  solid('foyer-c2-lintel',-2.8,f.front-.1,2.8,f.front+.1,y+3.16,y+f.height+.7);
+  solid('foyer-c1-lintel',f.end-.1,f.near+1.3,f.end+.1,f.far-1.3,y+3.16,y+3.5);
   const surface=(id,p)=>plan.walkSurfaces.push({id,sourceId:plan.id,polygon:p,surfaceY:y,kind:'foyer'});
   surface('foyer-floor',rect(f.left,back-.2,f.right,f.front));
   surface('foyer-corridor-floor',rect(f.end,f.near,f.left+.1,f.far));
