@@ -191,7 +191,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   }
   function rebuild(markers,portals){
     clearBeacons();
-    for(const data of [...markers.map(m=>({...m,kind:'marker'})),...portals.map(p=>({...p,kind:'portal',height:76,color:'#28efcf',beamRadius:2.6}))]){
+    for(const data of [...markers.map(m=>({...m,kind:'marker'})),...portals.map(p=>({...p,kind:'portal',height:120,color:'#28efcf',beamRadius:2.6}))]){
       const group=new THREE.Group(),height=data.height,radius=data.kind==='portal'?data.beamRadius:data.radius;
       group.position.set(data.x,.3,data.z);worldGroup.add(group);
       // Match the campus logarithmic depth buffer so the glow shares building
