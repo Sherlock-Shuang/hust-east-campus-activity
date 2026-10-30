@@ -70,7 +70,7 @@ function renderC118Screen(){
 function renderC118Flood(){
   const ready=loggedIn&&skyQrReady&&Boolean(snapshot),event=ready?snapshot.state.c118Flood:null;
   const elapsed=event?getC118FloodElapsed(event,now()):null;
-  const label=!ready?'等待同步':!event?'校园 / 报告厅正常':event.pausedAt!==null?'演出已暂停':elapsed<0?`${Math.ceil(-elapsed)} 秒后涌入`:elapsed<18?'校园巨浪逼近 · 厅内涌水':'校园持续巨浪 · 厅内漂浮';
+  const label=!ready?'等待同步':!event?'校园 / 报告厅正常':event.pausedAt!==null?'演出已暂停':elapsed<0?`${Math.ceil(-elapsed)} 秒后涌入`:elapsed<24?'巨浪横穿校园 · 厅内涌水':'校园积水 / 后续浪潮 · 厅内漂浮';
   $('c118-flood-status').textContent=label;
   $('c118-flood-status').dataset.status=event?'active':'off';
   $('trigger-c118-flood').disabled=busy||!ready||Boolean(event);

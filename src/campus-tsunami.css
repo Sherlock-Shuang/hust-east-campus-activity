@@ -4,3 +4,4 @@
 .campus-tsunami-arrow{display:grid;place-items:center;flex-shrink:0;width:26px;height:30px;font-size:25px;color:#d8faf8;}
 @media(max-width:600px){.campus-tsunami-notice{top:76px;padding:8px 12px;gap:8px;}.campus-tsunami-notice strong{font-size:11px;}.campus-tsunami-notice small{font-size:9px;}}
 @media(max-height:500px){.campus-tsunami-notice{top:10px;padding:6px 11px;}.campus-tsunami-notice small{display:none;}}
+.campus-tsunami-wash{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,#66b9c7,#0b667e 55%,#063d59);mix-blend-mode:multiply;z-index:1}.campus-tsunami-notice{z-index:2}
