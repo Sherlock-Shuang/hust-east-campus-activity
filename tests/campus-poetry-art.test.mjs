@@ -14,7 +14,7 @@ const expected=[
   ['heroes','侠骨柔情的英雄气概\n重心然诺的君子风度\n快意恩仇的人生境界\n照亮了我们平庸而琐碎的生活'],
   ['breeze','他强任他强，清风拂山岗，\n他横由他横，明月照大江。'],
   ['day','seize the day'],
-  ['stay','STAY'],
+  ['stay','S.T.A.Y'],
 ];
 
 // Record the real painter's text commands rather than duplicating its layout.
@@ -70,7 +70,7 @@ test('the actual Canvas painter emits every authored character within its artwor
   }
 });
 
-test('vertical couplet and spaced STAY use their intended reading order',()=>{
+test('vertical couplet and spaced S.T.A.Y use their intended reading order',()=>{
   for(const id of ['breeze','stay']){
     const poem=CAMPUS_POETRY.find(p=>p.id===id),record=recordingContext(768,768);
     paintCampusMural(record.ctx,{width:768,height:768},{...poem,poetryId:id,color:'#69736b'});
@@ -79,6 +79,6 @@ test('vertical couplet and spaced STAY use their intended reading order',()=>{
       const first=record.text.slice(0,[...poem.lines[0]].length),second=record.text.slice(first.length);
       assert.ok(first.every((t,i)=>!i||t.top>first[i-1].top),'first column reads down');
       assert.ok(second[0].left<first[0].left,'second column follows to the left');
-    }else assert.ok(record.text.every((t,i)=>!i||t.left>record.text[i-1].right),'STAY has separated letters without altering case');
+    }else assert.ok(record.text.every((t,i)=>!i||t.left>record.text[i-1].right),'S.T.A.Y has separated letters without altering case');
   }
 });

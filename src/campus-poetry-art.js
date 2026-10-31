@@ -10,7 +10,7 @@ export const CAMPUS_POETRY=Object.freeze([
   {id:'heroes',text:'侠骨柔情的英雄气概\n重心然诺的君子风度\n快意恩仇的人生境界\n照亮了我们平庸而琐碎的生活',lines:['侠骨柔情的英雄气概','重心然诺的君子风度','快意恩仇的人生境界','照亮了我们平庸而琐碎的生活'],motif:'mountains'},
   {id:'breeze',text:'他强任他强，清风拂山岗，\n他横由他横，明月照大江。',lines:['他强任他强，','清风拂山岗，','他横由他横，','明月照大江。'],motif:'river',vertical:true},
   {id:'day',text:'seize the day',lines:['seize the day'],motif:'day',latin:true},
-  {id:'stay',text:'STAY',lines:['STAY'],motif:'orbit',latin:true},
+  {id:'stay',text:'S.T.A.Y',lines:['S.T.A.Y'],motif:'orbit',latin:true},
 ].map(p=>Object.freeze({...p,lines:Object.freeze(p.lines)})));
 
 const song='"Songti SC", "Noto Serif CJK SC", "SimSun", serif';

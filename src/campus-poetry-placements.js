@@ -152,7 +152,7 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
   const lifeScienceRoof=records.get('way/98867881')?.height??27.4;
   sourceWall(9,'way/98867881',[114.4278446600322,30.513006891543753],{
     width:22,height:5.5,y:lifeScienceRoof+3.5,roofY:lifeScienceRoof,presentation:'rooftop',out:.15,along:-8,distance:65,surface:'east-eleven-rooftop-lettering',
-    expectedSupportNames:['roof-mount'],approachLabel:'东十一前道路 · 屋顶 STAY 远景',
+    expectedSupportNames:['roof-mount'],approachLabel:'东十一前道路 · 屋顶 S.T.A.Y 远景',
   });
   return plan.sort((a,b)=>a.index-b.index);
 }
