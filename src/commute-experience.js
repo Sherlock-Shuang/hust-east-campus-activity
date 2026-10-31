@@ -35,7 +35,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
     lastFollow = null, followStartedAt = 0, followWaitedAt = 0, uiElapsed = 0, disposed = false, observationProgress = 0, observationMode = 'route';
   const visualCadence=createTrafficVisualCadence();
   const residentialParked=()=>visual.scooterTransport.parkedAgents;
-  let detailDistanceScale=1;
+  let detailDistanceScale=1,floodState=null;
   const previousCamera = new THREE.Vector3(Infinity, Infinity, Infinity);
   const previousDirection = new THREE.Quaternion();
   const listeners = [];
@@ -278,6 +278,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
   updateUI(); visual.update(camera);
   return {
     get optoTransportPlan(){return optoTransportPlan;},get route(){return route;},get simulation(){return simulation;},get visual(){return visual;},get player(){return player;},get npcTransport(){return npcTransport;},get residentialTraffic(){return residentialTraffic;},get trafficSimulation(){return trafficSimulation;}, junctionView, spawnView, routeView, stopFollow,
+    setFloodState(value){floodState=value;visual.setFloodState(value);npcTransport.setFloodState(value);},
     get running() { return running; },
     get suspended() { return suspended; },
     setPerformanceBudget({trafficHz=60,detailDistanceScale:scale=1}={}) {
@@ -330,7 +331,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
       }
       uiElapsed += dt;
       if (uiElapsed > .25) { updateUI(); uiElapsed = 0; }
-      if ((running || camera.position.distanceToSquared(previousCamera) > .0001 ||
+      if ((running || floodState || camera.position.distanceToSquared(previousCamera) > .0001 ||
         camera.quaternion.angleTo(previousDirection) > .001) && visualCadence.take()) {
         visual.update(camera);
         previousCamera.copy(camera.position); previousDirection.copy(camera.quaternion);

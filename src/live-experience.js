@@ -15,7 +15,7 @@ import {campusEffectBudget} from './campus-effect-budget.js';
 import './live-experience.css';
 import './campus-tsunami.css';
 
-export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,getInteriors=()=>[],getWallText=()=>[],setSuspended,invalidate,notify,tsunamiQuality='desktop',handheld=false,onRuntimeBudgetChange=()=>{}}) {
+export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,onFloodState=()=>{},getInteriors=()=>[],getWallText=()=>[],setSuspended,invalidate,notify,tsunamiQuality='desktop',handheld=false,onRuntimeBudgetChange=()=>{}}) {
   const disposeMobileViewport=mountMobileViewport();
   const root=document.createElement('div');root.id='live-experience';
   root.innerHTML=`
@@ -57,7 +57,9 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     if(!client||disposed)return false;
     const changed=campusTsunami.update({event:client.state.c118Flood,now:client.now(),
       visible:!opened&&!document.hidden&&!!audienceUI?.registered,paused:client.state.paused,reducedMotion:reduced?.matches});
-    getPlayer()?.setFloodState?.(client.state.c118Flood&&campusTsunami.sample?{id:client.state.c118Flood.id,...campusTsunami.sample,paused:client.state.paused,reducedMotion:!!reduced?.matches}:null);
+    const flood=client.state.c118Flood&&campusTsunami.sample?{id:client.state.c118Flood.id,...campusTsunami.sample,paused:client.state.paused,reducedMotion:!!reduced?.matches}:null;
+    onFloodState(flood);
+    getPlayer()?.setFloodState?.(flood);
     tsunamiNotice.update({paused:client.state.paused,reducedMotion:reduced?.matches});
     root.dataset.campusTsunami=campusTsunami.active?campusTsunami.sample.phase:'hidden';
     return changed;

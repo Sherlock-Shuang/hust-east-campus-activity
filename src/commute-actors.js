@@ -22,7 +22,7 @@ export function sampleActorPose(agent={},kind='scooter'){
   const speed=Math.max(0,agent.speed??0),walk=kind==='walk',appearance=actorAppearance(agent);
   const steering=clamp(agent.steeringAngle??0,-.5,.5),footDown=walk?0:clamp(agent.footDown??(1-speed/.75),0,1);
   const pitch=walk?-.025:-.025-Math.min(speed/6,1)*.09;
-  const phase=(agent.progress??0)*5.2+(Number(agent.id??0)%7)*.14;
+  const phase=agent.swimming?agent.swimPhase:(agent.progress??0)*5.2+(Number(agent.id??0)%7)*.14;
   const stride=walk?Math.sin(phase)*.28*Math.min(speed/1.2,1):0;
   const pose={steering,footDown,pitch,lean:walk?0:clamp(agent.lean??0,-.18,.18),appearance,points:{}};
   for(const side of[-1,1]){
@@ -41,6 +41,12 @@ export function sampleActorPose(agent={},kind='scooter'){
       const support=side===(Number(agent.id??0)%4===0?1:-1)?footDown:0;
       knee=blend([side*.19,.585,-.13],[side*.265,.50,.095],support);
       ankle=blend([side*.145,.397,-.14],[side*.285,.045,.115],support);
+    }
+    if(agent.swimming){
+      const stroke=Math.sin(phase+side*Math.PI/2);
+      hand=[side*(.34+.18*stroke),1.1+.48*Math.cos(phase+side),-.25+.35*stroke];
+      elbow=[side*.33,1.24,-.12+.18*stroke];
+      knee=[side*.13,.48,.1+stroke*.13];ankle=[side*.13,.06,.1-stroke*.2];
     }
     Object.assign(pose.points,{[`shoulder${key}`]:shoulder,[`elbow${key}`]:elbow,[`hand${key}`]:hand,[`hip${key}`]:hip,[`knee${key}`]:knee,[`ankle${key}`]:ankle});
   }

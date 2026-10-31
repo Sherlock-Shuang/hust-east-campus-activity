@@ -68,3 +68,15 @@ test('roadside canopy receives the current detail budget through dynamic and sta
   f.render.setDetailDistanceScale(1.25);f.render.update(camera);assert.equal(canopy.userData.visibilityStats.detailDistanceScale,1.25);
   f.render.updateStatic(null);assert.equal(canopy.children.filter(o=>/leaves-\d+$/.test(o.name)).reduce((n,m)=>n+m.count,0),canopy.userData.visibilityStats.candidates,'export returns every tree to full detail');
 });
+
+test('shared flood raises cached moving and parked instances and clearing it restores original matrices',t=>{
+ const f=fixture(t);f.render.update();
+ const actors=[f.sim.agents.find(a=>a.kind==='scooter'),f.render.scooterTransport.parkedAgents.find(a=>Number.isFinite(a.id))];
+ const body=(id)=>f.meshes().find(m=>m.userData.part==='paint'&&m.userData.joint==='fixed'&&m.userData.agentIds.includes(id));
+ const before=actors.map(a=>matrixFor(body(a.id),a.id).clone());
+ f.render.setFloodState({id:'test',elapsed:180});f.render.update();
+ actors.forEach((a,i)=>assert.ok(matrixFor(body(a.id),a.id).elements[13]>before[i].elements[13]+5));
+ const wet=actors.map(a=>matrixFor(body(a.id),a.id).clone());f.render.setFloodState({id:'test',elapsed:181});f.render.update();
+ actors.forEach((a,i)=>assert.notDeepEqual(matrixFor(body(a.id),a.id).elements,wet[i].elements));
+ f.render.setFloodState(null);f.render.update();actors.forEach((a,i)=>assert.deepEqual(matrixFor(body(a.id),a.id).elements,before[i].elements));
+});

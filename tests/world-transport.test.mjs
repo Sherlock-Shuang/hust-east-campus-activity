@@ -71,3 +71,14 @@ test('both real lake docks remain usable for normal boarding and local disembark
  const {scene,model,route,motion}=fixture(),playerModels=mockModels(),layer=createWorldTransport({THREE,scene,model,route,groundAt:motion.groundAt,canPlaceMode:motion.canPlaceMode,playerModels});
  try{for(const boat of layer.items.filter(i=>i.mode==='boat')){assert.equal(motion.placeWalker(boat.boardingPose).ok,true);const transport=createTransportInteraction({motion,sources:[layer]});assert.equal(transport.mount().ok,true,boat.id+' real shoreline should board');assert.equal(motion.state.mode,'boat');assert.equal(transport.dismount().ok,true,boat.id+' real shoreline should exit');assert.equal(motion.state.mode,'walk');assert.equal(boat.taken,false);}}finally{layer.dispose();model.dispose();playerModels.geometry.dispose();playerModels.material.dispose();}
 });
+
+test('parked activity vehicles float and remain selectable at the floating position, then reset to their dry location',()=>{
+ const {scene,model,route,motion}=fixture(),playerModels=mockModels(),layer=createWorldTransport({THREE,scene,model,route,groundAt:motion.groundAt,playerModels});
+ try{
+  const car=layer.items.find(i=>i.mode==='roadster'),dry={x:car.x,y:car.y,z:car.z};
+  layer.setFloodState({id:'test',elapsed:180});layer.update(0,null);
+  const p=car.visual.position.clone();assert.ok(p.y>6);assert.ok(p.z<dry.z);assert.equal(layer.nearest({...p,y:p.y-.9,mode:'walk'}),car);
+  const lease=layer.take(car);assert.equal(lease.pose.y,p.y);assert.equal(car.visual.visible,false);
+  layer.release(car,{...dry,yaw:car.yaw});layer.setFloodState(null);layer.update(0,null);assert.equal(car.visual.position.y,dry.y);assert.equal(car.visual.position.z,dry.z);
+ }finally{layer.dispose();model.dispose();playerModels.geometry.dispose();playerModels.material.dispose();}
+});
