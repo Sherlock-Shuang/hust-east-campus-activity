@@ -3,12 +3,12 @@
 export const CAMPUS_POETRY=Object.freeze([
   {id:'life-ai',text:'给AI以生命，而不是给生命以AI',lines:['给AI以生命，','而不是给生命以AI'],motif:'breath'},
   {id:'life-art',text:'生活源于艺术而高于艺术',lines:['生活源于艺术','而高于艺术'],motif:'horizon'},
-  {id:'responsibility',text:'能力越大，责任越大',lines:['能力越大，','责任越大'],motif:'thread'},
-  {id:'chocolate',text:"life is always like a box of chocolate, you'll never know what you are gonna get",lines:['life is always like','a box of chocolate,',"you'll never know",'what you are gonna get'],motif:'chocolate',latin:true},
-  {id:'birds',text:'some birds are never meant to be caged, their feathers are just too bright',lines:['some birds are never','meant to be caged,','their feathers are','just too bright'],motif:'feather',latin:true},
+  {id:'responsibility',text:'能力越大，责任越大',lines:['能力越大，责任越大'],motif:'thread'},
+  {id:'chocolate',text:"life is always like a box of chocolate, you'll never know what you are gonna get",lines:['life is always','like a box','of chocolate,',"you'll never",'know what you','are gonna get'],motif:'chocolate',latin:true},
+  {id:'birds',text:'some birds are never meant to be caged, their feathers are just too bright',lines:['some birds are never meant to be caged,','their feathers are just too bright'],motif:'feather',latin:true},
   {id:'possibility',text:'你能做的，岂止如此！',lines:['你能做的，','岂止如此！'],motif:'open'},
   {id:'heroes',text:'侠骨柔情的英雄气概\n重心然诺的君子风度\n快意恩仇的人生境界\n照亮了我们平庸而琐碎的生活',lines:['侠骨柔情的英雄气概','重心然诺的君子风度','快意恩仇的人生境界','照亮了我们平庸而琐碎的生活'],motif:'mountains'},
-  {id:'breeze',text:'他强任他强，清风拂山岗，\n他横由他横，明月照大江。',lines:['他强任他强，清风拂山岗，','他横由他横，明月照大江。'],motif:'river',vertical:true},
+  {id:'breeze',text:'他强任他强，清风拂山岗，\n他横由他横，明月照大江。',lines:['他强任他强，','清风拂山岗，','他横由他横，','明月照大江。'],motif:'river',vertical:true},
   {id:'day',text:'seize the day',lines:['seize the day'],motif:'day',latin:true},
   {id:'stay',text:'STAY',lines:['STAY'],motif:'orbit',latin:true},
 ].map(p=>Object.freeze({...p,lines:Object.freeze(p.lines)})));
@@ -62,20 +62,24 @@ export function paintCampusMural(ctx,canvas,item){
   }
   if(poem&&!shallow)motif(ctx,w,h,item.motif,item.color);
   const family=item.latin?'Georgia, "Times New Roman", serif':item.vertical||item.motif==='mountains'?kai:song;
+  const weight=prominent?'600':'400';
   if(item.vertical){
-    const size=Math.min(h*.073,w*.16);
-    ctx.font=`400 ${size}px ${family}`;
-    item.lines.forEach((line,i)=>[...line].forEach((char,j)=>drawText(char,w*(.66-i*.32),h*.06+j*size*1.06,size)));
+    const rows=Math.max(...item.lines.map(line=>[...line].length)),columns=item.lines.length;
+    const size=Math.min(h*.82/rows,w*.82/(columns*1.1));
+    ctx.font=`${weight} ${size}px ${family}`;
+    item.lines.forEach((line,i)=>[...line].forEach((char,j)=>drawText(char,w*(.09+.82*(columns-i-.5)/columns),h*.09+j*size*1.06,size)));
     return;
   }
   const count=item.lines.length;
-  const blockHeight=h*(prominent?(count>2?.60:.54):poem?.46:count>1?.7:.8),step=blockHeight/count;
-  const first=shallow?h*.5:poem?(count===1?h*.46:prominent?h*.23:h*.28):h*.5-step*(count-1)/2;
+  const blockHeight=h*(prominent?.72:poem?.46:count>1?.7:.8),step=blockHeight/count;
+  const first=shallow?h*.5:poem?(count===1?h*.46:prominent?(count>2?h*.15:h*.25):h*.28):h*.5-step*(count-1)/2;
   item.lines.forEach((line,i)=>{
-    let size=shallow?h*(prominent?.80:.60):poem?(count===1?h*.23:step*(prominent?.82:.77)):step*.65;
-    const font=n=>`${item.latin&&item.motif!=='orbit'?'italic ':''}400 ${n}px ${family}`;
-    ctx.font=font(size);size*=Math.min(1,w*(poem?.90:.94)/Math.max(1,ctx.measureText(line).width));ctx.font=font(size);
+    let size=shallow?h*(prominent?.80:.60):poem?(count===1?h*(prominent?.76:.23):step*(prominent?.90:.77)):step*.65;
+    const font=n=>`${item.latin&&item.motif!=='orbit'?'italic ':''}${weight} ${n}px ${family}`;
+    ctx.font=font(size);size*=Math.min(1,w*(prominent?.94:poem?.90:.94)/Math.max(1,ctx.measureText(line).width));ctx.font=font(size);
     if(item.motif==='orbit'){
+      const spacedWidth=ctx.measureText(line).width+size*.42*([ ...line].length-1);
+      size*=Math.min(1,w*.94/spacedWidth);ctx.font=font(size);
       const gap=size*.42,chars=[...line],widths=chars.map(c=>ctx.measureText(c).width),total=widths.reduce((a,b)=>a+b,0)+gap*(chars.length-1);
       let x=(w-total)/2;ctx.textAlign='left';chars.forEach((c,j)=>{ctx.fillText(c,x,first);x+=widths[j]+gap;});ctx.textAlign='center';
     }else drawText(line,w/2,first+i*step,size);

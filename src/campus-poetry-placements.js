@@ -3,8 +3,8 @@ import {planEinsteinSquare} from './einstein-square.js';
 import {planOptoBuilding,OPTO_BUILDING_ID} from './opto-building.js';
 
 // Activity artwork only. These are surfaces of the existing reconstruction,
-// not claims that these poems are painted on the real campus. No new backing
-// walls, collision geometry, map features or architectural proportions are added.
+// not claims that these poems are painted on the real campus. Wall paintings
+// and the two roof-mounted letter sculptures do not change collision or GIS.
 const IDS=['life-ai','life-art','responsibility','chocolate','birds','possibility','heroes','breeze','day','stay'];
 
 function edges(record){
@@ -45,35 +45,38 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
   if(!model?.records||!records?.get||!frame||typeof geoToLocal!=='function')return [];
   const source=new Map(model.records.map(r=>[r.id,r])),plan=[];
   const local=([longitude,latitude])=>geoToLocal({longitude,latitude,height:0,coordinateSystem:'EPSG:4326'},frame);
-  function roadApproach(id,face){
-    const road=model.roads.find(r=>r.id===id),geometry=road?.feature.geometry;
-    if(!geometry)return null;
-    const lines=geometry.type==='LineString'?[geometry.coordinates]:geometry.type==='MultiLineString'?geometry.coordinates:[];
+  function roadApproach(id,face,minimumDistance=0){
+    const roads=id?model.roads.filter(r=>r.id===id):model.roads;
     let nearest;
+    for(const road of roads){const geometry=road.feature.geometry;
+    const lines=geometry.type==='LineString'?[geometry.coordinates]:geometry.type==='MultiLineString'?geometry.coordinates:[];
     for(const line of lines){const points=line.map(local);for(let i=1;i<points.length;i++){
       const a=points[i-1],b=points[i],dx=b.x-a.x,dz=b.z-a.z,lengthSq=dx*dx+dz*dz;
-      const t=lengthSq?Math.max(0,Math.min(1,((face.x-a.x)*dx+(face.z-a.z)*dz)/lengthSq)):0;
+      const projected=lengthSq?Math.max(0,Math.min(1,((face.x-a.x)*dx+(face.z-a.z)*dz)/lengthSq)):0;
+      const samples=minimumDistance?Array.from({length:Math.ceil(Math.sqrt(lengthSq)/3)+1},(_,j)=>j/Math.max(1,Math.ceil(Math.sqrt(lengthSq)/3))):[projected];
+      for(const t of samples){
       const x=a.x+dx*t,z=a.z+dz*t,distance=Math.hypot(x-face.x,z-face.z);
-      if((x-face.x)*face.nx+(z-face.z)*face.nz<=distance*.4)continue;
-      if(!nearest||distance<nearest.distance)nearest={x,z,y:.14,distance,sourceId:id};
-    }}
+      if(distance<minimumDistance||(x-face.x)*face.nx+(z-face.z)*face.nz<=distance*(minimumDistance?.65:.4))continue;
+      if(!nearest||distance<nearest.distance)nearest={x,z,y:.14,distance,sourceId:road.id};
+    }}}}
     return nearest;
   }
-  function add(index,record,face,{width,height,y,out=.035,surface,distance=5,floor=.14,ink,expectedSupportNames=[],approach,approachRoadId,approachLabel}){
+  function add(index,record,face,{width,height,y,out=.035,surface,distance=5,floor=.14,ink,expectedSupportNames=[],approach,approachRoadId,approachLabel,presentation='paint',roofY}){
     if(!face)return;
     const x=face.x+face.nx*out,z=face.z+face.nz*out,yaw=Math.atan2(face.nx,face.nz);
-    const routePoint=approach||(approachRoadId&&roadApproach(approachRoadId,face));
+    const routePoint=approach||(presentation==='rooftop'?roadApproach(null,face,Math.max(36,y+5)):approachRoadId&&roadApproach(approachRoadId,face));
     const routePose=routePoint&&{...routePoint,y:routePoint.y??floor,yaw:Math.atan2(routePoint.x-x,routePoint.z-z),pitch:Math.atan2((routePoint.y??floor)+1.65-y,Math.hypot(routePoint.x-x,routePoint.z-z))};
     plan.push({id:`poem-${index}`,poetryId:IDS[index],index,featureId:record.id,
       building:record.feature?.properties?.name||(record.id==='way/1484333086'?'韵苑体育馆 · 基座':record.id),surface,x,y,z,nx:face.nx,nz:face.nz,yaw,width,height,
-      ...(ink?{ink}:{}),expectedSupportNames,expectedSupportFeatureId:index===5?null:record.id,
+      presentation,...(roofY!==undefined?{roofY}:{}),...(ink?{ink}:{}),expectedSupportNames,expectedSupportFeatureId:index===5?null:record.id,
       ...(routePose?{approach:routePose,approachLabel}:{}),
-      inspection:{x:x+face.nx*distance,y:floor,z:z+face.nz*distance,yaw,pitch:Math.atan2(floor+1.65-y,distance)}});
+      inspection:presentation==='rooftop'&&routePose?{...routePose}:{x:x+face.nx*distance,y:floor,z:z+face.nz*distance,yaw,pitch:Math.atan2(floor+1.65-y,distance)}});
   }
   function sourceWall(index,id,seed,options){
     const record=source.get(id);
     if(record&&records.has(id)){
       const face=nearestWall(record,local(seed));
+      if(face&&options.center){face.x=(face.a.x+face.b.x)/2;face.z=(face.a.z+face.b.z)/2;}
       if(face&&options.along){face.x+=face.tx*options.along;face.z+=face.tz*options.along;}
       add(index,record,face,options);
     }
@@ -102,21 +105,21 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
   // sits in front of the upper windowed gym; painting the upper wall at eye
   // level would bury artwork behind that actual rendered lower volume.
   sourceWall(2,'way/1484333086',[114.42899115417319,30.51535230642861],{
-    width:8.4,height:3.8,y:2.75,out:.04,distance:8,surface:'gym-southwest-base-blank-wall',expectedSupportNames:[''],
+    width:34,height:3.8,y:2.75,center:true,out:.04,distance:25,surface:'gym-southwest-base-blank-wall',expectedSupportNames:[''],
   });
   sourceWall(4,'way/1484333086',[114.4293349597728,30.51532522465536],{
-    width:10,height:3.8,y:2.75,out:.04,distance:12,surface:'gym-southeast-base-blank-wall',expectedSupportNames:[''],
+    width:34,height:3.8,y:2.75,center:true,out:.04,distance:28,surface:'gym-southeast-base-blank-wall',expectedSupportNames:[''],
   });
 
   // A-wing end is intentionally blind here, unlike its glazed stair tower.
   sourceWall(3,'way/1023544717',[114.422122550059,30.51621457780646],{
-    width:8.4,height:3.1,y:2,out:.06,distance:11,surface:'east-nine-a-blank-end-wall-low',expectedSupportNames:[''],
+    width:5.6,height:11.4,y:11.6,center:true,along:-6.1,out:.06,distance:22,surface:'east-nine-a-blank-end-wall-tall',expectedSupportNames:[''],
   });
-  // Use the blank strip above the first-row windows and below the floor
-  // band. The projecting band must not cut across the enlarged letters.
-  sourceWall(8,'way/1023544717',[114.42165914853514,30.5150771016799],{
-    width:6.4,height:.5,y:3.8,out:.06,along:6,distance:9,surface:'east-nine-d-path-facing-wall-band',expectedSupportNames:[''],
-    approachRoadId:'way/97080595',approachLabel:'东九 D 区湖边弯道 · 步道交汇处',
+  // Roof lettering clears the windows and floor bands altogether.
+  const eastNineRoof=records.get('way/1023544717')?.height??20;
+  sourceWall(8,'way/1023544717',[114.4210,30.51504],{
+    width:30,height:3.8,y:eastNineRoof+2.7,roofY:eastNineRoof,presentation:'rooftop',out:.15,center:true,along:28,distance:55,surface:'east-nine-d-rooftop-lettering',expectedSupportNames:['roof-mount'],
+    approachLabel:'东九湖边道路 · 屋顶大字远景',
   });
 
   const square=planEinsteinSquare(model,{frame,geoToLocal}),squareRecord=source.get(square.sourceId);
@@ -133,9 +136,9 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
   const opto=source.get(OPTO_BUILDING_ID),optoPlan=opto&&planOptoBuilding(opto,{frame,geoToLocal});
   if(optoPlan){
     for(const [index,e,width,height,y,distance]of[
-      [6,optoPlan.groundFloor.college,5.2,3.4,2.1,4],
-      [7,optoPlan.rear,3.6,3.4,2.22,4.2],
-    ])add(index,opto,{x:e.x-e.nx*(index===6?2.8:2)+e.tx*e.width/2,z:e.z-e.nz*(index===6?2.8:2)+e.tz*e.width/2,nx:-e.tx,nz:-e.tz},{
+      [6,optoPlan.groundFloor.college,7.2,3.65,2.3,4.5],
+      [7,optoPlan.rear,3.6,3.65,2.3,4.2],
+    ])add(index,opto,{x:e.x-e.nx*(index===6?3.8:2)+e.tx*e.width/2,z:e.z-e.nz*(index===6?3.8:2)+e.tz*e.width/2,nx:-e.tx,nz:-e.tz},{
       // The photo-derived stone lining/poster relief projects up to 0.1225 m
       // into this corridor. Keep the enlarged paint 7.5 mm clear of that
       // finish, while the ordinary entrance approach stays unchanged.
@@ -146,13 +149,10 @@ export function planCampusPoetryPlacements(model,records,{frame,geoToLocal}={}){
     });
   }
 
-  // Keep STAY on the same road-facing blank band. The photographed seven-row
-  // facade has its next window reveal at y=4.755 m; the old 4.775 m centre
-  // overlapped it. Keep the enlarged inscription below that next window
-  // without moving its source-edge location or ordinary-road viewing point.
+  const lifeScienceRoof=records.get('way/98867881')?.height??27.4;
   sourceWall(9,'way/98867881',[114.4278446600322,30.513006891543753],{
-    width:5.4,height:1.25,y:3.95,out:.04,along:-8,distance:10,surface:'east-eleven-entry-wall-band',
-    expectedSupportNames:['way/98867881:photo-main:0'],approachRoadId:'way/103495015',approachLabel:'东十一教学楼入口前道路',
+    width:22,height:5.5,y:lifeScienceRoof+3.5,roofY:lifeScienceRoof,presentation:'rooftop',out:.15,along:-8,distance:65,surface:'east-eleven-rooftop-lettering',
+    expectedSupportNames:['roof-mount'],approachLabel:'东十一前道路 · 屋顶 STAY 远景',
   });
   return plan.sort((a,b)=>a.index-b.index);
 }

@@ -2,6 +2,7 @@ import {planCanteenBoundary} from './yunyuan-canteen.js';
 import {getReconstructionBuildings} from './campus-feature-selection.js';
 import {CAMPUS_POETRY,paintCampusMural} from './campus-poetry-art.js';
 import {planCampusPoetryPlacements} from './campus-poetry-placements.js';
+import {createCampusRooftopLettering} from './campus-rooftop-lettering.js';
 
 // Lecture artwork in the game, separate from the source map and surveyed facade.
 // Quiet inscriptions stay on real blank facade/display surfaces. They belong
@@ -179,7 +180,8 @@ export function planCampusAIMurals(model,records,{frame,geoToLocal}) {
     const poem=CAMPUS_POETRY.find(p=>p.id===placement.poetryId);
     if(!poem)continue;
     plan.push({...placement,...poem,id:`poem-${poem.id}`,poetryId:poem.id,
-      color:placement.ink||'#56635c',opacity:.82,fadeStart:18,maxDistance:55,
+      color:placement.ink||(poem.id.startsWith('life-')?'#56635c':'#3b4a40'),opacity:poem.id.startsWith('life-')?.82:.96,
+      fadeStart:poem.id.startsWith('life-')?18:75,maxDistance:poem.id.startsWith('life-')?55:220,
       priority:'discovery',background:null,style:'poetry'});
   }
   return plan;
@@ -191,6 +193,13 @@ export function createCampusAIMurals(THREE,model,records,options) {
   group.userData={component:'campus-ai-murals',artwork:true,source:'activity-copy-and-authored-poetry',count:plan.length};
   const artworks=[];
   for(const item of plan){
+    if(item.presentation==='rooftop'){
+      const mesh=createCampusRooftopLettering(THREE,item);
+      mesh.name=`ai-wall-${item.id}`;mesh.position.set(item.x,item.y,item.z);mesh.rotation.y=item.yaw;
+      mesh.raycast=()=>{};mesh.receiveShadow=true;
+      mesh.userData={...mesh.userData,featureId:item.featureId,surface:item.surface,priority:item.priority};
+      group.add(mesh);artworks.push({mesh,item});continue;
+    }
     if(typeof document==='undefined')break;
     const canvas=document.createElement('canvas');
     canvas.width=Math.min(2048,Math.max(384,Math.ceil(item.width*220)));

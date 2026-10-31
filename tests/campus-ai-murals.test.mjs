@@ -11,6 +11,7 @@ import {createPlayerMotion} from '../src/player-motion.js';
 import {campusLandmarkArrival} from '../src/campus-landmark-arrival.js';
 import {planCampusAIMurals,createCampusAIMurals} from '../src/campus-ai-murals.js';
 import {CAMPUS_POETRY} from '../src/campus-poetry-art.js';
+import {pointInLandcover} from '../src/campus-landcover.js';
 
 // Use the same merged source map, reconstructed facades and initial player
 // position as the actual campus. A standalone flat-wall fixture misses signs
@@ -122,8 +123,8 @@ test('all ten authored poems are attached to the real campus plan exactly once w
     assert.equal(item.motif,authored.motif);
     assert.ok(item.inspection&&Number.isFinite(item.inspection.x+item.inspection.y+item.inspection.z));
     assert.ok(item.expectedSupportNames?.length,'placement records its actual blank supporting surface');
-    assert.ok(!item.background);assert.ok(item.opacity>=.6&&item.opacity<=.85);
-    assert.ok(item.fadeStart>=16&&item.maxDistance<=55&&item.maxDistance>item.fadeStart,'ordinary approach distances remain readable, with a finite distant fade');
+    assert.ok(!item.background);assert.ok(item.opacity>=.6&&item.opacity<=.98);
+    assert.ok(item.fadeStart>=16&&item.maxDistance<=220&&item.maxDistance>item.fadeStart,'ordinary approach distances remain readable, with a finite distant fade');
     assert.ok(Math.hypot(item.nx,item.nz)>.999&&Math.hypot(item.nx,item.nz)<1.001);
   }
 });
@@ -131,14 +132,22 @@ test('all ten authored poems are attached to the real campus plan exactly once w
 test('every poem footprint stays on its intended solid surface and can be seen from its inspection point',()=>{
   for(const item of plan.filter(p=>p.poetryId)){
     const normal=new THREE.Vector3(item.nx,0,item.nz),eye=new THREE.Vector3(item.inspection.x,item.inspection.y+1.65,item.inspection.z);
+    if(item.presentation==='rooftop'){
+      assert.equal(item.roofY,campus.records.get(item.featureId).height);
+      const source=model.records.find(r=>r.id===item.featureId);
+      const polygons=source.shapes.map(s=>[s.getPoints().map(p=>[p.x,-p.y]),...s.holes.map(h=>h.getPoints().map(p=>[p.x,-p.y]))]);
+      for(const u of [-.36,0,.36])assert.ok(pointInLandcover(item.x+item.nz*item.width*u-item.nx*.7,item.z-item.nx*item.width*u-item.nz*.7,polygons),`${item.poetryId}: mount feet must stay on the original roof footprint`);
+    }
     for(const u of [-.49,-.25,0,.25,.49])for(const v of [-.49,0,.49]){
       const point=pointOnSign(item,item.width*u,item.height*v);
-      // Include the environment: the Einstein inscription belongs to a stone
-      // plinth there, whereas the other nine attach to reconstructed facades.
-      const hit=new THREE.Raycaster(point.clone().addScaledVector(normal,.015),normal.clone().negate(),0,.65).intersectObject(campus.group,true)[0];
-      assert.ok(hit,`${item.poetryId} (${u},${v}) floats without supporting architecture`);
-      assert.ok(item.expectedSupportNames.includes(hit.object.name),`${item.poetryId} (${u},${v}) covers ${hit.object.name} instead of its blank surface`);
-      if(item.expectedSupportFeatureId)assert.equal(hit.object.userData.featureId,item.expectedSupportFeatureId,`${item.poetryId} must not attach to a different unnamed building mesh`);
+      // Wall paint uses solid support; sculptural letters are supported by
+      // the registered roof and their mounts, checked above.
+      const hit=item.presentation==='rooftop'?null:new THREE.Raycaster(point.clone().addScaledVector(normal,.015),normal.clone().negate(),0,.65).intersectObject(campus.group,true)[0];
+      if(item.presentation!=='rooftop'){
+        assert.ok(hit,`${item.poetryId} (${u},${v}) floats without supporting architecture`);
+        assert.ok(item.expectedSupportNames.includes(hit.object.name),`${item.poetryId} (${u},${v}) covers ${hit.object.name} instead of its blank surface`);
+        if(item.expectedSupportFeatureId)assert.equal(hit.object.userData.featureId,item.expectedSupportFeatureId,`${item.poetryId} must not attach to a different unnamed building mesh`);
+      }else assert.ok(item.y-item.height/2>item.roofY+.5,'roof letters clear the existing roof');
       const delta=point.clone().sub(eye),distance=delta.length();
       const obstruction=new THREE.Raycaster(eye,delta.normalize(),0,distance-.005).intersectObject(campus.group,true)[0];
       assert.equal(Boolean(obstruction),false,`${item.poetryId} inspection blocked by ${obstruction?.object.name}`);
@@ -175,7 +184,7 @@ test('relocated poems are visible from safe ordinary route approaches, not only 
     }
     if(item.poetryId==='life-ai')assert.ok(Math.hypot(pose.x-spawn.x,pose.z-spawn.z)<.02,'the front canteen poem is visible from the existing spawn');
     const eye=new THREE.Vector3(pose.x,pose.y+1.65,pose.z),horizontal=Math.hypot(pose.x-item.x,pose.z-item.z);
-    assert.ok(horizontal>=1.2&&horizontal<=18,`${item.poetryId}: ordinary approach distance ${horizontal}`);
+    assert.ok(horizontal>=1.2&&horizontal<=(item.presentation==='rooftop'?100:18),`${item.poetryId}: ordinary approach distance ${horizontal}`);
     assert.ok(((pose.x-item.x)*item.nx+(pose.z-item.z)*item.nz)/horizontal>.25,`${item.poetryId}: not visible only at a grazing angle`);
     assert.ok(Math.abs(Math.atan2(item.y-eye.y,horizontal))<Math.PI/4,`${item.poetryId}: does not require looking straight up or down`);
     for(const u of [-.49,-.25,0,.25,.49])for(const v of [-.49,0,.49]){
@@ -221,16 +230,20 @@ test('production artwork meshes stay matte and readable nearby, fade continuousl
   try{
     layer=createCampusAIMurals(THREE,model,campus.records,{frame,geoToLocal});
     assert.equal(layer.group.children.length,layer.plan.length,'each planned artwork has a runtime mesh');
-    assert.equal(canvases.length,layer.plan.length);
+    assert.equal(canvases.length,layer.plan.filter(p=>p.presentation!=='rooftop').length);
+    let canvasIndex=0;
     const camera=new THREE.PerspectiveCamera();
     for(const [index,item]of layer.plan.entries()){
       const mesh=layer.group.getObjectByName(`ai-wall-${item.id}`),material=mesh.material;
-      const canvas=canvases[index];
+      const canvas=item.presentation==='rooftop'?null:canvases[canvasIndex++];
+      if(canvas){
       const commands=item.vertical||item.motif==='orbit'?[...item.lines.join('')]:item.lines;
       assert.deepEqual(canvas.text.map(t=>t.value),commands,`${item.id}: production canvas keeps all original characters`);
       for(const t of canvas.text)assert.ok(t.left>=0&&t.right<=canvas.width&&t.top>=0&&t.bottom<=canvas.height,`${item.id}: production texture ${canvas.width}×${canvas.height} clips ${JSON.stringify(t)}`);
-      assert.ok(material.isMeshStandardMaterial&&material.transparent&&material.roughness>=.9);
-      assert.equal(material.depthWrite,false,'small paint does not occlude later transparent rendering');
+      }
+      assert.ok(material.isMeshStandardMaterial&&material.transparent);
+      assert.ok(material.roughness>=(item.presentation==='rooftop'?.5:.9));
+      assert.equal(material.depthWrite,item.presentation==='rooftop','only solid roof lettering writes depth');
       const at=distance=>{camera.position.set(item.x+item.nx*distance,item.y,item.z+item.nz*distance);layer.update(camera);};
       at(2);assert.equal(mesh.visible,true);assert.ok(Math.abs(material.opacity-item.opacity)<1e-8);
       const nearOpacity=material.opacity;
