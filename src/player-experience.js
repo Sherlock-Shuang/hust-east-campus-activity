@@ -14,7 +14,7 @@ import { createPlayerPointerLock } from './player-pointer-lock.js';
 import { createWorldTransport } from './world-transport.js';
 import { createTransportInteraction } from './transport-interaction.js';
 import { createMobileControls } from './mobile-controls.js';
-import { createControlPreferences, controlLookDelta } from './control-preferences.js';
+import { createControlPreferences, controlLookDelta, COMFORT_CONTROL_DEFAULTS } from './control-preferences.js';
 import { createControlPreferencesUI } from './control-preferences-ui.js';
 import { preloadSpiderGeometry } from './spider-geometry-loader.js';
 
@@ -63,16 +63,15 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   let active=false, suspended=false, initialized=false, view='third', yawOffset=0, pitch=.25, distance, drag=null, mouseLook=null,
     cruise=false, liftTarget=null, landing=false, uiElapsed=0, savedNear=camera.near, savedFov=camera.fov, disposed=false, immersive=true, driveImmersive=true, suitView=false, lookHold=0, manualPitch=false, steeringSideways=false, suitAngle=0, suitPitch=.03, suitDistance=3.15;
   const aimPosition=new THREE.Vector3();
-  const reducedMotion=!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   let storage;try{storage=window.localStorage;}catch{}
-  const preferences=createControlPreferences({storage,defaults:{comfortableCamera:reducedMotion},onChange:applyPreferences});
+  const preferences=createControlPreferences({storage,defaults:COMFORT_CONTROL_DEFAULTS,onChange:applyPreferences});
   let comfortableCamera=preferences.value.comfortableCamera,escapeReleaseUntil=0;
   const preparation=spiderPreparation??(typeof Worker==='function'?preloadSpiderGeometry():null);
   let spiderPrepared=!preparation,spiderRequest=null,preparationState=preparation?'preparing':'fallback';
   const ready=Promise.resolve(preparation).then(result=>{spiderPrepared=true;preparationState=result?'ready':'fallback';},()=>{spiderPrepared=true;preparationState='fallback';});
   let lookViewport={width:844,height:390};
   function measureLookViewport(){const rect=canvas.getBoundingClientRect();lookViewport={width:rect.width,height:rect.height};}
-  function applyPreferences(value){comfortableCamera=value.comfortableCamera;mobileControls?.setJoystickScale(value.joystickScale);updateElement('look-sensitivity',{value:String(value.sensitivity)});updateElement('look-sensitivity-value',{textContent:`${value.sensitivity.toFixed(2)}×`});preferencesUI?.refresh();invalidate();}
+  function applyPreferences(value){comfortableCamera=value.comfortableCamera;mobileControls?.setJoystickScale(value.joystickScale);updateElement('look-sensitivity',{value:String(value.sensitivity)});updateElement('look-sensitivity-value',{textContent:`${value.sensitivity.toFixed(2)}×`});preferencesUI?.refresh();releaseLookContact();updateUI();invalidate();}
   const followPosition = new THREE.Vector3(), lookTarget = new THREE.Vector3();
   const modeNames={walk:'步行探索',scooter:'电动车骑行',helicopter:'直升机探索',roadster:'特斯拉 · 喷气跑车',hoverboard:'电动飞行器',spider:'蜘蛛侠 · 蛛丝摆荡',boat:'湖上游艇'};
   const codes=new Set(['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyQ','KeyE','KeyF','KeyX','KeyG','KeyT','Space','ShiftLeft','ShiftRight','KeyV','KeyC','KeyL','Escape']);
@@ -130,7 +129,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(!spider)models.group.visible=active&&view==='third'&&!(['roadster','hoverboard'].includes(motion.state.mode)&&desired.transitioning);
     if(spider&&desired.roll)camera.rotateZ(desired.roll);
     const targetFov=spider?(suitView?45:desired.fov??58):(desired.fov??savedFov);
-    const nextFov=targetFov;
+    const nextFov=suitView?targetFov:Math.max(45,Math.min(82,targetFov+preferences.value.fovOffset));
     if(Math.abs(nextFov-camera.fov)>.005){camera.fov=nextFov;camera.updateProjectionMatrix();}
     if(spider){
       camera.updateMatrixWorld();
@@ -161,11 +160,11 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     });
     updateElement('player-mode-label',{textContent:s.mode==='walk'&&s.waterMode!=='dry'?({swim:'游泳',board:'冲浪板',surf:'冲浪'}[s.waterMode]||modeNames[s.mode]):modeNames[s.mode]});
     updateElement('pointer-lock-hint',{hidden:!active||!pointerLock.locked});
-    updateElement('player-look-reticle',{hidden:!active||!pointerLock.locked});
+    updateElement('player-look-reticle',{hidden:!active||inputBlocked()||suitView||!(pointerLock.locked||comfortableCamera)});
     $('viewport').classList.toggle('pointer-locked',active&&pointerLock.locked);
     const hud=$('player-hud');
     if(hud)Object.assign(hud.dataset,{
-      pointerLockSupported:String(pointerLock.supported),pointerLocked:String(pointerLock.locked),
+      pointerLockSupported:String(pointerLock.supported),pointerLocked:String(pointerLock.locked),comfortableCamera:String(comfortableCamera),
       mode:s.mode,waterMode:s.waterMode??'dry',view,inspect:String(suitView),suspended:String(suspended),spiderPreparation:preparationState,
     });
     updateElement('web-target-status',{hidden:!active||!spider});
@@ -180,7 +179,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
       const releaseHint=attached?({entry:'接丝过渡',downswing:'下摆蓄速',bottom:'谷底 · 松丝前冲',upswing:'上摆 · 松丝腾高'}[s.swingPhase]||'松丝保留惯性'):'空格起跳 · E 接丝';
       const target=$('web-target-status');
       if(target)target.dataset.state=attached||s.zipActive?'attached':ready?'ready':'searching';
-      let targetLabel=suitView?'移动鼠标环视':s.diving?'松开 X · E 接丝':s.zipActive?'蛛丝前冲 · WASD 控向':attached?`${releaseHint} · 松手后重按换点`:ready?'按 E / 左键挂丝':s.wallContact?'空格蹬墙跃出':s.grounded?'空格起跳 / WASD 移动后找挂点':'暂无可见挂点 · 调整方向后重按';
+      let targetLabel=suitView?(comfortableCamera?'按住右键拖动环视':'移动鼠标环视'):s.diving?'松开 X · E 接丝':s.zipActive?'蛛丝前冲 · WASD 控向':attached?`${releaseHint} · 松手后重按换点`:ready?'按 E / 左键挂丝':s.wallContact?'空格蹬墙跃出':s.grounded?'空格起跳 / WASD 移动后找挂点':'暂无可见挂点 · 调整方向后重按';
       if(!suitView&&pointBusy)targetLabel=s.pointPhase==='approach'?'接近屋沿时按空格弹射':'空格弹射 · E 接丝';
       else if(!suitView&&s.trickActive)targetLabel='松开 T 收招 · E 接丝';
       updateElement('web-target-label',{textContent:targetLabel});
@@ -197,7 +196,8 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(s.mode==='walk'&&s.waterMode!=='dry')basics.walk='WASD 移动 · 空格 / Q 上浮 · C / E 下潜 · F 上下板 · G 冲浪';
     const escapeHint=pointerLock.locked?'Esc 释放，再按退出':'Esc 退出';
     const actionHint=!interaction||s.waterMode!=='dry'?'':s.mode==='walk'?'靠近载具 / 战衣 · F 使用':s.mode==='spider'?'F 空中前冲 / 地面脱下战衣':s.mode==='boat'?'靠岸停稳 · F 下船':'停稳落地 · F 下车';
-    let helpText=`${basics[s.mode]}${actionHint?'\n'+actionHint:''}\n中键 / L 锁定鼠标 · V 切视角 · ${escapeHint}`;
+    const lookHint=comfortableCamera?(spider?'按住右键拖动视角':'按住鼠标拖动视角'):'移动鼠标转动视角';
+    let helpText=`${lookHint}\n${basics[s.mode]}${actionHint?'\n'+actionHint:''}\n中键 / L 锁定鼠标 · V 切视角 · ${escapeHint}`;
     const nearby=active&&!suspended&&s.waterMode==='dry'?interaction?.nearest():null;
     updateElement('transport-interact',{hidden:!nearby});
     updateElement('transport-interact-label',{textContent:nearby?`${nearby.item.mode==='spider'?'穿上':nearby.item.mode==='boat'?'登上':'驾驶'}${nearby.item.label}`:''});
@@ -341,6 +341,11 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     // Only a press on the canvas starts a web. Hovering from a HUD button
     // with a held mouse button must never initiate traversal.
     if(mouse&&!(e.buttons&1))held.delete('mouse-swing');
+    // Comfort mode never pans merely while the pointer travels to a HUD button.
+    // Spider left-click remains dedicated to web actions; right-drag looks around.
+    if(mouse&&comfortableCamera&&!(e.buttons&(motion.state.mode==='spider'?2:3))){
+      mouseLook={id:e.pointerId,x:e.clientX,y:e.clientY,looking:false};return;
+    }
     if(mouse&&(!mouseLook||mouseLook.id!==e.pointerId)){seedMouse(e);return;}
     const pointer=mouse?mouseLook:drag;
     if(!pointer||pointer.id!==e.pointerId)return;
@@ -351,7 +356,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     applyLook(dx,dy,!mouse);
   });
   const releasePointer=e=>{if(e.pointerType!=='mouse'){if(drag?.id===e.pointerId)releaseLookContact();return;}mouseLook=null;held.delete('mouse-swing');};
-  on(canvas,'pointerup',e=>{if(e.pointerType==='mouse')held.delete('mouse-swing');else releasePointer(e);});
+  on(canvas,'pointerup',e=>{if(e.pointerType==='mouse'){held.delete('mouse-swing');if(comfortableCamera&&mouseLook)mouseLook.looking=false;}else releasePointer(e);});
   on(canvas,'pointercancel',releasePointer);on(canvas,'lostpointercapture',releasePointer);
   on(window,'pointerup',releasePointer);on(window,'pointercancel',releasePointer);
   on(canvas,'pointerleave',e=>{if(e.pointerType==='mouse'&&!pointerLock.locked){mouseLook=null;held.delete('mouse-swing');}});
@@ -514,8 +519,8 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     onChange:()=>{updateUI();invalidate();},
   });
   preferencesUI=createControlPreferencesUI({document,host:$('player-hud'),preferences,canOpen:()=>active&&!disposed&&!suspended,
-    onBoundary:()=>{clearInput();pointerLock.release();},
-    onClose:()=>{if(active&&!disposed&&!suspended)canvas.focus({preventScroll:true});},
+    onBoundary:()=>{clearInput();pointerLock.release();updateElement('player-look-reticle',{hidden:true});},
+    onClose:()=>{updateUI();if(active&&!disposed&&!suspended)canvas.focus({preventScroll:true});},
   });
   applyPreferences(preferences.value);
   async function restorePreparedActivityPose(saved){

@@ -158,12 +158,12 @@ export function calculatePlayerCamera(state, { view = 'third', yawOffset = 0, pi
   if (spider) {
     const bodyTarget = { ...target };
     const airborne = state.grounded === false || !!state.anchor;
-    if (airborne) {
+    if (airborne && !comfortable) {
       const vx = finite(state.vx, -Math.sin(finite(state.yaw, 0)) * horizontalSpeed);
       const vz = finite(state.vz, -Math.cos(finite(state.yaw, 0)) * horizontalSpeed);
       const velocity = Math.hypot(vx, vz), lead = Math.min(2.2, velocity * .09);
       if (velocity > .001) { target.x += vx / velocity * lead; target.z += vz / velocity * lead; }
-      if (!comfortable) target.y += Math.max(-.35, Math.min(.45, finite(state.verticalSpeed, 0) * .035));
+      target.y += Math.max(-.35, Math.min(.45, finite(state.verticalSpeed, 0) * .035));
     }
     if (!comfortable && state.pointTarget && action.approach>0) {
       // Only a committed destination influences framing. A candidate changing
@@ -173,7 +173,7 @@ export function calculatePlayerCamera(state, { view = 'third', yawOffset = 0, pi
       target.x+=dx/length*lead;target.z+=dz/length*lead;
       target.y+=Math.max(-.25,Math.min(.8,(state.pointTarget.y-origin.y)*.04))*action.approach;
     }
-    target.y-=action.perch*.25;
+    if (!comfortable) target.y-=action.perch*.25;
     // Velocity look-ahead must not put the sight-line origin inside a
     // facade or a raised deck before the regular trailing-camera ray is tested.
     let targetHit = groundHit(bodyTarget, target, groundAt);
@@ -229,7 +229,8 @@ export function createTraversalCameraRig(){
     const rawSpeed=Math.hypot(state.vx||0,state.vz||0,(state.diving ? state.verticalSpeed||0 : 0)*.45);
     speed=snap?rawSpeed:damp(speed,rawSpeed,4.2,h);
     if(position&&!options.lookLocked&&options.view!=='first'&&!snap){
-      const px=state.x+(state.vx||0)*.08,pz=state.z+(state.vz||0)*.08;
+      const anticipation=options.comfortable?0:.08;
+      const px=state.x+(state.vx||0)*anticipation,pz=state.z+(state.vz||0)*anticipation;
       const dx=position.x-px,dz=position.z-pz;
       if(Math.hypot(dx,dz)>1.2){
         const delta=wrapAngle(Math.atan2(dx,dz)-heading);
@@ -329,10 +330,11 @@ export function createVehicleCameraRig() {
   let transition=null, renderedPosition=null, renderedTarget=null, renderedFov=58, renderedLift=0;
   let centering=false,centeringHeading=null,firstHeading=0;
   let followRelease=1;
+  let groundFrameY=null;
   function reset(state, angle=state.yaw||0) {
     heading=wrapAngle(angle);ready=false;position=null;target=null;previousOrigin=null;
     firstHeading=heading;speed=Math.abs(finite(state.speed,0));velocity={x:0,y:0,z:0};
-    activeMode=null;activeView=null;lead=0;transition=null;renderedPosition=null;renderedTarget=null;renderedLift=0;centering=false;centeringHeading=null;followRelease=1;
+    activeMode=null;activeView=null;lead=0;transition=null;renderedPosition=null;renderedTarget=null;renderedLift=0;centering=false;centeringHeading=null;followRelease=1;groundFrameY=null;
   }
   function rotate(delta) { heading=wrapAngle(heading+finite(delta,0));centering=false;centeringHeading=null; }
   function recenter(state) {
@@ -357,6 +359,13 @@ export function createVehicleCameraRig() {
       }
     } else if (!ready||activeMode!==state.mode||teleport) transition=null;
     const snap=!!options.snap||!ready||activeMode!==state.mode||activeView!==view||teleport;
+    // Treads move the feet immediately. In comfort mode carry the eye and aim
+    // together over small grounded steps, without delaying horizontal movement
+    // or changing pitch. Falls, teleports and mode/view switches stay immediate.
+    const previousGroundY=groundFrameY??origin.y;
+    const easeGround=options.comfortable&&state.mode==='walk'&&state.grounded!==false&&
+      (!state.waterMode||state.waterMode==='dry')&&!snap&&previousOrigin&&Math.abs(origin.y-previousOrigin.y)<.5;
+    groundFrameY=easeGround?damp(previousGroundY,origin.y,12,h):origin.y;
     const bodyHeading=finite(state.yaw,0);
     if (!ready) heading=finite(options.heading,heading);
     if (Number.isFinite(options.heading)) heading=wrapAngle(options.heading);
@@ -385,7 +394,7 @@ export function createVehicleCameraRig() {
     const baseFov=finite(options.baseFov,profile.fov+(view==='first'&&state.mode==='roadster'?3:0));
     const desiredFov=baseFov+(options.comfortable?0:profile.widen*speedBlend);
     fov=snap?desiredFov:fov+Math.max(-14*h,Math.min(14*h,damp(fov,desiredFov,4.5,h)-fov));
-    const leadTarget=options.lookLocked?0:profile.lead*speedBlend*Math.sign(finite(state.speed,0));
+    const leadTarget=options.comfortable||options.lookLocked?0:profile.lead*speedBlend*Math.sign(finite(state.speed,0));
     lead=snap?leadTarget:damp(lead,leadTarget,6,h);
     let desired;
     if (view==='first') {
@@ -394,7 +403,13 @@ export function createVehicleCameraRig() {
       // without adding that delay to movement or camera-relative aiming.
       firstHeading=snap?heading:wrapAngle(firstHeading+wrapAngle(heading-firstHeading)*(1-Math.exp(-40*h)));
       desired=calculatePlayerCamera(state,{...options,view,heading:firstHeading,yawOffset:0,pitch});
-      if(state.mode==='walk'&&state.grounded!==false&&!snap&&position){
+      if(easeGround){
+        const original={...desired.position};
+        const eased={...original,y:original.y+groundFrameY-origin.y};
+        const safe=clipCameraSegment(original,eased,options);
+        safe.y=Math.max(safe.y,groundHeight(options.groundAt,safe)+CLEARANCE);
+        desired.position=safe;desired.target.y+=safe.y-original.y;
+      }else if(!options.comfortable&&state.mode==='walk'&&state.grounded!==false&&!snap&&position){
         // The feet land on the true tread. Ease only the eye's vertical travel
         // over the short riser, without delaying horizontal steering or aim.
         const eyeY=damp(position.y,desired.position.y,18,h),dy=eyeY-desired.position.y;
@@ -404,19 +419,19 @@ export function createVehicleCameraRig() {
     } else {
       const bodyTarget={x:origin.x,y:origin.y+profile.aim,z:origin.z};
       const reach=Math.max(3,Math.min(35,finite(options.distance,profile.distance+(options.comfortable?0:profile.pullback*speedBlend))));
-      const look={x:bodyTarget.x-Math.sin(bodyHeading)*lead,y:bodyTarget.y,z:bodyTarget.z-Math.cos(bodyHeading)*lead};
+      const look={x:bodyTarget.x-Math.sin(bodyHeading)*lead,y:groundFrameY+profile.aim,z:bodyTarget.z-Math.cos(bodyHeading)*lead};
       const clearLook=clipCameraSegment(bodyTarget,look,options);
       // Looking above the horizon rotates a walker's optical axis, not the
       // boom into the ground. Keep the eye at chest height or above.
       const boomPitch=state.mode==='walk'?Math.max(0,pitch):pitch;
       const desiredPosition={x:origin.x+Math.sin(heading)*Math.cos(boomPitch)*reach,
-        y:bodyTarget.y+Math.sin(boomPitch)*reach,z:origin.z+Math.cos(heading)*Math.cos(boomPitch)*reach};
+        y:groundFrameY+profile.aim+Math.sin(boomPitch)*reach,z:origin.z+Math.cos(heading)*Math.cos(boomPitch)*reach};
       desiredPosition.y=Math.max(desiredPosition.y,groundHeight(options.groundAt,desiredPosition)+CLEARANCE+.18);
       desired={position:desiredPosition,target:clearLook};
       if (snap) {position={...desired.position};target={...desired.target};velocity={x:0,y:0,z:0};}
       else {
         for (const key of ['x','y','z']) {
-          const carried=origin[key]-previousOrigin[key];
+          const carried=key==='y'?groundFrameY-previousGroundY:origin[key]-previousOrigin[key];
           position[key]+=carried;target[key]+=carried;
           // Keep the flying board responsive during orbit and fast banking,
           // while retaining a stable horizon and carrying translation exactly.
