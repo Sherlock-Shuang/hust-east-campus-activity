@@ -82,7 +82,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   const inputBlocked=()=>suspended||document.hidden||!!document.querySelector('dialog[open]');
   const pointerLock=createPlayerPointerLock({canvas,document,canLock:()=>active&&!disposed&&!inputBlocked(),
     onChange(locked){clearInput();if(!locked)escapeReleaseUntil=performance.now()+300;updateUI();invalidate();},
-    onError(){notify(pointerLock.supported?'暂未锁定鼠标：请在游戏画面内按中键或 L 重试；仍可直接移动鼠标环视。':'当前浏览器不支持鼠标锁定，仍可移动鼠标环视；在 Chrome 中打开此预览可使用锁定。');},
+    onError(){const fallback=comfortableCamera?(motion.state.mode==='spider'?'按住右键拖动视角':'按住鼠标拖动视角'):'移动鼠标环视';notify(pointerLock.supported?`暂未锁定鼠标：请在游戏画面内按中键或 L 重试；仍可${fallback}。`:`当前浏览器不支持鼠标锁定，仍可${fallback}。`);},
   });
   function releaseLookContact(){const previous=drag;drag=null;mouseLook=null;if(previous)try{if(canvas.hasPointerCapture?.(previous.id))canvas.releasePointerCapture(previous.id);}catch{}}
   function clearInput(){spiderRequest=null;if(!suspended)motion.clearActionInputs?.();keys.clear();held.clear();mobileHeld.clear();waterControls?.reset();mobileAxes={forward:0,sideways:0};mobileControls?.reset();pulses.clear();cruise=false;liftTarget=null;landing=false;releaseLookContact();held.delete('mouse-swing');webAudio.setActive(false);}

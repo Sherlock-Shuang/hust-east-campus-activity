@@ -20,8 +20,9 @@ const source=bundled.outputFiles[0].text;
 const settle=async()=>{for(let i=0;i<6;i++)await new Promise(resolve=>setImmediate(resolve));};
 async function fixture(t){
   const html=await readFile(new URL('../../admin.html',import.meta.url),'utf8');
-  const dom=new JSDOM(html,{url:'https://campus.test/admin.html',runScripts:'outside-only'});t.after(()=>dom.window.close());
+  const dom=new JSDOM(html,{url:'https://campus.test/admin.html',runScripts:'outside-only',pretendToBeVisual:true});t.after(()=>dom.window.close());
   const win=dom.window;win.structuredClone=structuredClone;win.setInterval=()=>1;
+  win.matchMedia=()=>({matches:false});
   const at=Date.now();
   const person={id:'visitor-one',nickname:'<img src=x onerror=alert(1)>',joinedAt:at,lastSeenAt:at,online:true,visitedPoints:[{pointId:'point-tasay',label:'过拟合恋人',firstAt:at,lastAt:at}],openedWorks:[{workId:'tasay',openCount:1,readyLevel:'page_opened'}],currentExperiences:[],lastStatus:'returned',attempts:[{id:'a1',workId:'tasay',status:'returned',startedAt:at,endedAt:at,readyLevel:'page_opened'},{id:'a2',workId:'wanyan',status:'failed',startedAt:at,endedAt:at}],events:[{type:'visit',pointId:'point-tasay',at},{type:'returned',status:'returned',workId:'tasay',at},{type:'open_failed',status:'failed',workId:'wanyan',at}]};
   let state=createDefaultLiveState();state.portals=[];
@@ -89,4 +90,28 @@ test('stale activity selection cannot overwrite another host and an explicit syn
   assert.equal(f.writes.length,count);assert.match(f.$('admin-notice').textContent,/其他管理员/);
   f.$('reset-activity-selection').click();assert.equal(f.$('activity-choices').querySelector('input[value="point-wanyan"]').checked,true);
   assert.equal(f.$('activity-choices').querySelector('input[value="point-library"]').checked,false);
+});
+test('script edits copy as plain text and never publish, pause or change activities',async t=>{
+  const f=await fixture(t),panel=f.$('cue-sidebar');let copied;
+  Object.defineProperty(f.win.navigator,'clipboard',{value:{async writeText(text){copied=text;}}});
+  const card=panel.querySelector('[data-cue-id="line-07"]'),input=card.querySelector('textarea');
+  input.value='<img src=x onerror=alert(1)>\n彩排修改';input.dispatchEvent(new f.win.Event('input',{bubbles:true}));
+  card.querySelector('.cue-actions button').click();await settle();
+  assert.equal(copied,input.value);assert.equal(card.querySelector('img'),null);
+  assert.equal(JSON.parse(f.win.localStorage.getItem('hust-activity-script-edits-v1')).edits['line-07'],input.value);
+  assert.equal(card.querySelector('.cue-use'),null,'Codex replies must not fill a campus announcement');
+  assert.equal(panel.querySelector('[data-role="direction"] .cue-use'),null,'stage directions never fill outgoing text');
+  assert.equal(f.writes.length,0);
+  f.$('cue-toggle').click();assert.equal(panel.hidden,true);f.$('cue-toggle').click();assert.equal(panel.hidden,false);
+});
+test('announcement cue fills a retained draft; only the existing publish button writes it',async t=>{
+  const f=await fixture(t);
+  f.$('announcement-title').value='已有标题';f.$('announcement-body').value='已有内容';f.$('tab-portal').click();
+  f.$('cue-sidebar').querySelector('[data-cue-id="line-24"] .cue-use').click();
+  assert.equal(f.$('panel-announcement').hidden,false);assert.equal(f.$('announcement-title').value,'已有标题');
+  assert.equal(f.$('announcement-body').value,'已有内容\n\n欢迎大家探索东校区online');
+  assert.equal(f.writes.length,0);
+  await f.submit('announcement-form');
+  assert.equal(f.writes.length,1);assert.equal(f.state.announcement.body,'已有内容\n\n欢迎大家探索东校区online');
+  assert.equal(f.$('cue-sidebar').querySelector('textarea').disabled,false,'publishing must leave cue editing enabled');
 });

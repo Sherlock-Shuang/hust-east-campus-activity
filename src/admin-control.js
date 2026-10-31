@@ -1,4 +1,6 @@
 import './admin-control.css';
+import './operator-cues.css';
+import { mountCueSidebar } from './operator-cues.js';
 import { geoToLocal } from './geospatial.js';
 import { createLiveMapFrame, getLiveLocationPresets } from './live-locations.js';
 import { ACTIVITY_PHASES, ACTIVITY_WORKS, activityPortals, getTasayPortal, isTasayLinkedPortal, SHE_LOVE_POINT_ID } from './activity-catalog.js';
@@ -8,6 +10,25 @@ import { getC118FloodElapsed } from './c118-flood-state.js';
 import { normalizeC118Screen } from './c118-screen-state.js';
 
 const $ = id => document.getElementById(id);
+const cueSidebar = mountCueSidebar({
+  host: $('cue-sidebar'), toggle: $('cue-toggle'), actionRole: 'announcement', actionLabel: '填入公告',
+  onUse(text) {
+    if ($('announcement-title').disabled) throw new Error('后台正在操作，请稍后再填入。');
+    activateTab('announcement');
+    // Keep any existing draft and use the body field for longer announcements.
+    const title = $('announcement-title'), body = $('announcement-body');
+    if (!title.value.trim() && !body.value.trim() && text.length <= title.maxLength) title.value = text;
+    else {
+      const next = [body.value, text].filter(Boolean).join('\n\n');
+      if (next.length > body.maxLength) throw new Error('公告内容过长，请先编辑为 800 字以内。');
+      if (!title.value.trim()) title.value = '活动公告';
+      body.value = next;
+    }
+    previewAnnouncement();
+    title.focus();
+    return '已填入公告草稿，请核对后点击「发布公告」。';
+  },
+});
 let csrfToken = '', snapshot = null, busy = false, loggedIn = false, serverOffset = 0;
 let presets = [], mapReady = false, mapView = null, defaultMapView = null, pollInFlight = false;
 let pauseMessageDirty = false, pauseMessageBase = '';
@@ -39,7 +60,7 @@ function connection(online) {
 }
 function setBusy(value) {
   busy = value;
-  document.querySelectorAll('#dashboard button, #dashboard input, #dashboard textarea, #dashboard select').forEach(el => { el.disabled = value; });
+  document.querySelectorAll('#dashboard button, #dashboard input, #dashboard textarea, #dashboard select').forEach(el => { if (!el.closest('.cue-sidebar') && el.id !== 'cue-toggle') el.disabled = value; });
   renderSkyQr();renderC118Flood();renderC118Screen();renderActivityChoices();syncLinkedPortalControls();
 }
 function renderC118Screen(){
@@ -97,6 +118,7 @@ function showLogin(message = '') {
 }
 function showDashboard() {
   loggedIn = true; $('login-screen').hidden = true; $('dashboard').hidden = false;
+  cueSidebar?.resize();
   skyQrReady = false; renderSkyQr();renderC118Flood();renderC118Screen();
   $('admin-password').value = '';
 }
