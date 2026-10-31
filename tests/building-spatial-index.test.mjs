@@ -48,6 +48,6 @@ test('large footprints and edge touching are retained without unbounded cell con
 test('six modes and camera traces retain pre-index behavior, including long frames and held casts',()=>{
   const baseline=JSON.parse(readFileSync(new URL('./fixtures/building-spatial-baseline.json',import.meta.url),'utf8'));
   const world=spatialWorld(),motion=motionReplay(createPlayerMotion,world);
-  for(const mode of Object.keys(motion))assert.equal(digest(motion[mode]),baseline.motion[mode],`${mode} deterministic fixed-step behavior unchanged`);
+  for(const mode of Object.keys(motion))assert.equal(digest(motion[mode].map(({waterMode,waterY,surfRemaining,surfWindowRemaining,...legacy})=>legacy)),baseline.motion[mode],`${mode} deterministic fixed-step behavior unchanged`);
   assert.equal(digest(cameraReplay(calculatePlayerCamera,constrainPlayerCamera,world)),baseline.camera,'camera clipping including inner courts/overhead structures unchanged');
 });

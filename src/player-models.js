@@ -209,6 +209,20 @@ export function createPlayerModels(THREE){
     if(mode==='walk'||mode==='scooter'){
       const agent={...character,speed:mode==='walk'?walkingAnimationSpeed(speed):speed,progress:mode==='walk'?walkProgress:finite(state.distance),steeringAngle:finite(state.steeringAngle),lean:finite(state.lean),footDown:clamp(1-speed/.75,0,1)};
       const pose=library.samplePose(agent,mode);
+      const wet=mode==='walk'&&state.waterMode&&state.waterMode!=='dry';
+      walker.rotation.y=wet&&state.waterMode!=='swim'?Math.PI/2:0;
+      if(wet){
+        const boarding=state.waterMode!=='swim',phase=finite(state.elapsed)*3;
+        pose.pitch=boarding?-.12:-.20;
+        for(const side of[-1,1]){
+          const key=side<0?'L':'R',stroke=Math.sin(phase+side*Math.PI/2);
+          pose.points[`hand${key}`]=[side*(boarding?.52:.42),boarding?1.12:1.1+stroke*.18,boarding?.08:stroke*.4-.2];
+          pose.points[`elbow${key}`]=[side*.36,1.20,boarding?.04:stroke*.2];
+          pose.points[`knee${key}`]=[side*(boarding?.20:.12),.48,boarding?-.10:stroke*.12];
+          pose.points[`ankle${key}`]=[side*(boarding?.34:.14),.07,boarding?.10:-stroke*.16];
+        }
+      }
+
       for(const {mesh,part}of mode==='walk'?walkingParts:ridingParts){library.partMatrix(part,agent,pose,mesh.matrix);mesh.matrixWorldNeedsUpdate=true;}
     }
     const power=clamp(finite(state.rotorPower,mode==='helicopter'?1:0),0,1);

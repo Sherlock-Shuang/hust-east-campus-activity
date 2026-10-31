@@ -32,7 +32,7 @@ function fixture(t,originalFog=new THREE.Fog('#cbd6d6',480,2900)){
     controller.dispose();effect.dispose();
     if(previous)Object.defineProperty(globalThis,'document',previous);else delete globalThis.document;
   });
-  const update=(input={},options={})=>{effect.update({event,now:atSeconds(30),...input});controller.update(options);};
+  const update=(input={},options={})=>{effect.update({event,now:atSeconds(60),...input});controller.update(options);};
   return {root,scene,camera,effect,controller,wash,notice,originalFog,originalValues,update};
 }
 function assertOriginal(f){
@@ -51,7 +51,7 @@ test('mounting and repeated inactive updates leave the original scene fog untouc
 });
 
 test('the approaching crest adds mist before inundation and restores it when the crest is distant',t=>{
-  const f=fixture(t);f.camera.position.set(1400,1.8,1000);
+  const f=fixture(t);f.camera.position.set(1400,1.8,1950);
   f.update({now:event.startAt});
   assert.equal(f.effect.sampleAt(f.camera.position).wet,false,'this checks the approaching crest, not underwater fog');
   assert.notEqual(f.scene.fog,f.originalFog);
@@ -72,8 +72,8 @@ test('leaving water, hiding the campus, stopping the event and disposing the eff
     assert.equal(f.wash.dataset.submerged,'true');assert.equal(f.wash.hidden,false);
     assert(f.scene.fog.near<f.originalFog.near&&f.scene.fog.far<f.originalFog.far);
     if(transition==='leave-water')f.camera.position.y=30;
-    if(transition==='hide-campus')f.effect.update({event,now:atSeconds(31),visible:false});
-    if(transition==='stop-event')f.effect.update({event:null,now:atSeconds(31)});
+    if(transition==='hide-campus')f.effect.update({event,now:atSeconds(61),visible:false});
+    if(transition==='stop-event')f.effect.update({event:null,now:atSeconds(61)});
     if(transition==='dispose-effect')f.effect.dispose();
     f.controller.update();
     assertOriginal(f);assert.equal(f.wash.hidden,true,transition);
@@ -83,29 +83,29 @@ test('leaving water, hiding the campus, stopping the event and disposing the eff
 
 test('authoritative pause freezes fog and wash while resume advances their shared water state',t=>{
   const f=fixture(t);
-  const paused=reconcileC118Flood({c118Flood:event},{c118Flood:event,paused:true},atSeconds(30.2));
-  f.update({event:paused,now:atSeconds(31),paused:true},{paused:true});
+  const paused=reconcileC118Flood({c118Flood:event},{c118Flood:event,paused:true},atSeconds(60.2));
+  f.update({event:paused,now:atSeconds(61),paused:true},{paused:true});
   const fog=f.scene.fog,values=fogValues(fog),opacity=f.wash.style.opacity,water=f.effect.sampleAt(f.camera.position);
   assert.notEqual(fog,f.originalFog);assert.equal(f.notice.hidden,true);
-  for(const seconds of [32,100,1000]){
+  for(const seconds of [62,100,1000]){
     f.update({event:paused,now:atSeconds(seconds),paused:true},{paused:true});
     assert.equal(f.scene.fog,fog);assert.deepEqual(fogValues(f.scene.fog),values);
     assert.equal(f.wash.style.opacity,opacity);assert.deepEqual(f.effect.sampleAt(f.camera.position),water);
   }
   const resumed=reconcileC118Flood({c118Flood:paused},{c118Flood:paused,paused:false},atSeconds(1000));
   f.update({event:resumed,now:atSeconds(1000.8)});
-  assert.equal(f.notice.hidden,false);assert(f.effect.sample.elapsed>30.2);
+  assert.equal(f.notice.hidden,false);assert(f.effect.sample.elapsed>60.2);
   assert.notEqual(f.wash.style.opacity,opacity,'the fog/wash continues from the resumed event, not a separate animation clock');
   f.update({event:null},{paused:true});assertOriginal(f);assert.equal(f.wash.hidden,true,'a stop still clears the scene during a global pause');
 });
 
 test('reduced motion skips the crest impact flash while preserving underwater visibility cues',t=>{
-  const f=fixture(t);f.camera.position.set(1400,1.8,1000);
+  const f=fixture(t);f.camera.position.set(1400,1.8,1950);
   f.update({now:event.startAt});assert.notEqual(f.scene.fog,f.originalFog);assert.equal(f.wash.hidden,false);
   f.update({now:event.startAt,reducedMotion:true},{reducedMotion:true});
   assertOriginal(f);assert.equal(f.wash.hidden,true);
   f.camera.position.set(1400,1.8,0);
-  f.update({now:atSeconds(30),reducedMotion:true},{reducedMotion:true});
+  f.update({now:atSeconds(60),reducedMotion:true},{reducedMotion:true});
   assert.notEqual(f.scene.fog,f.originalFog);assert.equal(f.wash.hidden,false);
   assert.equal(f.wash.dataset.submerged,'true');assert(Number(f.wash.style.opacity)>0);
 });
@@ -134,8 +134,8 @@ test('a newer fog owner survives a direct stop or notice disposal',t=>{
 test('a newer fog owner is not lost after another active update and subsequent restoration',t=>{
   const f=fixture(t);f.update();
   const replacement=new THREE.Fog('#403f58',7,410),values=fogValues(replacement);f.scene.fog=replacement;
-  f.update({now:atSeconds(31)});
-  f.update({event:null,now:atSeconds(32)});
+  f.update({now:atSeconds(61)});
+  f.update({event:null,now:atSeconds(62)});
   assert.equal(f.scene.fog,replacement,'restore must preserve the newer module configuration after continued tsunami updates');
   assert.deepEqual(fogValues(replacement),values);
   assert.deepEqual(fogValues(f.originalFog),f.originalValues);

@@ -57,6 +57,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     if(!client||disposed)return false;
     const changed=campusTsunami.update({event:client.state.c118Flood,now:client.now(),
       visible:!opened&&!document.hidden&&!!audienceUI?.registered,paused:client.state.paused,reducedMotion:reduced?.matches});
+    getPlayer()?.setFloodState?.(client.state.c118Flood&&campusTsunami.sample?{id:client.state.c118Flood.id,...campusTsunami.sample,paused:client.state.paused,reducedMotion:!!reduced?.matches}:null);
     tsunamiNotice.update({paused:client.state.paused,reducedMotion:reduced?.matches});
     root.dataset.campusTsunami=campusTsunami.active?campusTsunami.sample.phase:'hidden';
     return changed;

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as THREE from 'three';
+import {sampleCampusTsunami} from '../src/campus-tsunami.js';
 import {createPlayerExperience} from '../src/player-experience.js';
 
 // Only the DOM surface is faked. All registered input handlers, player motion,
@@ -1125,4 +1126,38 @@ test('middle mouse toggles pointer lock without swinging, zooming or changing mo
   assert.equal(f.experience.captureActivityPose().distance,before.distance);
   f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4});assert.equal(f.doc.pointerLockElement,null);
   f.experience.setSuspended(true);f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4});assert.equal(f.doc.pointerLockElement,null);
+});
+
+
+function outdoorWaterFixture(t,{coarsePointer=false,age=65}={}){
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer});
+  f.experience.enterAt({x:0,z:0,yaw:Math.PI/2});
+  const event={id:'outdoor-ui',startAt:10000,pausedAt:null,pausedMs:0};
+  const at=elapsed=>f.experience.setFloodState({id:event.id,...sampleCampusTsunami(event,event.startAt+elapsed*1000)});
+  const run=seconds=>{for(let i=0;i<Math.round(seconds*60);i++){at(age);f.tick(1/60);age+=1/60;}};
+  at(age);const root=f.el('viewport').children.find(c=>c.className==='campus-water-controls');
+  return {...f,root,action:name=>root.children.find(c=>c.dataset.waterAction===name),run};
+}
+test('the rendered surf action catches a wave and moves forward for five seconds irrespective of the initial view',t=>{
+  const f=outdoorWaterFixture(t,{age:45.8});f.experience.state.y=1.2;f.run(1/60);
+  assert.equal(f.root.hidden,false);assert.equal(f.action('surf').hidden,false);
+  f.action('surf').emit('click');const start=f.experience.state.z;
+  f.run(4.8);assert.equal(f.experience.state.waterMode,'surf');assert.ok(f.experience.state.z<start-239);
+  assert.ok(Math.abs(f.experience.state.x)<1,'initial sideways camera does not turn the wave direction');
+  f.run(.3);assert.equal(f.experience.state.waterMode,'board');assert.equal(f.action('surf').hidden,true);
+  assert.equal(f.action('board').textContent,'下板');
+  f.action('board').emit('click');assert.equal(f.experience.state.waterMode,'swim');
+});
+test('desktop and touch water inputs dive, surface and clear held controls on suspension',t=>{
+  const f=outdoorWaterFixture(t,{coarsePointer:true});f.run(3);
+  assert.equal(f.experience.state.waterMode,'swim');const start=f.experience.state.y;
+  f.key('KeyC');f.run(.8);f.key('KeyC','keyup');assert.ok(f.experience.state.y<start-2.5);
+  const submerged=f.experience.state.y;f.key('Space');f.run(.5);f.key('Space','keyup');assert.ok(f.experience.state.y>submerged+1.5);
+  f.action('down').emit('pointerdown',{pointerType:'touch'});f.run(.5);f.action('down').emit('pointercancel');
+  const low=f.experience.state.y;f.action('up').emit('pointerdown',{pointerType:'touch'});f.run(.5);assert.ok(f.experience.state.y>low+1.5);
+  f.experience.setSuspended(true);assert.equal(f.root.hidden,true);
+  const pose={...f.experience.state};f.run(.5);assert.equal(f.experience.state.y,pose.y);
+  f.experience.setSuspended(false);f.run(.2);assert.equal(f.root.hidden,false);
+  f.experience.setFloodState(null);assert.equal(f.root.hidden,true);assert.equal(f.experience.state.waterMode,'dry');
+  assert.equal(f.scene.getObjectByName('campus-surfboards').visible,false);
 });
