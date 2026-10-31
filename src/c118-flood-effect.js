@@ -1,6 +1,4 @@
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {CAMPUS_FLOOD_WATER,CAMPUS_FLOOD_WAVES,sampleCampusFloodwater} from './campus-floodwater.js';
-import {campusTsunamiFront} from './campus-tsunami-timeline.js';
 import {optoFloodRegistration,optoFloodPatches} from './opto-flood-registration.js';
 
 /** Deterministic, time-authored disaster staging, not a hydraulic simulation.
@@ -12,6 +10,15 @@ const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
 const pulse=(x,width)=>Math.exp(-(x*x)/(width*width));
 const meshBudgets=[[32,48,16,8,128],[48,72,28,12,320],[80,120,44,20,640]];
 const safeLevel=level=>Math.max(0,Math.min(2,Math.floor(Number.isFinite(level)?level:2)));
+
+// The room is an authored performance: it starts at the shared event time,
+// but does not wait for the kilometre-scale exterior wave to reach the building.
+// CPU buoyancy and every water/spray shader use this same accelerated clock.
+export const C118_INDOOR_FLOOD_TIME_SCALE=2;
+export function c118IndoorFloodTime(elapsed){
+  const time=elapsed*C118_INDOOR_FLOOD_TIME_SCALE;
+  return Number.isFinite(elapsed)&&Number.isFinite(time)?time:-1;
+}
 
 // One spectrum feeds CPU height queries and generated GLSL. Each component is
 // [amplitude, x frequency, z frequency, time frequency, phase] in local metres.
@@ -33,7 +40,7 @@ function configuration(plan){
 }
 
 function sample(c,position,elapsed,rippleScale=1){
-  const t=Number.isFinite(elapsed)?elapsed:-1;
+  const t=c118IndoorFloodTime(elapsed);
   if(t<1.5)return {waterY:c.floorY-1,impact:0,depth:0,submerged:false,phase:'waiting',currentX:0,currentZ:0};
   const level=c.floorY-.35+(c.peak-c.floorY+.35)*Math.pow(clamp((t-2.8)/15.2),.85);
   const turbulence=smooth(1.5,4,t);
@@ -54,35 +61,20 @@ function sample(c,position,elapsed,rippleScale=1){
   currentX+=turbulence*(.95*Math.sin(z*.3-t*.85)+.45*Math.cos(x*.45+z*.13+t*.4));
   currentZ+=turbulence*(.8*Math.cos(x*.32+t*.72)+.38*Math.sin(z*.4-t*.6));
   height=Math.min(c.peak+.55,height);
-  if(c.registration){
-    const world=c.registration.toCampus(position);
-    const field=sampleCampusFloodwater(world,{elapsed:t,front:campusTsunamiFront(t),reducedMotion:rippleScale<1});
-    // Fill the deeper hall as the same advancing front reaches the building.
-    height=field.waterY+c.registration.datum*smooth(0,.08,field.fill);
-  }
   const depth=Math.max(0,height-(position.y??c.floorY+1.65));
   return {waterY:height,impact,depth,submerged:depth>.02,phase:t<8?'rush':t<18?'rising':'flooded',currentX:clamp(currentX,-2.6,2.6),currentZ};
 }
 
 export function sampleC118Flood(plan,position,elapsed,{reducedMotion=false}={}){return sample(configuration(plan),position,elapsed,reducedMotion?.35:1);}
 
-const campusSpectrum=CAMPUS_FLOOD_WAVES.map(([a,x,z,t,p])=>`${glslFloat(a)}*sin(w.x*${glslFloat(x)}+w.y*${glslFloat(z)}+uCampusTime*${glslFloat(t)}+${glslFloat(p)})`).join('+');
 const waterField=/* glsl */`
 uniform float uTime;
 uniform float uFloor;
 uniform float uPeak;
 uniform float uRipple;
 uniform vec4 uDoors[4];
-uniform float uConnected,uDatum,uCampusFront,uCampusTime,uCampusRipple;
-uniform vec2 uWorldOrigin,uWorldX,uWorldZ;
 float saturate1(float x){return clamp(x,0.,1.);}
 float waterHeight(vec2 p){
-  if(uConnected>.5){
-    vec2 w=uWorldOrigin+uWorldX*p.x+uWorldZ*p.y;
-    float u=(w.x-${glslFloat(CAMPUS_FLOOD_WATER.x)})/${glslFloat(CAMPUS_FLOOD_WATER.width/2)};
-    float fill=smoothstep(0.,${glslFloat(CAMPUS_FLOOD_WATER.fillDistance)},w.y-uCampusFront-u*u*${glslFloat(CAMPUS_FLOOD_WATER.arcDepth)});
-    return -1.+${glslFloat(CAMPUS_FLOOD_WATER.level+1)}*fill+fill*uCampusRipple*(${campusSpectrum})+uDatum*smoothstep(0.,.08,fill);
-  }
   float t=uTime;
   float level=uFloor-.35+(uPeak-uFloor+.35)*pow(saturate1((t-2.8)/15.2),.85);
   for(int i=0;i<4;i++){
@@ -123,10 +115,8 @@ export function createC118FloodEffect(THREE,{plan,level=2}){
   const geometries=new Set(),materials=[];let disposed=false,rippleScale=1,lastElapsed=-1,qualityLevel=safeLevel(level);
   const [columns,rows,jetColumns,jetRows,particles]=meshBudgets[qualityLevel];
   const ownGeometry=g=>(geometries.add(g),g),ownMaterial=m=>(materials.push(m),m);
-  const registration=c.registration,vec=p=>new THREE.Vector2(p?.x||0,p?.z||0);
-  const uniforms={uConnected:{value:registration?1:0},uDatum:{value:registration?.datum||0},
-    uWorldOrigin:{value:vec(registration?.origin)},uWorldX:{value:vec(registration?.xAxis)},uWorldZ:{value:vec(registration?.zAxis)},
-    uCampusFront:{value:campusTsunamiFront(0)},uCampusTime:{value:0},uCampusRipple:{value:1},uTime:{value:0},uFloor:{value:c.floorY},uPeak:{value:c.peak},uRipple:{value:1},
+  const registration=c.registration;
+  const uniforms={uTime:{value:0},uFloor:{value:c.floorY},uPeak:{value:c.peak},uRipple:{value:1},
     uRoom:{value:new THREE.Vector4(c.width/2,c.depth/2,c.floorY,c.floorY+plan.config.height)},
     uDoors:{value:c.doors.map(d=>new THREE.Vector4(d.x,d.z,d.y,d.delay))}};
   function surfaceGeometry(columns,rows){
@@ -239,7 +229,7 @@ export function createC118FloodEffect(THREE,{plan,level=2}){
         #include <colorspace_fragment>
       }`}));
   const spray=new THREE.Points(sprayGeometry,sprayMaterial);spray.name='c118-door-spray';spray.frustumCulled=false;spray.renderOrder=30;group.add(spray);
-  group.userData={type:'authored-tsunami',peakWaterLevel:c.peak,doors:c.doors.map(d=>({...d})),additionalDrawCalls:6,qualityLevel};
+  group.userData={type:'authored-tsunami',peakWaterLevel:c.peak,doors:c.doors.map(d=>({...d})),additionalDrawCalls:6,qualityLevel,timeScale:C118_INDOOR_FLOOD_TIME_SCALE};
   function setPerformanceBudget({level=2}={}){
     if(disposed)return;
     const next=safeLevel(level);
@@ -261,10 +251,9 @@ export function createC118FloodEffect(THREE,{plan,level=2}){
     setPerformanceBudget,
     update({elapsed,active=true,reducedMotion=false}){
       if(disposed)return;lastElapsed=Number.isFinite(elapsed)?elapsed:-1;
-      group.visible=Boolean(active)&&lastElapsed>=1.5;
-      rippleScale=reducedMotion ? .35 : 1;uniforms.uRipple.value=rippleScale;uniforms.uTime.value=Math.max(0,lastElapsed);
-      uniforms.uCampusFront.value=campusTsunamiFront(lastElapsed);
-      uniforms.uCampusTime.value=reducedMotion?0:lastElapsed;uniforms.uCampusRipple.value=reducedMotion?.25:1;
+      const time=c118IndoorFloodTime(lastElapsed);
+      group.visible=Boolean(active)&&time>=1.5;
+      rippleScale=reducedMotion ? .35 : 1;uniforms.uRipple.value=rippleScale;uniforms.uTime.value=Math.max(0,time);
       spray.visible=!reducedMotion;
     },
     sampleAt(position,elapsed=lastElapsed){return sample(c,position,elapsed,rippleScale);},

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {planOptoC118Interior} from '../src/opto-c118-interior.js';
 import {optoFloodRegistration,optoFloodPatches} from '../src/opto-flood-registration.js';
-import {sampleC118Flood,createC118FloodEffect} from '../src/c118-flood-effect.js';
+import {sampleC118Flood,createC118FloodEffect,c118IndoorFloodTime} from '../src/c118-flood-effect.js';
 import {sampleCampusFloodwater} from '../src/campus-floodwater.js';
 import {campusTsunamiFront} from '../src/campus-tsunami-timeline.js';
 import {createC118Swimming} from '../src/c118-swimming.js';
@@ -11,15 +11,14 @@ import {createC118Swimming} from '../src/c118-swimming.js';
 const plan=planOptoC118Interior({withFoyer:true}),f=plan.foyer,registration=optoFloodRegistration(plan);
 const portals=[{x:0,z:f.front},{x:f.end,z:(f.near+f.far)/2}];
 
-test('C2 and C1 wet door thresholds have the same water height as their campus coordinates, including late joins and calm mode',()=>{
-  for(const p of portals)for(const elapsed of[2,10,25,30,35,40,300])for(const reducedMotion of[false,true]){
-    const world=registration.toCampus({...p,y:f.y+1.65});
+test('the interior fills in nine seconds without waiting for the distant outdoor wave, while portal registration stays unchanged',()=>{
+  for(const p of portals)for(const reducedMotion of[false,true]){
+    const world=registration.toCampus({...p,y:f.y+1.65}),elapsed=9;
     const campus=sampleCampusFloodwater(world,{elapsed,front:campusTsunamiFront(elapsed),reducedMotion});
     const interior=sampleC118Flood(plan,{...p,y:f.y+1.65},elapsed,{reducedMotion});
-    if(campus.waterY>0){
-      assert.ok(Math.abs(interior.waterY-f.y-campus.waterY)<1e-10);
-      assert.equal(interior.submerged,campus.depth>.02);
-    }
+    assert.equal(campus.wet,false,'the exterior front has not reached either real door');
+    assert.ok(interior.waterY>f.y+1.7,'the interior already reaches swimming depth');
+    assert.equal(interior.phase,'flooded');
   }
   // C2 is on the eastern inner courtyard; C1 opens toward the west approach.
   assert.ok(Math.abs(registration.toCampus(portals[0]).x-646.194)<.02);
@@ -38,10 +37,34 @@ test('water geometry covers both outdoor views, foyer, corridor and hall without
   assert.ok(water.geometry.boundingBox.min.x<=f.end-11);
   assert.ok(water.geometry.boundingBox.max.z>=f.front+11);
   let meshes=0;effect.group.traverse(o=>{if(o.geometry)meshes++;});assert.equal(meshes,6);
-  // Confirm the connected branch receives the actual same clock and affine frame.
-  assert.equal(water.material.uniforms.uCampusFront.value,campusTsunamiFront(3));
-  assert.equal(water.material.uniforms.uDatum.value,f.y);
+  // Geometry remains registered to the whole building, but all room surfaces
+  // now use the same independent fast performance clock as swimming.
+  assert.equal(water.material.uniforms.uTime.value,c118IndoorFloodTime(3));
+  assert.equal(water.material.uniforms.uCampusFront,undefined);
   effect.dispose();
+});
+
+test('late joins, held elapsed times and event restarts seek the same indoor state without replay or allocation',()=>{
+  const a=createC118FloodEffect(THREE,{plan}),b=createC118FloodEffect(THREE,{plan});
+  const positions=[{x:0,z:0,y:1.65},{x:0,z:f.back+3,y:f.y+1.65},{x:-30,z:(f.near+f.far)/2,y:f.y+1.65}];
+  try{
+    a.update({active:true,elapsed:1});a.update({active:true,elapsed:10});
+    b.update({active:true,elapsed:10});
+    const water=a.group.getObjectByName('c118-rising-water'),geometry=water.geometry;
+    for(const position of positions){
+      assert.deepEqual(a.sampleAt(position),b.sampleAt(position));
+      assert.ok(a.sampleAt(position).waterY>position.y-.5,'hall, foyer and corridor are swimmable');
+    }
+    const held=positions.map(position=>a.sampleAt(position));
+    for(let i=0;i<3;i++)a.update({active:true,elapsed:10});
+    assert.deepEqual(positions.map(position=>a.sampleAt(position)),held,'holding the shared elapsed freezes the fast water too');
+    a.update({active:false,elapsed:0});assert.equal(a.group.visible,false);
+    a.update({active:true,elapsed:-3});assert.equal(a.group.visible,false);
+    assert.ok(positions.every(position=>a.sampleAt(position).depth===0));
+    a.update({active:true,elapsed:1});assert.equal(a.group.visible,true);
+    assert.equal(water.geometry,geometry,'restarting reuses the complete building water mesh');
+    assert.equal(water.material.uniforms.uTime.value,2);
+  }finally{a.dispose();b.dispose();}
 });
 
 // Follow waypoints using ordinary controls while counteracting current and
@@ -71,15 +94,21 @@ test('a swimmer can enter C118 through a rear door, return to the foyer and leav
   assert.equal(swim.state.exitDoorId,'opto-c2');
 });
 
-test('rising swimmers are held beneath corridor ceilings and cannot escape over C2 door lintels',()=>{
+test('rising swimmers stay under corridor ceilings and can leave C2 only within its actual door aperture',()=>{
   for(const p of[{x:-30,z:(f.near+f.far)/2},{x:0,z:f.front-.5}]){
     const swim=createC118Swimming(plan);swim.enter({...p,y:f.y+(p.x===0?4:1.65)});
     for(let i=0;i<600;i++){
       const w=sampleC118Flood(plan,swim.state,50);
       swim.step(1/120,{elapsed:50,vertical:1,moveX:-w.currentX*.7/2.7,moveZ:p.x===0?1:-w.currentZ*.7/2.7});
     }
-    assert.equal(swim.state.exitDoorId,null);
     assert.ok(swim.state.y+.17<=f.y+(p.x===0?f.height+.7:3.25));
-    if(p.x===0)assert.ok(swim.state.z<f.front);
+    if(p.x===0){
+      // The fast authored high water is lower than the old outdoor-connected
+      // flood. A swimmer now fits under C2's real lintel instead of being held
+      // above it by a 13 m outdoor water level.
+      assert.equal(swim.state.exitDoorId,'opto-c2');
+      assert.ok(swim.state.y-.65>=f.y-.004);
+      assert.ok(swim.state.y+.17<=f.y+3.16);
+    }else assert.equal(swim.state.exitDoorId,null);
   }
 });

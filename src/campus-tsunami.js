@@ -284,16 +284,16 @@ export function createCampusTsunami({THREE,scene,quality='desktop',level}){
     get sample(){return lastSample;},
     get active(){return group.visible&&!disposed;},
     sampleAt(position){return group.visible&&!disposed&&water?water.sampleAt(position):{wet:false,depth:0,waterY:-1,fill:0};},
-    update({event,now,visible=true,paused=false,reducedMotion=false}){
+    update({event,now,visible=true,paused=false,locallyPaused=false,reducedMotion=false}){
       if(disposed)return false;
       let sample=sampleCampusTsunami(event,now);
       const wasVisible=group.visible;group.visible=!!sample&&visible;
       if(!sample){lastSample=null;lastId=null;lastTime=null;water?.update({active:false,elapsed:0,front:4200});return wasVisible;}
       if(!group.visible)return wasVisible;
       build();
-      // A local pause awaiting the server's reconciliation freezes the same
-      // world-space surface; resume/late join seeks the authoritative clock.
-      if(paused&&event.pausedAt==null&&lastId===event.id&&lastSample)sample=lastSample;
+      // A player's pause retains its frozen frame even when the host pause
+      // acknowledgement arrives later. Continuing seeks the shared clock.
+      if((locallyPaused||(paused&&event.pausedAt==null))&&lastId===event.id&&lastSample)sample=lastSample;
       const time=reducedMotion?0:sample.elapsed;
       let changed=qualityDirty||!wasVisible||lastId!==event.id||lastTime!==time||lastReduced!==!!reducedMotion||lastSample?.elapsed!==sample.elapsed;
       changed=paintSample(sample,time,reducedMotion)||changed;qualityDirty=false;

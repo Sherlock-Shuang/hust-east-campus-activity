@@ -7,7 +7,7 @@ import {createC118CodexScreen} from './c118-codex-screen.js';
 import {createC118VideoScreen} from './c118-video-screen.js';
 import {createC118ActivitySync} from './c118-activity-sync.js';
 import {normalizeC118Flood,getC118FloodElapsed} from './c118-flood-state.js';
-import {createC118FloodEffect} from './c118-flood-effect.js';
+import {createC118FloodEffect,c118IndoorFloodTime} from './c118-flood-effect.js';
 import {createC118FloodSensory} from './c118-flood-sensory.js';
 import {normalizeC118Screen} from './c118-screen-state.js';
 import {createC118Seating,c118SeatedFov,c118CinemaFov} from './c118-seating.js';
@@ -303,7 +303,8 @@ if(!disposed)try{
     if(scene.fog)underwaterFog.density=Math.min(.045,.018+depth*.004);
     floodStatus.hidden=!floodEvent;
     if(floodEvent){
-      const message=floodElapsed<0?'门外传来低沉的轰鸣…':floodElapsed<3?'海浪正在冲破门口':floodElapsed<10?'海水猛烈涌入大楼':floodElapsed<18?'水位正在迅速上涨':'急流持续翻涌';
+      const indoorTime=c118IndoorFloodTime(floodElapsed);
+      const message=floodElapsed<0?'门外传来低沉的轰鸣…':indoorTime<3?'海浪正在冲破门口':indoorTime<10?'海水猛烈涌入大楼':indoorTime<18?'水位正在迅速上涨':'急流持续翻涌';
       if(floodStatus.firstElementChild.textContent!==message)floodStatus.firstElementChild.textContent=message;
       floodStatus.lastElementChild.textContent=swimming.state.active?'WASD 游动 · 空格上浮 · C 下潜':'点击画面开启音效 · 海水上涨后可游泳';
     }

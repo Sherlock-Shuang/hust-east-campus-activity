@@ -12,6 +12,9 @@ import {nearbyInterior,crossedInteriorDoor,interiorReturnSnapshot,interiorExitEn
 import {createActivityBridgeMessage} from './activity-bridge-state.js';
 import {createCampusTsunami,mountCampusTsunamiNotice} from './campus-tsunami.js';
 import {campusEffectBudget} from './campus-effect-budget.js';
+import {getC118FloodElapsed} from './c118-flood-state.js';
+import {createCivilizationPause,CIVILIZATION_PAUSE_MESSAGE,CIVILIZATION_CONTINUE_LABEL} from './civilization-pause.js';
+import './civilization-pause.css';
 import './live-experience.css';
 import './campus-tsunami.css';
 
@@ -22,6 +25,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     <div class="live-connection" role="status">正在连接活动</div>
     <div class="live-marker-labels" aria-label="活动地点"></div>
     <div class="live-pause" tabindex="-1" hidden><div class="live-pause-symbol" aria-hidden="true"><i></i><i></i></div><span>校园暂时静止</span><p></p><small>请留意活动公告，恢复后可继续探索</small></div>
+    <section class="civilization-pause" role="dialog" aria-modal="true" aria-labelledby="civilization-pause-message" hidden><p id="civilization-pause-message">${CIVILIZATION_PAUSE_MESSAGE}</p><button type="button">${CIVILIZATION_CONTINUE_LABEL}</button></section>
     <section class="live-announcement" role="status" aria-live="polite" aria-atomic="true" hidden></section>
     <button class="live-portal-prompt" hidden><span>体验入口</span><strong></strong><small>Enter 进入</small></button>
     <section class="live-portal-view" aria-label="体验程序" hidden><div class="live-portal-bar"><span></span><small>校园位置已保留</small><button type="button">返回校园</button></div><div class="live-portal-loading" role="status" hidden></div><div class="live-portal-frame"></div></section>`;
@@ -41,6 +45,9 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   }});
   const projected=new THREE.Vector3();
   const reduced=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+  let civilizationStorage=null;try{civilizationStorage=window.sessionStorage;}catch{}
+  const civilization=createCivilizationPause({storage:civilizationStorage});
+  const civilizationPanel=$('.civilization-pause'),civilizationContinue=civilizationPanel.querySelector('button');
   const campusTsunami=createCampusTsunami({THREE,scene,quality:tsunamiQuality});
   const tsunamiNotice=mountCampusTsunamiNotice({THREE,root,camera,effect:campusTsunami,scene});
   let visualBudget=campusEffectBudget(),lastForeground='';
@@ -58,19 +65,35 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   }
   function updateTsunami(){
     if(!client||disposed)return false;
+    const wasPaused=civilization.active,player=getPlayer();
+    civilization.update({eventId:client.state.c118Flood?.id,elapsed:getC118FloodElapsed(client.state.c118Flood,client.now()),
+      position:player?.state,outdoors:!opened,eligible:!!player?.active&&!!audienceUI?.registered&&!document.hidden,hostPaused:client.state.paused});
+    civilizationPanel.hidden=!civilization.active;civilizationPanel.inert=!!client.state.paused;
+    civilizationContinue.disabled=!!client.state.paused;
+    root.classList.toggle('is-civilization-paused',civilization.active);
+    root.dataset.civilizationPaused=String(civilization.active);
+    const pauseChanged=wasPaused!==civilization.active;
+    if(pauseChanged){updateFrozen();bridge();invalidate();if(civilization.active)civilizationContinue.focus({preventScroll:true});}
     const changed=campusTsunami.update({event:client.state.c118Flood,now:client.now(),
-      visible:!opened&&!document.hidden&&!!audienceUI?.registered,paused:client.state.paused,reducedMotion:reduced?.matches});
-    const flood=client.state.c118Flood&&campusTsunami.sample?{id:client.state.c118Flood.id,...campusTsunami.sample,paused:client.state.paused,reducedMotion:!!reduced?.matches}:null;
+      visible:!opened&&!document.hidden&&!!audienceUI?.registered,paused:client.state.paused,locallyPaused:civilization.active,reducedMotion:reduced?.matches});
+    const flood=client.state.c118Flood&&campusTsunami.sample?{id:client.state.c118Flood.id,...campusTsunami.sample,paused:!!client.state.paused||civilization.active,reducedMotion:!!reduced?.matches}:null;
     onFloodState(flood);
     getPlayer()?.setFloodState?.(flood);
-    tsunamiNotice.update({paused:client.state.paused,reducedMotion:reduced?.matches});
+    // Keep the frozen spray/fog frame under the civilization card. Its banner
+    // is hidden by CSS; only a host pause suppresses the exterior wash.
+    tsunamiNotice.update({paused:!!client.state.paused,reducedMotion:reduced?.matches});
     root.dataset.campusTsunami=campusTsunami.active?campusTsunami.sample.phase:'hidden';
-    return changed;
+    return changed||pauseChanged;
   }
+  civilizationContinue.addEventListener('click',()=>{
+    if(client?.state.paused||!civilization.continueExploring())return;
+    civilizationPanel.hidden=true;root.classList.remove('is-civilization-paused');
+    updateFrozen();refresh(true);bridge();canvas.focus({preventScroll:true});invalidate();
+  });
   const interactionRoots=[document.querySelector('body > header'),document.querySelector('.transport-selector'),canvas,...container.querySelectorAll('.view-toolbar,#inspect,#measurement,#mobile-controls,#mobile-orientation-hint,#mobile-enable-touch,#transport-interact,#resume-exploration')].filter(Boolean);
   const setInert=frozen=>interactionRoots.forEach(el=>{el.inert=frozen;});
   function updateFrozen(){
-    const frozen=!!client?.state.paused||!!opened||!!skyQr?.isOpen||!audienceUI?.registered;
+    const frozen=!!client?.state.paused||civilization.active||!!opened||!!skyQr?.isOpen||!audienceUI?.registered;
     if(frozen!==lastFrozen){
       lastFrozen=frozen;
       if(frozen){restoreFocus=document.activeElement;document.exitPointerLock?.();}
@@ -83,7 +106,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     updateRuntimeBudget();
   }
   function bridge(){
-    if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage(createActivityBridgeMessage({opened,state:client.state,serverTime:client.now(),locallyPaused:!!skyQr?.isOpen}),frameOrigin);
+    if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage(createActivityBridgeMessage({opened,state:client.state,serverTime:client.now(),locallyPaused:!!skyQr?.isOpen||civilization.active}),frameOrigin);
   }
   function loading(message,status='loading'){
     const el=$('.live-portal-loading');el.hidden=!message;el.dataset.status=status;el.textContent=message;
@@ -105,7 +128,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   }
   async function openPortal(portal){
     if(portal.kind==='building-interior')return openInterior(portal);
-    if(client.state.paused||opened)return;
+    if(client.state.paused||civilization.active||opened)return;
     if(!audienceUI.registered)return notify('请先填写昵称参与活动');
     if(!client.connected)return notify('活动连接恢复后再进入');
     const current=client.state.portals.find(p=>p.id===portal.id);
@@ -148,7 +171,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     updateFrozen();$('.live-portal-bar button').focus();invalidate();
   }
   function openInterior(requested,crossedFrom=null){
-    if(client.state.paused||opened||skyQr?.isOpen||!audienceUI.registered)return;
+    if(client.state.paused||civilization.active||opened||skyQr?.isOpen||!audienceUI.registered)return;
     const player=getPlayer(),current=player?.active&&(crossedFrom?crossedInteriorDoor(getInteriors(),crossedFrom,player.state):nearbyInterior(getInteriors(),player.state));
     if(!current||current.id!==requested.id)return notify('请步行靠近光电楼开启的玻璃门');
     const attemptId=createClientId(),url=new URL(current.url,location.href);
@@ -171,6 +194,10 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   $('.live-portal-bar button').addEventListener('click',()=>closePortal());
   prompt.addEventListener('click',()=>nearest&&openPortal(nearest));
   function keyboard(event){
+    if(civilization.active){
+      if(event.code==='Tab'&&!client.state.paused){event.preventDefault();civilizationContinue.focus({preventScroll:true});}
+      return;
+    }
     if(event.defaultPrevented||event.repeat||event.ctrlKey||event.metaKey||event.altKey)return;
     if(event.code==='Enter'&&nearest&&!client.state.paused&&!opened&&event.target===canvas){event.preventDefault();openPortal(nearest);}
   }
@@ -252,20 +279,21 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       audienceUI?.phase(state.phase);
       portalView.inert=state.paused||!!skyQr?.isOpen;
       if(state.paused&&!wasPaused){document.exitPointerLock?.();pause.focus({preventScroll:true});}
+      else if(!state.paused&&wasPaused&&civilization.active)civilizationContinue.focus({preventScroll:true});
       wasPaused=state.paused;
     }
     const player=getPlayer();nearest=null;
     if(restorePending&&audienceUI?.registered&&!lastFrozen&&player){
       restorePending=false;try{const stored=JSON.parse(sessionStorage.getItem('campus-return-pose'));if(stored?.audienceId===audienceUI.client.identity.id)player.restoreActivityPose?.(stored.pose);}catch{}
     }
-    if(player?.active&&audienceUI?.registered&&client.connected&&!state.paused&&!opened){
+    if(player?.active&&audienceUI?.registered&&client.connected&&!state.paused&&!civilization.active&&!opened){
       let distance=Infinity;
       for(const portal of portals){const d=Math.hypot(player.state.x-portal.x,player.state.z-portal.z);if(d<=portal.radius&&player.state.y<12){
         if(d<distance){distance=d;nearest=portal;}
         if(!visited.has(portal.id)&&!visiting.has(portal.id)&&Date.now()>(visitRetry.get(portal.id)||0)){visiting.add(portal.id);record('visit',{pointId:portal.id,position:position()},{required:true}).then(()=>{visited.add(portal.id);visitRetry.delete(portal.id);}).catch(()=>{visitRetry.set(portal.id,Date.now()+15000);}).finally(()=>visiting.delete(portal.id));}
       }}
     }
-    const interiorEnabled=!document.hidden&&player?.active&&audienceUI?.registered&&!state.paused&&!opened&&!skyQr?.isOpen;
+    const interiorEnabled=!document.hidden&&player?.active&&audienceUI?.registered&&!state.paused&&!civilization.active&&!opened&&!skyQr?.isOpen;
     if(interiorEnabled){
       const interiors=getInteriors(),currentPosition={...player.state};
       const previousPosition=previousInteriorPosition,crossed=crossedInteriorDoor(interiors,previousPosition,currentPosition);
@@ -306,7 +334,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       const textRects=projectWallTextRects(THREE,camera,getWallText(),width,height);
       for(const item of items){
         const {data,group,label}=item;projected.set(data.x,Math.min(data.height*.65,22),data.z).project(camera);
-        label.hidden=client.state.paused||projected.z>1||projected.z< -1||Math.abs(projected.x)>1||Math.abs(projected.y)>1;
+        label.hidden=client.state.paused||civilization.active||projected.z>1||projected.z< -1||Math.abs(projected.x)>1||Math.abs(projected.y)>1;
         const x=(projected.x*.5+.5)*width,y=(-projected.y*.5+.5)*height;
         let labelY=y;
         if(!label.hidden&&textRects.length){const size=item.labelSize??={width:label.offsetWidth,height:label.offsetHeight};labelY=avoidWallText(x,y,size.width,size.height,textRects,height);}
@@ -315,12 +343,12 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
         // Distance still updates when reduced motion disables the slow pulse.
         const distance=Math.hypot(camera.position.x-data.x,camera.position.z-data.z);
         const emphasis=THREE.MathUtils.smoothstep(distance,12,48);
-        const pulse=client.state.paused||reduced?.matches?0:Math.sin(client.now()/1300+group.position.x*.01);
+        const pulse=client.state.paused||civilization.active||reduced?.matches?0:Math.sin(client.now()/1300+group.position.x*.01);
         item.material.uniforms.intensity.value=(1.3+pulse*.08)*(.18+emphasis*.82);
         item.core.material.opacity=.48+emphasis*.44;
         item.ring.scale.setScalar(1+pulse*.045);
       }
-      if(client.state.paused||reduced?.matches)return tsunamiChanged;
+      if(client.state.paused||civilization.active||reduced?.matches)return tsunamiChanged;
       if(now-lastPaint>=100){lastPaint=now;return true;}return tsunamiChanged;
     },
     dispose(){disposed=true;announcementNotice.dispose();disposeMobileViewport();clearInterval(timer);client.dispose();closePortal();skyQr.dispose();tsunamiNotice.dispose();campusTsunami.dispose();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},

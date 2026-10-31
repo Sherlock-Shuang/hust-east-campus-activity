@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {planOptoC118Interior} from '../src/opto-c118-interior.js';
-import {createC118FloodEffect,sampleC118Flood} from '../src/c118-flood-effect.js';
+import {createC118FloodEffect,sampleC118Flood,c118IndoorFloodTime} from '../src/c118-flood-effect.js';
 
 const plan=planOptoC118Interior();
 test('flood effect follows real doors and covers the current raised rear seating without reaching the ceiling',()=>{
@@ -21,8 +21,9 @@ test('arrival is a travelling impact from the door, while negative time is dry a
   const p={x:door.x-door.side*4.5,z:door.z,y:door.y+1.65};
   assert.equal(sampleC118Flood(plan,p,-3).impact,0);
   assert.equal(sampleC118Flood(plan,p,-3).submerged,false);
-  assert.ok(sampleC118Flood(plan,p,2.5).impact>.9);
-  assert.ok(sampleC118Flood(plan,p,4).impact<.1);
+  assert.equal(sampleC118Flood(plan,p,.74).phase,'waiting');
+  assert.ok(sampleC118Flood(plan,p,1.25).impact>.9);
+  assert.ok(sampleC118Flood(plan,p,2).impact<.1);
   const rear={x:0,z:plan.seatRows.at(-1).z,y:plan.seatRows.at(-1).y+1.65};
   assert.equal(sampleC118Flood(plan,rear,30).submerged,true);
   assert.equal(sampleC118Flood(plan,rear,300).submerged,true);
@@ -31,6 +32,9 @@ test('arrival is a travelling impact from the door, while negative time is dry a
 test('time jumps and rewind reproduce the same water state without per-frame accumulation',()=>{
   const effect=createC118FloodEffect(THREE,{plan}),p={x:3,z:2,y:2};
   effect.update({elapsed:6,active:true});const early=effect.sampleAt(p);
+  const water=effect.group.getObjectByName('c118-rising-water');
+  assert.equal(water.material.uniforms.uTime.value,c118IndoorFloodTime(6));
+  effect.group.traverse(object=>{if(object.material?.uniforms.uTime)assert.equal(object.material.uniforms.uTime.value,c118IndoorFloodTime(6));});
   effect.update({elapsed:90,active:true});effect.update({elapsed:6,active:true});
   assert.deepEqual(effect.sampleAt(p),early);
   effect.update({elapsed:6,active:false});assert.equal(effect.group.visible,false);
@@ -74,7 +78,7 @@ test('CPU surface and generated GLSL use the identical persistent wave spectrum'
   const gpuWaves=new Function('p','t',`return ${expression.replaceAll('sin(', 'Math.sin(')};`);
   const peak=effect.group.userData.peakWaterLevel;
   for(const time of[30,33.7,1000])for(const x of[-9,0,8])for(const z of[-14,0,13]){
-    const expected=peak+gpuWaves({x,y:z},time);
+    const expected=peak+gpuWaves({x,y:z},c118IndoorFloodTime(time));
     assert.ok(Math.abs(effect.sampleAt({x,z,y:3},time).waterY-expected)<1e-10);
   }
   effect.dispose();

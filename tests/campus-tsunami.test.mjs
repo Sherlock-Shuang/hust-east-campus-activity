@@ -140,6 +140,55 @@ test('local pause freezes the last visible phase until the authoritative pause s
   }finally{effect.dispose();}
 });
 
+test('civilization pause freezes the visible wave and water until continue seeks the authoritative phase',()=>{
+  const effect=createCampusTsunami({THREE,scene:new THREE.Scene()});
+  try{
+    effect.update({event,now:atSeconds(151)});
+    const frozen=structuredClone(effect.sample),water=effect.sampleAt({x:1400,y:1.8,z:2500});
+    const resident=resources(effect.group),wall=effect.group.getObjectByName('campus-tsunami-wall');
+    const time=wall.material.uniforms.uTime.value;
+    assert.equal(effect.update({event,now:atSeconds(180),locallyPaused:true}),false);
+    assert.deepEqual(effect.sample,frozen);
+    assert.deepEqual(effect.sampleAt({x:1400,y:1.8,z:2500}),water);
+    assert.equal(wall.material.uniforms.uTime.value,time);
+    assert.equal(effect.update({event,now:atSeconds(190),locallyPaused:false}),true);
+    assert.deepEqual(effect.sample,sampleCampusTsunami(event,atSeconds(190)));
+    assertReused(resident,resources(effect.group));
+  }finally{effect.dispose();}
+});
+
+test('host pause reconciliation cannot move an already locally frozen wave forward',()=>{
+  const effect=createCampusTsunami({THREE,scene:new THREE.Scene()});
+  try{
+    effect.update({event,now:atSeconds(151)});
+    const frozen=structuredClone(effect.sample),water=effect.sampleAt({x:1400,y:1.8,z:2500});
+    const hostPaused=reconcileC118Flood({c118Flood:event},{c118Flood:event,paused:true},atSeconds(160));
+    assert.equal(effect.update({event:hostPaused,now:atSeconds(200),paused:true,locallyPaused:true}),false);
+    assert.deepEqual(effect.sample,frozen,'the server pausedAt receipt must not override local pause');
+    assert.deepEqual(effect.sampleAt({x:1400,y:1.8,z:2500}),water);
+    effect.update({event:hostPaused,now:atSeconds(210),paused:true,locallyPaused:false});
+    const hostSample=sampleCampusTsunami(hostPaused,atSeconds(210));
+    assert.deepEqual(effect.sample,hostSample,'continuing joins the host frozen phase rather than resuming the host');
+    assert.equal(effect.update({event:hostPaused,now:atSeconds(240),paused:true}),false);
+    assert.deepEqual(effect.sample,hostSample);
+  }finally{effect.dispose();}
+});
+
+test('authoritative reset and a new event release an old local wave freeze',()=>{
+  const effect=createCampusTsunami({THREE,scene:new THREE.Scene()});
+  try{
+    effect.update({event,now:atSeconds(151)});
+    effect.update({event,now:atSeconds(160),locallyPaused:true});
+    assert.equal(effect.update({event:null,now:atSeconds(170),locallyPaused:true}),true);
+    assert.equal(effect.sample,null);assert.equal(effect.active,false);
+    const next={...event,id:'next-civilization-event',startAt:atSeconds(173)};
+    effect.update({event:next,now:atSeconds(170),locallyPaused:true});
+    assert.equal(effect.sample.elapsed,-3,'a new countdown must not reuse the previous event sample');
+    effect.update({event:next,now:atSeconds(200),locallyPaused:false});
+    assert.deepEqual(effect.sample,sampleCampusTsunami(next,atSeconds(200)));
+  }finally{effect.dispose();}
+});
+
 test('no event builds nothing; entering a portal suspends the wave and returning catches up',()=>{
   const scene=new THREE.Scene(),effect=createCampusTsunami({THREE,scene});
   try{

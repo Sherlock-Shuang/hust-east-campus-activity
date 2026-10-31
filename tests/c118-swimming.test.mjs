@@ -16,8 +16,8 @@ test('swimming has independent rise/dive controls, buoyancy and finite water ine
   run(swim,1.2,still(swim,1));assert.ok(swim.state.y>deep+2.3,'Space ascends');
   run(swim,5,still(swim));
   assert.ok(Math.abs(swim.state.y-swim.state.waterY-.22)<.08,'release returns eyes above the water');
-  const x=swim.state.x;run(swim,1);
-  assert.ok(Math.abs(swim.state.x-x)>.05,'persistent water current moves an idle swimmer');
+  const {x,z}=swim.state;run(swim,1);
+  assert.ok(Math.hypot(swim.state.x-x,swim.state.z-z)>.05,'persistent water current moves an idle swimmer');
   assert.ok(Math.abs(swim.state.vx)<2.6&&Math.abs(swim.state.vz)<2.6);
 });
 

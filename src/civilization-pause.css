@@ -1,0 +1,10 @@
+.civilization-pause{position:absolute;inset:0;z-index:3;display:grid;place-items:center;box-sizing:border-box;padding:40px 28px 90px;background:#03121dc9;color:#edf3f1;pointer-events:auto;text-align:center;animation:civilization-arrival .5s ease-out}
+.civilization-pause p{max-width:23em;margin:0;font-family:"Songti SC","Noto Serif CJK SC","SimSun",serif;font-size:clamp(23px,3.1vw,43px);font-weight:400;line-height:1.9;letter-spacing:.055em;text-wrap:balance}
+.civilization-pause button{position:absolute;right:max(30px,env(safe-area-inset-right));bottom:max(24px,env(safe-area-inset-bottom));padding:12px 4px;border:0;border-bottom:1px solid #b8d6d04d;border-radius:0;background:transparent;color:#c5d8d3;font:inherit;font-size:12px;letter-spacing:.12em;cursor:pointer}
+.civilization-pause button:hover{color:#fff;border-color:#d7ebe5}.civilization-pause button:focus-visible{outline:2px solid #c7e3d9;outline-offset:6px}.civilization-pause button:disabled{opacity:.4;cursor:default}
+.is-civilization-paused .live-marker-labels,.is-civilization-paused .live-portal-prompt,.is-civilization-paused .campus-tsunami-notice{visibility:hidden}
+body:has(#live-experience.is-civilization-paused) #viewport{z-index:30}
+body:has(#live-experience.is-civilization-paused) #player-hud{visibility:hidden}
+@keyframes civilization-arrival{from{opacity:0}to{opacity:1}}
+@media(max-height:500px){.civilization-pause{padding:20px 36px 65px}.civilization-pause p{font-size:clamp(19px,3vw,28px);line-height:1.7}.civilization-pause button{right:max(22px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom))}}
+@media(prefers-reduced-motion:reduce){.civilization-pause{animation:none}}
