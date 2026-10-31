@@ -11,6 +11,8 @@ import { createGeoScene,setCartographicLinesVisible } from "./geo-scene.js";
 import { createWaterDetails } from "./water-details.js";
 import { applyRiverTerrain } from "./river-terrain.js";
 import { createCampus3D, createCampus3DProgressive } from "./campus-3d.js";
+import {createCampusAtmosphere,mountAtmosphereUI} from "./campus-atmosphere.js";
+import "./campus-atmosphere.css";
 import {getCampusPlayerSpawn} from './player-experience.js';
 import {mergeCampusExtension} from './campus-data-merge.js';
 import {campusLandmarkArrival} from './campus-landmark-arrival.js';
@@ -87,7 +89,8 @@ controls.dampingFactor = 0.08;
 controls.maxPolarAngle = Math.PI * 0.66;
 controls.minDistance = 8;
 controls.maxDistance = 9000;
-scene.add(new THREE.HemisphereLight("#dbe9f2", "#878b73", 1.3));
+const hemisphere=new THREE.HemisphereLight("#dbe9f2", "#878b73", 1.3);
+scene.add(hemisphere);
 const sun = new THREE.DirectionalLight("#fff1d9", 2.25);
 const sunOffset = new THREE.Vector3(650, 520, 420);
 // Hold the shadow grid in world/light space so camera movement does not make
@@ -185,6 +188,19 @@ const diagnostics=mountRuntimeDiagnostics({document,window,canvas,renderer,scene
 })});
 let pendingLandmark=new URLSearchParams(location.search).get('place');
 const qualityUI=mountPerformanceUI({document,storage:getQualityStorage(),mode:qualityBudget.mode,onChange(mode){performanceQuality.setMode(mode);applyPerformanceBudget();canvas.focus({preventScroll:true});}});
+// Local visual preference; independent of the host's activity phase.
+function syncAtmosphereLighting(mode){
+  shadowDirection.copy(sunOffset).normalize();
+  shadowRight.crossVectors(new THREE.Vector3(0,1,0),shadowDirection).normalize();
+  shadowUp.crossVectors(shadowDirection,shadowRight).normalize();
+  sun.position.copy(sun.target.position).add(sunOffset);
+  renderer.shadowMap.needsUpdate=true;lastShadowAt=-Infinity;
+  campus?.canteenStreetLife?.setTimeOfDay(mode);
+  canvas.dataset.timeOfDay=mode;needsRender=true;
+}
+const atmosphere=createCampusAtmosphere({THREE,scene,renderer,hemisphere,sun,sunOffset,daylight,storage:getQualityStorage(),onChange:syncAtmosphereLighting,invalidate:()=>{needsRender=true;}});
+syncAtmosphereLighting(atmosphere.mode);
+mountAtmosphereUI({document,atmosphere,onChange:()=>canvas.focus({preventScroll:true})});
 function applyPerformanceBudget(){
   qualityBudget=performanceQuality.budget;
   if(qualityBudget===appliedBudget)return;
@@ -682,6 +698,7 @@ async function loadDataset(data, manifest = {}) {
   const campusStarted=performance.now();
   const initialPosition=getCampusPlayerSpawn(model)||{x:0,z:0};
   campus = await createCampus3DProgressive(THREE, model, { frame, geoToLocal },{initialPosition,getPosition:()=>commute?.player?.state||initialPosition,signal:campusBuildAbort.signal,yieldTask:yieldBrowserTask,onProgress:({stage})=>{if(datasetLoading)$('load-screen').querySelector('small').textContent=stage;needsRender=true;}});
+  campus.canteenStreetLife?.setTimeOfDay(atmosphere.mode);
   startupTimings.campusBuildMs=performance.now()-campusStarted;
   canvas.dataset.campusDetails='preparing';
   const buildingCampus=campus;
@@ -713,7 +730,8 @@ async function loadDataset(data, manifest = {}) {
   try {
     commute = createCommuteExperience({
       THREE, scene, camera, controls, canvas, model, fc, frame, geoToLocal,
-      treeReservations: [...(campus.landcoverPlan?.trees||[]),...(campus.landcoverPlan?.shrubs||[])],
+      treeReservations: [...(campus.landcoverPlan?.trees||[]),...(campus.landcoverPlan?.shrubs||[]),...(campus.canteenStreetLife?.plan.trees||[])],
+      extraActivityParking: campus.canteenStreetLife?.plan.parking||[],
       focusBox: fitBox, notify: toast,
       onRouteChange: route => campus.setDetailedRoadIds(route.segments.map(segment=>segment.sourceId)),
       invalidate: () => { needsRender = true; },
@@ -1097,7 +1115,7 @@ function render(now) {
     // A ground-scale fog cutoff hid the far half of the campus in overview.
     // Keep normal street haze while retaining spatial context at aerial scale.
     const overviewLift=Math.max(0,camera.position.y-120);
-    if(scene.fog.name!=='campus-tsunami-immersion'){scene.fog.near=480+overviewLift*.9;scene.fog.far=2900+overviewLift*1.3;}
+    atmosphere.update(camera,{overviewLift});
     campus?.update?.(camera, { viewportHeight,detailDistanceScale:qualityBudget.detailDistanceScale });
     fieldGroupQr?.update(camera,{visible:layerSettings.symbolic&&layerSettings.water&&!liveControl?.portalOpen});
     if(now-lastLabelAt>=100){updateLabels();lastLabelAt=now;}

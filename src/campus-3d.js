@@ -28,6 +28,7 @@ import {createYunyuanSouthPrecinct} from './yunyuan-south-precinct.js';
 import {createCampusCommercialStreet} from './campus-commercial-street.js';
 import {createOptoApproach} from './opto-approach.js';
 import {createCampusGates} from './campus-gates.js';
+import {createCanteenStreetLife} from './canteen-street-life.js';
 import {createLifeScienceBuilding,LIFE_SCIENCE_BUILDING_ID} from './life-science-building.js';
 
 /** Low road-edge stones, derived from the existing road ribbons. Accesses are
@@ -510,6 +511,11 @@ function* buildCampus3D(THREE, model, { frame, geoToLocal, progressive=false,ini
       barriers:[...(access.barriers||[]),...einsteinSquare.infrastructure.barriers,...(opto.barriers||[]),...(life.barriers||[]),...south.barriers,...commercial.barriers,...optoApproach.infrastructure.barriers,...campusGates.infrastructure.barriers],
       walkSurfaces:[...(access.walkSurfaces||[]),...einsteinSquare.infrastructure.walkSurfaces,...(opto.walkSurfaces||[]),...(life.walkSurfaces||[]),...south.walkSurfaces,...optoApproach.infrastructure.walkSurfaces,...campusGates.infrastructure.walkSurfaces]};
   }
+  yield {stage:'食堂林荫街道'};
+  const canteenStreetLife=createCanteenStreetLife(THREE,model,{frame,geoToLocal,southPlan:southPrecinct.plan,existingTrees:forestPlan.trees});
+  layer('environment').add(canteenStreetLife.group);detailDisposers.push(canteenStreetLife.dispose);
+  model.architectureInfrastructure.barriers.push(...canteenStreetLife.infrastructure.barriers);
+  counts.canteenStreetTrees=canteenStreetLife.plan.trees.length;
   let forecourt=null,aquaticPlants=null;
   function* buildForecourtDecoration(){
     yield {stage:'前场绿化'};
@@ -561,12 +567,13 @@ function* buildCampus3D(THREE, model, { frame, geoToLocal, progressive=false,ini
   function setLayerVisible(name, visible) { const key = ({ buildings: 'building', roads: 'road' })[name] || name; if (layers.has(key)) layers.get(key).visible = !!visible; }
   const facadeFrustum=new THREE.Frustum(),facadeMatrix=new THREE.Matrix4(),facadeSphere=new THREE.Sphere(),lastPosition=new THREE.Vector3(Infinity,Infinity,Infinity),lastQuaternion=new THREE.Quaternion();
   let fullDetail=false,detailedRoadIds=new Set(),lastDetailScale=-1,lastCamera=null,lastUpdateOptions={};
-  function releaseDecorativeResources(){decorationActive=false;forestLayer?.releaseDecorativeResources();facadeLods.forEach(lod=>lod.resident?.release());fullDetail=true;}
-  function resumeDecorativeResources(){decorationActive=true;forestLayer?.resumeDecorativeResources();fullDetail=true;}
+  function releaseDecorativeResources(){decorationActive=false;canteenStreetLife.group.visible=false;forestLayer?.releaseDecorativeResources();facadeLods.forEach(lod=>lod.resident?.release());fullDetail=true;}
+  function resumeDecorativeResources(){decorationActive=true;canteenStreetLife.group.visible=true;forestLayer?.resumeDecorativeResources();fullDetail=true;}
   function setDetailedRoadIds(ids=[]){detailedRoadIds=new Set(ids);group.userData.detailedRoadIds=[...detailedRoadIds];counts.reservedRoadEdgeStones=roadEdgePlan.filter(e=>detailedRoadIds.has(e.featureId)).length;fullDetail=true;}
   function update(camera,{viewportHeight=800,detailDistanceScale=1}={}){
     if(disposed)return;lastCamera=camera;lastUpdateOptions={viewportHeight,detailDistanceScale};
     const detailScale=Number.isFinite(detailDistanceScale)?Math.max(.35,Math.min(1.5,detailDistanceScale)):1;
+    if(decorationActive)canteenStreetLife.update(camera,{detailDistanceScale:detailScale});
     forestLayer?.update?.(camera,{detailDistanceScale:detailScale});
     einsteinSquare.update?.(camera);
     aiMurals.update(camera);
@@ -598,7 +605,7 @@ function* buildCampus3D(THREE, model, { frame, geoToLocal, progressive=false,ini
     geometries.forEach(g => g.dispose()); usedMaterials.forEach(m => m.dispose()); group.removeFromParent();
   }
   function tick(dt,camera){return forecourt?.update?.(dt,camera)||false;}
-  const api={ group, records, counts, layers, warnings, roadEdgePlan,
+  const api={ group, records, counts, layers, warnings, roadEdgePlan,canteenStreetLife,
     lifeSciencePlan:lifeScienceBuilding?.plan,lifeScienceViewpoints:lifeScienceBuilding?.viewpoints,
     optoEntry:optoBuilding?{...optoBuilding.entry,label:'光电信息大楼 · C118 报告厅'}:null,optoEntries:optoBuilding?.entries||[],optoViewpoints:optoBuilding?.viewpoints,optoPhotoViewpoints:optoBuilding?.photoViewpoints,optoApproachPlan:optoApproach.plan,
     gatePlan:campusGates.plan,gateViewpoints:campusGates.viewpoints,

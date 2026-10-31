@@ -11,7 +11,7 @@ import { createPlayerExperience, getCampusPlayerSpawn } from './player-experienc
 
 /** Connect the sourced route, traffic model and camera to the visible controls. */
 export function createCommuteExperience({ THREE, scene, camera, controls, canvas, model, fc, frame,
-  geoToLocal, focusBox, notify, invalidate, cancelCameraAnimation, enable3D, treeReservations=[], onRouteChange=()=>{} }) {
+  geoToLocal, focusBox, notify, invalidate, cancelCameraAnimation, enable3D, treeReservations=[], extraActivityParking=[], onRouteChange=()=>{} }) {
   const $ = id => document.getElementById(id);
   // Optional inspection controls may be absent in the compact transport UI.
   const updateElement = (id, properties) => {
@@ -27,7 +27,8 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
   let trafficSimulation=combineTrafficSources(simulation,residentialTraffic);
   let optoTransportPlan=planOptoRoadTransport({model,route,frame,geoToLocal,treeReservations});
   const optoParking=()=>optoTransportPlan.items.filter(i=>i.mode==='scooter').map((i,index)=>({...i,id:-200001-index,activityId:i.id,activityRegion:'opto-road',kind:'scooter',type:'scooter',phase:'parked',active:true,contactMode:'independent',y:i.y+.021,colorIndex:index+3}));
-  let visual = createCommuteScene(THREE, scene, route, trafficSimulation,{model,activityParking:optoParking()});
+  const activityParking=()=>[...optoParking(),...extraActivityParking.map((p,index)=>({...p,id:-300001-index,activityId:p.id,activityRegion:'canteen-street',kind:'scooter',type:'scooter',phase:'parked',active:true,contactMode:'independent'}))];
+  let visual = createCommuteScene(THREE, scene, route, trafficSimulation,{model,activityParking:activityParking()});
   let npcTransport = createNpcTransport({THREE,scene,model,route});
   onRouteChange(route);
   let player, suspended = false, running = true, visible = true, timeScale = 1, followId = null,
@@ -231,7 +232,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
     stopFollow();player.dispose();visual.dispose();npcTransport.dispose();residentialTraffic.dispose();route=next;
     simulation=createCommuteSimulation(route,settings);residentialTraffic=createResidentialTraffic({model,route,frame,geoToLocal});trafficSimulation=combineTrafficSources(simulation,residentialTraffic);
     optoTransportPlan=planOptoRoadTransport({model,route,frame,geoToLocal,treeReservations});
-    visual=createCommuteScene(THREE,scene,route,trafficSimulation,{model,activityParking:optoParking()});visual.setDetailDistanceScale(detailDistanceScale);visualCadence.invalidate();onRouteChange(route);player=createPlayer();
+    visual=createCommuteScene(THREE,scene,route,trafficSimulation,{model,activityParking:activityParking()});visual.setDetailDistanceScale(detailDistanceScale);visualCadence.invalidate();onRouteChange(route);player=createPlayer();
     npcTransport=createNpcTransport({THREE,scene,model,route});npcTransport.setDetailDistanceScale(detailDistanceScale);npcTransport.setVisible(visible);
     observationProgress=0;observationMode='route';previousCamera.set(Infinity,Infinity,Infinity);
     updateElement('route-position-slider', { value: 0 });updateElement('route-position', { textContent: route.start.name });
