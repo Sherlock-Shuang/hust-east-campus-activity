@@ -107,7 +107,7 @@ export function mountAtmosphereUI({document,host,atmosphere,onChange=()=>{}}={})
   if(!document||!host||!atmosphere)return{update(){},dispose(){}};
   const label=document.createElement('label');label.className='campus-atmosphere-choice';
   const select=document.createElement('select');select.id='campus-time-of-day';select.setAttribute('aria-label','校园光照时段');
-  for(const [value,p]of Object.entries(ATMOSPHERE_PRESETS)){const option=document.createElement('option');option.value=value;option.textContent=p.label;select.append(option);}
+  for(const [value,p]of Object.entries(ATMOSPHERE_PRESETS)){const option=document.createElement('option');option.value=value;option.textContent=`天气 · ${p.label}`;select.append(option);}
   label.append(select);host.append(label);select.value=atmosphere.mode;
   const update=()=>{select.value=atmosphere.mode;select.title='只改变你看到的光照，不影响活动阶段';};
   const change=()=>{atmosphere.setMode(select.value);update();select.blur();onChange(atmosphere.mode);};
