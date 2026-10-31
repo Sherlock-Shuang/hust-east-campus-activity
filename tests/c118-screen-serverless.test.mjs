@@ -82,3 +82,15 @@ test('old persisted activity state projects the default screen without rewriting
   const stored=await f.dbs[0].prepare('SELECT revision,payload FROM activity_state WHERE key=?').bind('current').first();
   assert.equal(stored.revision,17);assert.equal(stored.payload,raw);
 });
+
+test('host Codex text broadcasts to separate hall clients, persists through restart and rejects stale text edits',{timeout:10000},async t=>{
+ const f=await fixture(t),initial=await f.read(),a=await f.stream(0),b=await f.stream(1);await Promise.all([a.next(),b.next()]);
+ const wanted={...initial,c118Screen:{mediaId:'codex',revision:1,codexText:'第一条 Codex 内容\n可回复 <script>普通文字</script>'}};
+ assert.equal((await f.put(wanted,{auth:{}})).status,401);
+ const sent=await f.save(wanted);await f.clock.advance(1500);
+ for(const s of await Promise.all([a.next(),b.next()]))assert.deepEqual(s.state.c118Screen,wanted.c118Screen);
+ assert.equal((await f.put({...sent,c118Screen:{...sent.c118Screen,codexText:'同版本替换'}})).status,400);
+ const second=await f.save({...sent,c118Screen:{...sent.c118Screen,revision:2,codexText:'第二条'}});
+ assert.equal((await f.put({...second,c118Screen:{...second.c118Screen,revision:3,codexText:'x'.repeat(4001)}})).status,400);
+ f.restart();assert.deepEqual((await f.read(1)).c118Screen,second.c118Screen);
+});

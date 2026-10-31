@@ -1,15 +1,15 @@
 import './sky-qr.css';
-import {LEARNING_BOARD} from './activity-catalog.js';
 
 export const SKY_QR_IMAGE = '/images/activity/wechat-qr-cutout.png';
-export const SKY_QR_PLACEMENT = Object.freeze({x:LEARNING_BOARD.x,y:2400,z:LEARNING_BOARD.z,size:1200});
+import {SKY_QR_PLACEMENT} from './sky-qr-placement.js';
+export {SKY_QR_PLACEMENT} from './sky-qr-placement.js';
 
-// A fixed, downward-facing sky panel above the sports field. Its world pose and
+// A fixed west-facing panel above Yunyuan 16, the second dorm east of the canteen. Its world pose and
 // metre-scale size never depend on the viewer, camera heading, or screen size.
 export function createSkyQrExperience({THREE,scene,root,invalidate}) {
   const group=new THREE.Group();group.name='activity-sky-qr';group.visible=false;scene.add(group);
   group.position.set(SKY_QR_PLACEMENT.x,SKY_QR_PLACEMENT.y,SKY_QR_PLACEMENT.z);
-  group.rotation.x=Math.PI/2;
+  group.rotation.y=-Math.PI/2;
   const material=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,depthTest:true,depthWrite:false,toneMapped:false,fog:false});
   const geometry=new THREE.PlaneGeometry(1,1),poster=new THREE.Mesh(geometry,material);
   // A plain quiet zone under the alpha image keeps the code readable against sky.

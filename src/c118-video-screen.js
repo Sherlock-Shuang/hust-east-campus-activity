@@ -13,12 +13,13 @@ export function createC118VideoScreen(THREE,{screen,document=globalThis.document
   document.body.append(video);
   const defaultMedia={...getC118Media(C118_DEFAULT_MEDIA_ID),src,poster};
   let media=defaultMedia,revision=0,generation=0,posterGeneration=0;
+  let screenEnabled=true;
   let disposed=false,active=false,visible=false,userPaused=false,blocked=false,failed=false,changing=false;
   let assigned=false,pending=null,waiting=false,posterTexture=null,videoTexture=null,lastState='',hasFrame=false;
   const baseScale=screen.scale?{x:screen.scale.x,y:screen.scale.y,z:screen.scale.z}:null;
   const listeners=[];
   const on=(type,fn)=>{video.addEventListener(type,fn);listeners.push(()=>video.removeEventListener(type,fn));};
-  const wanted=()=>!disposed&&active&&visible&&!userPaused&&!blocked&&!failed;
+  const wanted=()=>screenEnabled&&!disposed&&active&&visible&&!userPaused&&!blocked&&!failed;
   const currentSource=()=>assigned&&(!video.currentSrc||video.currentSrc===video.src);
   function emit(){
     if(disposed||changing)return;
@@ -28,11 +29,11 @@ export function createC118VideoScreen(THREE,{screen,document=globalThis.document
       duration:assigned&&Number.isFinite(video.duration)&&video.duration>0?video.duration:media.duration};
     const signature=JSON.stringify(state);if(signature===lastState)return;lastState=signature;onState(state);
   }
-  function show(texture){if(disposed)return;screen.material.map=texture;screen.material.needsUpdate=true;screen.visible=true;}
+  function show(texture){if(disposed||!screenEnabled)return;screen.material.map=texture;screen.material.needsUpdate=true;screen.visible=true;}
   function pause(){if(pending)pending.interrupted=true;video.pause();}
   function fitVideo(){
     const p=screen.geometry?.parameters;
-    if(!baseScale||!p?.width||!p?.height||!currentSource()||!(video.videoWidth>0&&video.videoHeight>0))return;
+    if(!screenEnabled||!baseScale||!p?.width||!p?.height||!currentSource()||!(video.videoWidth>0&&video.videoHeight>0))return;
     const available=p.width*Math.abs(baseScale.x)/(p.height*Math.abs(baseScale.y));
     if(!(available>0))return;
     const aspect=video.videoWidth/video.videoHeight;
@@ -49,7 +50,7 @@ export function createC118VideoScreen(THREE,{screen,document=globalThis.document
   }
   function fail(){
     if(disposed||!currentSource())return;failed=true;waiting=false;pause();
-    if(posterTexture)show(posterTexture);else screen.visible=false;
+    if(posterTexture)show(posterTexture);else if(screenEnabled)screen.visible=false;
     emit();
   }
   function sync(){
@@ -107,6 +108,7 @@ export function createC118VideoScreen(THREE,{screen,document=globalThis.document
   }catch(error){dispose();throw error;}
   return {
     video,
+    setScreenEnabled(value){screenEnabled=!!value;if(!screenEnabled)pause();if(screenEnabled){if(hasFrame&&videoTexture)show(videoTexture);else if(posterTexture)show(posterTexture);else{screen.material.map=null;screen.visible=false;}}},
     selectMedia(next){
       if(disposed||!next||!Number.isSafeInteger(next.revision)||next.revision<0)return false;
       const selected=getC118Media(next.mediaId);

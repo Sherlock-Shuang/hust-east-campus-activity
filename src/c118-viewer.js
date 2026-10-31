@@ -3,6 +3,7 @@ import {createOptoC118Interior} from './opto-c118-interior.js';
 import {optoFoyerExit,isInsideC118} from './opto-foyer.js';
 import {createC118Navigation,indoorMovement,crossedC118Door} from './c118-navigation.js';
 import {createPlayerPointerLock} from './player-pointer-lock.js';
+import {createC118CodexScreen} from './c118-codex-screen.js';
 import {createC118VideoScreen} from './c118-video-screen.js';
 import {createC118ActivitySync} from './c118-activity-sync.js';
 import {normalizeC118Flood,getC118FloodElapsed} from './c118-flood-state.js';
@@ -27,6 +28,7 @@ const canvas=document.querySelector('#hall-canvas'),status=document.querySelecto
 let renderer,interior,motion,screenPlayer,raf,screenInView=false,disposed=false,paused=false,returning=false,previous=0,heading=0,pitch=0,joy=null,look=null,mouse=null,axes={forward:0,sideways:0};
 let activitySync,floodEffect,floodSensory,gpuTimer,floodEvent=null,floodRunning=false;
 let resetFloodView=()=>{};
+let codexScreen;
 let screenControl=null,audience,seating,seatedSeat=null,seatView=null,beforeSeatPose=null,seatTransition=null;
 let cinema=false,cinemaView=null,swimming,swimVertical=0,floodReturn=null;
 let enterSeat=()=>{},riseFromSeat=()=>{},faceStage=()=>{};
@@ -46,8 +48,19 @@ const floodStatus=document.querySelector('#hall-flood-status');
 const keys=new Set(),listeners=[],navigationListeners=[];
 const on=(target,type,fn,options)=>{target.addEventListener(type,fn,options);listeners.push(()=>target.removeEventListener(type,fn,options));};
 const onNavigation=(target,type,fn)=>{target.addEventListener(type,fn);navigationListeners.push(()=>target.removeEventListener(type,fn));};
-const usable=()=>!disposed&&!paused&&!returning&&!contextLost&&!pageLifecycle?.suspended&&!document.hidden;
+const usable=()=>!codexScreen?.isOpen&&!disposed&&!paused&&!returning&&!contextLost&&!pageLifecycle?.suspended&&!document.hidden;
 const lock=createPlayerPointerLock({canvas,document,canLock:usable,onChange:()=>resetInput(),onError:()=>{status.hidden=false;status.textContent='可直接移动鼠标环视，或在浏览器中按 L 锁定';}});
+function syncScreenProgramme(){
+  const codex=screenControl?.mediaId==='codex';
+  screenPlayer?.setScreenEnabled(!codex);codexScreen?.select(codex?screenControl:null);
+  document.querySelector('#screen-codex-open').hidden=!codex;
+  document.querySelector('#screen-program-note').textContent=codex?'主持人同步内容':'主持人统一选片';
+  document.querySelector('#hall-screen-controls nav').hidden=codex;
+  document.querySelector('#screen-time').hidden=codex;
+  if(codex){document.querySelector('#screen-title').textContent='Codex';document.querySelector('#screen-status').textContent='';canvas.dataset.mediaId='codex';canvas.dataset.videoState='codex';}
+  else if(screenControl)screenPlayer?.selectMedia(screenControl);
+  screenPlayer?.update({active:usable()&&!floodRunning&&!codex,visible:screenInView});
+}
 function resetInput(){keys.clear();swimVertical=0;joy=look=mouse=null;axes={forward:0,sideways:0};stick.hidden=true;motion?.suspend();}
 function rotate(dx,dy,touch=false){if(cinema)return;const delta=controlLookDelta(dx,dy,{touch,width:innerWidth,height:innerHeight,preferences:controlsPreference});heading-=Math.max(-.8,Math.min(.8,delta.x));pitch=Math.max(-1.35,Math.min(1.3,pitch-Math.max(-.65,Math.min(.65,delta.y))));}
 function exit(returnEntryId){
@@ -55,11 +68,11 @@ function exit(returnEntryId){
 onNavigation(document.querySelector('#hall-return'),'click',event=>{event.preventDefault();exit();});
 onNavigation(document.querySelector('#swim-exit'),'click',exit);
 onNavigation(window,'pagehide',event=>{if(!event.persisted)dispose();});
-on(window,'keydown',event=>{if(!usable()||event.target.closest?.('a,button,input'))return;if(event.code==='KeyE'&&!event.repeat){event.preventDefault();if(swimming?.state.active)return;if(seatedSeat)riseFromSeat();else enterSeat(true);return;}if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space','KeyC','ControlLeft','ControlRight'].includes(event.code)){event.preventDefault();if(!seatedSeat)keys.add(event.code);}if(event.code==='KeyL'&&!event.repeat){event.preventDefault();lock.toggle();}});
+on(window,'keydown',event=>{if(!usable()||event.target.closest?.('a,button,input,textarea'))return;if(event.code==='KeyE'&&!event.repeat){event.preventDefault();if(swimming?.state.active)return;if(seatedSeat)riseFromSeat();else enterSeat(true);return;}if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space','KeyC','ControlLeft','ControlRight'].includes(event.code)){event.preventDefault();if(!seatedSeat)keys.add(event.code);}if(event.code==='KeyL'&&!event.repeat){event.preventDefault();lock.toggle();}});
 on(window,'keyup',event=>keys.delete(event.code));
 on(window,'storage',event=>{if(event.key===CONTROL_PREFERENCES_KEY||event.key===null){controlsPreference=createControlPreferences({storage:getQualityStorage()}).value;applyStickScale();resetInput();}});
 on(window,'blur',()=>{inputFocused=false;resetInput();});on(window,'focus',()=>{inputFocused=true;resetInput();});
-on(document,'visibilitychange',()=>{resetInput();lastFrameRendered=false;performanceQuality.resetSamples();screenPlayer?.update({active:usable()&&!floodRunning,visible:screenInView});if(document.hidden)floodSensory?.update({active:false});});
+on(document,'visibilitychange',()=>{resetInput();lastFrameRendered=false;performanceQuality.resetSamples();screenPlayer?.update({active:usable()&&!floodRunning&&screenControl?.mediaId!=='codex',visible:screenInView});if(document.hidden)floodSensory?.update({active:false});});
 on(canvas,'webglcontextlost',event=>{
   event.preventDefault();contextLost=true;lastFrameRendered=false;resetInput();lock.release();
   renderCadence.reset();lastRenderedAt=0;frameMetrics.mark('context-lost');
@@ -100,8 +113,9 @@ activitySync=resources.own(createC118ActivitySync({embedded:window.parent!==wind
   // Apply pause/flood gates before a host selection can start a media request.
   // The initial bridge callback may run before activitySync is assigned.
   if(!usable()||floodRunning)screenPlayer?.update({active:false,visible:screenInView});
-  if(screenControl)screenPlayer?.selectMedia(screenControl);
-  screenPlayer?.update({active:usable()&&!floodRunning,visible:screenInView});
+  syncScreenProgramme();
+  if(paused||floodEvent)codexScreen?.close();
+  screenPlayer?.update({active:usable()&&!floodRunning&&screenControl?.mediaId!=='codex',visible:screenInView});
   if(paused){resetInput();lock.release();floodSensory?.update({active:false});}
   if(state.disposed)dispose();
 }}),'activity-subscription');
@@ -112,7 +126,7 @@ function dispose({keepNavigation=false}={}){
   if(!keepNavigation)navigationListeners.splice(0).forEach(fn=>fn());
   if(disposed)return;disposed=true;cancelAnimationFrame(raf);resetInput();lock.dispose();pageLifecycle?.dispose();listeners.splice(0).forEach(fn=>fn());
   const failures=resources.dispose();frameMetrics.mark('disposed',{cleanupFailures:failures.length});
-  renderer=interior=motion=audience=floodEffect=floodSensory=screenPlayer=activitySync=swimming=seating=gpuTimer=null;
+  renderer=interior=motion=audience=floodEffect=floodSensory=screenPlayer=activitySync=swimming=seating=gpuTimer=codexScreen=null;
   resetFloodView=enterSeat=riseFromSeat=faceStage=()=>{};canvas.dataset.resourceOwners='0';
 }
 function failRuntime(error){
@@ -153,6 +167,7 @@ if(!disposed)try{
   const underwaterFog=new THREE.FogExp2('#287484',.025);
   const timeLabel=seconds=>{const whole=Math.max(0,Math.floor(seconds));return `${Math.floor(whole/60)}:${String(whole%60).padStart(2,'0')}`;};
   screenPlayer=resources.own(createC118VideoScreen(THREE,{screen:interior.videoScreen,onState:s=>{
+    if(screenControl?.mediaId==='codex')return;
     document.querySelector('#screen-title').textContent=s.title||'Vibe Coding 成果展示';
     document.querySelector('#screen-time').textContent=`${timeLabel(s.time)} / ${timeLabel(s.duration)}`;
     document.querySelector('#screen-play').textContent=s.failed?'重试播放':s.blocked?'播放':s.userPaused?'继续播放':'暂停';
@@ -161,7 +176,9 @@ if(!disposed)try{
     canvas.dataset.videoState=s.failed?'error':s.playing?'playing':s.loading?'loading':'paused';
     canvas.dataset.mediaId=s.mediaId||'vibe-coding';
   }}),'video-screen');
-  if(screenControl)screenPlayer.selectMedia(screenControl);
+  codexScreen=resources.own(createC118CodexScreen({THREE,screen:interior.videoScreen,onOpenChange(){resetInput();lock.release();}}),'codex-screen');
+  on(document.querySelector('#screen-codex-open'),'click',()=>codexScreen.open());
+  syncScreenProgramme();
   for(const [id,action] of [['screen-play','togglePlayback'],['screen-sound','toggleSound'],['screen-restart','restart']])on(document.querySelector(`#${id}`),'click',event=>{screenPlayer[action]();if(event.detail>0)canvas.focus({preventScroll:true});});
   const screenFrustum=new THREE.Frustum(),projectionView=new THREE.Matrix4();
   const requestedView=new URLSearchParams(location.search).get('view'),start=interior.viewpoints[requestedView]||interior.spawn;
@@ -298,7 +315,7 @@ if(!disposed)try{
     }
     camera.updateMatrixWorld();projectionView.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);screenFrustum.setFromProjectionMatrix(projectionView);
     screenInView=inHall&&camera.position.z>interior.videoScreen.position.z&&screenFrustum.intersectsObject(interior.videoScreen);
-    if(ready)screenPlayer.update({active:usable()&&!floodRunning,visible:screenInView});
+    if(ready)screenPlayer.update({active:usable()&&!floodRunning&&screenControl?.mediaId!=='codex',visible:screenInView});
     interior.update?.(camera);
     // Input, walking, swimming, event clocks and poses above remain RAF driven.
     // Only GPU submission is capped, with a lower ceiling while watching film.

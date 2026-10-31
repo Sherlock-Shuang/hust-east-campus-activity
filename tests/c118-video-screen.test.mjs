@@ -252,3 +252,11 @@ test('dispose after a switch prevents both generations of async work from touchi
   assert.ok([...f.listeners.values()].every(set=>set.size===0));
   assert.equal(f.player.selectMedia({mediaId:'vibe-coding',revision:2}),false);
 });
+
+test('Codex owns the screen while delayed video posters, frames and metadata cannot overwrite or resize it',()=>{
+ const scale={x:1,y:1,z:1,set(x,y,z){Object.assign(this,{x,y,z});}},f=fixture({screen:{scale,geometry:{parameters:{width:16,height:9}}}});
+ f.visible();f.player.setScreenEnabled(false);const codex={name:'codex'};f.screen.material.map=codex;f.screen.visible=true;
+ f.readyPoster();f.video.readyState=2;f.video.videoWidth=100;f.video.videoHeight=100;f.video.dispatch('loadedmetadata');f.video.dispatch('loadeddata');
+ assert.equal(f.screen.material.map,codex);assert.equal(scale.x,1);
+ f.player.setScreenEnabled(true);assert.equal(f.screen.material.map,f.textures[0]);f.player.dispose();
+});

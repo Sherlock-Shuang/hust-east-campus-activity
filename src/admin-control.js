@@ -34,8 +34,8 @@ let presets = [], mapReady = false, mapView = null, defaultMapView = null, pollI
 let pauseMessageDirty = false, pauseMessageBase = '';
 let phaseDirty=false, phaseBase='', audienceData=null, audiencePending=false, selectedAudienceId=null, selectedAudience=null, detailLimit=100, searchTimer, detailRequest=0;
 let launchDirty=false, launchBase='', launchSelection=new Set();
-let skyQrReady = false,screenSelectionDirty=false;
-const screenTitles={'vibe-coding':'Vibe Coding 成果展示','club-promo':'AI 俱乐部宣传片'};
+let skyQrReady = false,screenSelectionDirty=false,codexDraftDirty=false;
+const screenTitles={'vibe-coding':'Vibe Coding 成果展示','club-promo':'AI 俱乐部宣传片','codex':'Codex 页面'};
 const defaultPauseMessage = '请稍候，活动即将继续';
 let selection = { x: 58.2, z: 17.6, label: '东九 B/C 前场' };
 const NS = 'http://www.w3.org/2000/svg';
@@ -68,7 +68,9 @@ function renderC118Screen(){
   const selector=$('c118-screen-media');
   if(!screenSelectionDirty)selector.value=current.mediaId;
   $('c118-screen-status').textContent=ready?`当前：${screenTitles[current.mediaId]}`:'等待同步';
-  $('c118-screen-note').textContent=ready&&snapshot.state.paused?'全场暂停中，恢复后播放所选影片。':ready&&snapshot.state.c118Flood?'海啸演出期间视频暂停，恢复报告厅后播放所选影片。':'厅内玩家会统一切换到所选影片；音量由每位观众控制。';
+  $('c118-screen-note').textContent=ready&&current.mediaId==='codex'?'后台发布文字，玩家可打开页面回复。':ready&&snapshot.state.paused?'全场暂停中，恢复后播放所选影片。':ready&&snapshot.state.c118Flood?'海啸演出期间视频暂停，恢复报告厅后播放所选影片。':'厅内玩家会统一切换到所选影片；音量由每位观众控制。';
+  if(!codexDraftDirty)$('c118-codex-text').value=current.codexText||'';
+  $('c118-codex-text').disabled=busy||!ready;$('publish-c118-codex').disabled=busy||!ready;
   selector.disabled=busy||!ready;
   $('play-c118-screen').disabled=busy||!ready;
   $('restart-c118-screen').disabled=busy||!ready;
@@ -110,7 +112,7 @@ async function request(path, options = {}) {
   return data;
 }
 function showLogin(message = '') {
-  loggedIn = false; csrfToken = ''; screenSelectionDirty=false; $('dashboard').hidden = true; $('login-screen').hidden = false;
+  loggedIn = false; csrfToken = ''; screenSelectionDirty=false,codexDraftDirty=false; $('dashboard').hidden = true; $('login-screen').hidden = false;
   skyQrReady = false; renderSkyQr();renderC118Flood();renderC118Screen();
   launchDirty=false;launchBase='';launchSelection.clear();delete $('activity-choices').dataset.signature;
   audienceData=null;selectedAudienceId=null;selectedAudience=null;detailRequest++;$('audience-list').replaceChildren();$('audience-detail').replaceChildren();delete $('audience-list').dataset.signature;delete $('audience-detail').dataset.signature;
@@ -609,12 +611,14 @@ $('toggle-pause').addEventListener('click', () => {
   const target = !snapshot?.state.paused, applyMessageEdit = capturePauseMessageEdit();
   mutate(state => { applyMessageEdit(state); state.paused = target; }, target ? '暂停指令已发布，在线玩家将进入暂停状态。' : '恢复指令已发布，玩家可以继续探索。').then(ok => { if (ok) syncPauseMessage(true); });
 });
-$('show-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = true; }, '二维码已在校园天空显示。'));
+$('show-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = true; }, '二维码已在韵苑十六栋上方显示。'));
 $('hide-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = false; }, '天空二维码已收起。'));
+$('c118-codex-text').addEventListener('input',()=>{codexDraftDirty=true;});
+$('c118-codex-form').addEventListener('submit',event=>{event.preventDefault();const text=$('c118-codex-text').value.trim();mutate(state=>{const current=normalizeC118Screen(state.c118Screen);state.c118Screen={...current,mediaId:'codex',revision:current.revision+1,codexText:text};},'Codex 内容已发布到报告厅大屏。').then(ok=>{if(ok){codexDraftDirty=false;screenSelectionDirty=false;renderC118Screen();}});});
 $('c118-screen-media').addEventListener('change',()=>{screenSelectionDirty=true;});
 $('play-c118-screen').addEventListener('click',()=>{
   const mediaId=$('c118-screen-media').value;
-  mutate(state=>{const current=normalizeC118Screen(state.c118Screen);state.c118Screen={mediaId,revision:current.revision+1};},`已切换到${screenTitles[mediaId]}，报告厅内观众将从头播放。`).then(ok=>{if(ok){screenSelectionDirty=false;renderC118Screen();}});
+  mutate(state=>{const current=normalizeC118Screen(state.c118Screen);state.c118Screen={...current,mediaId,revision:current.revision+1};},`已切换到${screenTitles[mediaId]}，报告厅内观众将从头播放。`).then(ok=>{if(ok){screenSelectionDirty=false;renderC118Screen();}});
 });
 $('restart-c118-screen').addEventListener('click',()=>{
   mutate(state=>{const current=normalizeC118Screen(state.c118Screen);state.c118Screen={...current,revision:current.revision+1};},'已通知报告厅内观众重新播放当前影片。');
