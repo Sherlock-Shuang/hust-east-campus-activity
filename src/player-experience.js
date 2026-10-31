@@ -82,7 +82,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   const inputBlocked=()=>suspended||document.hidden||!!document.querySelector('dialog[open]');
   const pointerLock=createPlayerPointerLock({canvas,document,canLock:()=>active&&!disposed&&!inputBlocked(),
     onChange(locked){clearInput();if(!locked)escapeReleaseUntil=performance.now()+300;updateUI();invalidate();},
-    onError(){const fallback=comfortableCamera?(motion.state.mode==='spider'?'按住右键拖动视角':'按住鼠标拖动视角'):'移动鼠标环视';notify(pointerLock.supported?`暂未锁定鼠标：请在游戏画面内按中键或 L 重试；仍可${fallback}。`:`当前浏览器不支持鼠标锁定，仍可${fallback}。`);},
+    onError(){const fallback='移动鼠标环视';notify(pointerLock.supported?`暂未锁定鼠标：请在游戏画面内按中键或 L 重试；仍可${fallback}。`:`当前浏览器不支持鼠标锁定，仍可${fallback}。`);},
   });
   function releaseLookContact(){const previous=drag;drag=null;mouseLook=null;if(previous)try{if(canvas.hasPointerCapture?.(previous.id))canvas.releasePointerCapture(previous.id);}catch{}}
   function clearInput(){spiderRequest=null;if(!suspended)motion.clearActionInputs?.();keys.clear();held.clear();mobileHeld.clear();waterControls?.reset();mobileAxes={forward:0,sideways:0};mobileControls?.reset();pulses.clear();cruise=false;liftTarget=null;landing=false;releaseLookContact();held.delete('mouse-swing');webAudio.setActive(false);}
@@ -179,7 +179,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
       const releaseHint=attached?({entry:'接丝过渡',downswing:'下摆蓄速',bottom:'谷底 · 松丝前冲',upswing:'上摆 · 松丝腾高'}[s.swingPhase]||'松丝保留惯性'):'空格起跳 · E 接丝';
       const target=$('web-target-status');
       if(target)target.dataset.state=attached||s.zipActive?'attached':ready?'ready':'searching';
-      let targetLabel=suitView?(comfortableCamera?'按住右键拖动环视':'移动鼠标环视'):s.diving?'松开 X · E 接丝':s.zipActive?'蛛丝前冲 · WASD 控向':attached?`${releaseHint} · 松手后重按换点`:ready?'按 E / 左键挂丝':s.wallContact?'空格蹬墙跃出':s.grounded?'空格起跳 / WASD 移动后找挂点':'暂无可见挂点 · 调整方向后重按';
+      let targetLabel=suitView?'移动鼠标环视':s.diving?'松开 X · E 接丝':s.zipActive?'蛛丝前冲 · WASD 控向':attached?`${releaseHint} · 松手后重按换点`:ready?'按 E / 左键挂丝':s.wallContact?'空格蹬墙跃出':s.grounded?'空格起跳 / WASD 移动后找挂点':'暂无可见挂点 · 调整方向后重按';
       if(!suitView&&pointBusy)targetLabel=s.pointPhase==='approach'?'接近屋沿时按空格弹射':'空格弹射 · E 接丝';
       else if(!suitView&&s.trickActive)targetLabel='松开 T 收招 · E 接丝';
       updateElement('web-target-label',{textContent:targetLabel});
@@ -196,7 +196,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(s.mode==='walk'&&s.waterMode!=='dry')basics.walk='WASD 移动 · 空格 / Q 上浮 · C / E 下潜 · F 上下板 · G 冲浪';
     const escapeHint=pointerLock.locked?'Esc 释放，再按退出':'Esc 退出';
     const actionHint=!interaction||s.waterMode!=='dry'?'':s.mode==='walk'?'靠近载具 / 战衣 · F 使用':s.mode==='spider'?'F 空中前冲 / 地面脱下战衣':s.mode==='boat'?'靠岸停稳 · F 下船':'停稳落地 · F 下车';
-    const lookHint=comfortableCamera?(spider?'按住右键拖动视角':'按住鼠标拖动视角'):'移动鼠标转动视角';
+    const lookHint='移动鼠标转动视角';
     let helpText=`${lookHint}\n${basics[s.mode]}${actionHint?'\n'+actionHint:''}\n中键 / L 锁定鼠标 · V 切视角 · ${escapeHint}`;
     const nearby=active&&!suspended&&s.waterMode==='dry'?interaction?.nearest():null;
     updateElement('transport-interact',{hidden:!nearby});
@@ -341,11 +341,6 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     // Only a press on the canvas starts a web. Hovering from a HUD button
     // with a held mouse button must never initiate traversal.
     if(mouse&&!(e.buttons&1))held.delete('mouse-swing');
-    // Comfort mode never pans merely while the pointer travels to a HUD button.
-    // Spider left-click remains dedicated to web actions; right-drag looks around.
-    if(mouse&&comfortableCamera&&!(e.buttons&(motion.state.mode==='spider'?2:3))){
-      mouseLook={id:e.pointerId,x:e.clientX,y:e.clientY,looking:false};return;
-    }
     if(mouse&&(!mouseLook||mouseLook.id!==e.pointerId)){seedMouse(e);return;}
     const pointer=mouse?mouseLook:drag;
     if(!pointer||pointer.id!==e.pointerId)return;
@@ -356,7 +351,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     applyLook(dx,dy,!mouse);
   });
   const releasePointer=e=>{if(e.pointerType!=='mouse'){if(drag?.id===e.pointerId)releaseLookContact();return;}mouseLook=null;held.delete('mouse-swing');};
-  on(canvas,'pointerup',e=>{if(e.pointerType==='mouse'){held.delete('mouse-swing');if(comfortableCamera&&mouseLook)mouseLook.looking=false;}else releasePointer(e);});
+  on(canvas,'pointerup',e=>{if(e.pointerType==='mouse')held.delete('mouse-swing');else releasePointer(e);});
   on(canvas,'pointercancel',releasePointer);on(canvas,'lostpointercapture',releasePointer);
   on(window,'pointerup',releasePointer);on(window,'pointercancel',releasePointer);
   on(canvas,'pointerleave',e=>{if(e.pointerType==='mouse'&&!pointerLock.locked){mouseLook=null;held.delete('mouse-swing');}});
