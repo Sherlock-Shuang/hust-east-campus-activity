@@ -26,3 +26,11 @@ test('each viewer keeps independent replies; repeated snapshots do not duplicate
 test('personal QR keeps its original sky placement independently of the group card',()=>{
  assert.deepEqual(SKY_QR_PLACEMENT,{x:428.44619,y:2400,z:58.80678,size:1200});
 });
+
+test('viewer chat is ephemeral and clearing does not replay an unchanged host snapshot',()=>{
+ const viewer=createLocalCodexConversation(),host={mediaId:'codex',revision:1,codexText:'主持人'};
+ viewer.accept(host);viewer.reply('私有回复');viewer.clear();assert.equal(viewer.messages.length,0);
+ assert.equal(viewer.accept(host),false);assert.equal(viewer.messages.length,0);
+ viewer.accept({...host,revision:2,codexText:'下一句'});assert.deepEqual(viewer.messages,[{role:'codex',text:'下一句'}]);
+ assert.equal(createLocalCodexConversation().messages.length,0,'a new page cannot restore another page reply');
+});

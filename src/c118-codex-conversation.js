@@ -7,5 +7,8 @@ export function createLocalCodexConversation(){
     accept(state){if(state?.mediaId!=='codex')return false;const key=`${state.revision}:${state.codexText||''}`;if(key===hostKey)return false;hostKey=key;
       const text=state.codexText?.trim();if(!text)messages=[];else messages=[...messages,{role:'codex',text}].slice(-40);return true;},
     reply(value){const text=String(value??'').trim().slice(0,2000);if(!text)return false;messages=[...messages,{role:'user',text}].slice(-40);return true;},
+    // Keep the host revision cursor so reconnecting to the same snapshot does
+    // not repopulate a chat the viewer deliberately cleared. Nothing is stored.
+    clear(){messages=[];},
   };
 }

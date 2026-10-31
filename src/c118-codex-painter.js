@@ -1,6 +1,7 @@
 // Canvas counterpart of codex-ui-replica/dist/index.html + fidelity.css.
 // Render into the hall's existing video mesh; no second screen or DOM app.
 export const CODEX_VIEW = Object.freeze({width:1280,height:720,ratio:2});
+const messageLayouts=new WeakMap();
 export function paintC118Codex(ctx,{messages=[],draft='',icon=()=>{}}={}){
   const C={chrome:'#f7f7f7',sidebar:'#fcfcfc',ink:'#373530',secondary:'#54534e',muted:'#9d9c99',line:'#eeeeec'};
   function roundedRect(x,y,w,h,r){ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
@@ -35,22 +36,29 @@ export function paintC118Codex(ctx,{messages=[],draft='',icon=()=>{}}={}){
   text('GPT-6.1 Sol',right-177,composerY+82,13);text('高',right-91,composerY+82,13,'#3021f0');glyph('chevronDown',right-70,composerY+72,10);
   box(right-42,composerY+64,28,28,14,draft.trim()?C.ink:'#ededeb');glyph('arrowUp',right-37,composerY+69,18,draft.trim()?'#fff':'#b3b3b0');
   if(!messages.length){
+    messageLayouts.delete(ctx);
     glyph('codex',764,191,40,C.muted);text('我们来构建点什么？',665,269,26,C.ink,500);
     const prompts=[['book','探索并理解','项目代码','#3d82c4'],['sparkles','构建新功能、','应用或工具','#9c6acf'],['gitPull','审查代码','并提供建议','#558c62'],['bolt','排查问题','并修复错误','#c47b4a']];
     prompts.forEach(([name,a,b,color],i)=>{const x=459+i*165;box(x,310,155,92,12,'#fff',C.line);glyph(name,x+12,322,16,color);text(a,x+12,368,12,C.secondary);text(b,x+12,386,12,C.secondary);});
   }else{
     // Latest turns stay above the composer; long content is clipped to the
     // conversation viewport, never over the title bar or input controls.
-    let bottom=578;const blocks=[];
-    for(const item of [...messages].reverse()){
-      const user=item.role==='user',rows=wrap(item.text,user?690:908).slice(-17),h=rows.length*27+(user?24:0),top=bottom-h;
-      blocks.unshift({user,rows,top,h});bottom=top-(user?35:28);if(bottom<44)break;
+    let layout=messageLayouts.get(ctx);
+    if(layout?.messages!==messages){
+      let bottom=578;const blocks=[];
+      for(const item of [...messages].reverse()){
+        const user=item.role==='user',rows=wrap(item.text,user?690:908).slice(-17),h=rows.length*27+(user?24:0),top=bottom-h;
+        const width=user?Math.min(726,Math.max(...rows.map(s=>ctx.measureText(s).width))+32):right-left;
+        blocks.unshift({user,rows,top,h,width});bottom=top-(user?35:28);if(bottom<44)break;
+      }
+      layout={messages,blocks};messageLayouts.set(ctx,layout);
     }
+    const {blocks}=layout;
     ctx.save();ctx.beginPath();ctx.rect(left,65,right-left,520);ctx.clip();
     const offset=Math.min(0,85-blocks[0].top);
-    for(const {user,rows,top:blockTop,h}of blocks){
+    for(const {user,rows,top:blockTop,h,width}of blocks){
       const top=blockTop+offset;
-      const width=user?Math.min(726,Math.max(...rows.map(s=>ctx.measureText(s).width))+32):right-left,x=user?right-width:left+4;
+      const x=user?right-width:left+4;
       if(user)box(x,top,width,h,18,'#f5f5f4');
       rows.forEach((s,i)=>text(s,x+(user?16:0),top+(user?31:20)+i*27,17));
     }ctx.restore();

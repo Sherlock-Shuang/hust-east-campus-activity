@@ -30,6 +30,7 @@ let renderer,interior,motion,screenPlayer,raf,screenInView=false,disposed=false,
 let activitySync,floodEffect,floodSensory,gpuTimer,floodEvent=null,floodRunning=false;
 let resetFloodView=()=>{};
 let codexScreen,screenNeedsRender=false;
+let activateCodexAt=()=>false;
 let screenControl=null,audience,seating,seatedSeat=null,seatView=null,beforeSeatPose=null,seatTransition=null;
 let cinema=false,cinemaView=null,swimming,swimVertical=0,floodReturn=null;
 let enterSeat=()=>{},riseFromSeat=()=>{},faceStage=()=>{};
@@ -54,7 +55,7 @@ const lock=createPlayerPointerLock({canvas,document,canLock:usable,onChange:()=>
 function syncScreenProgramme(){
   const codex=screenControl?.mediaId==='codex';
   screenPlayer?.setScreenEnabled(!codex);codexScreen?.select(codex?screenControl:null);
-  document.querySelector('#screen-codex-open').hidden=!codex;
+  document.querySelector('#screen-codex-open').hidden=!codex;document.querySelector('#screen-codex-new').hidden=!codex;
   document.querySelector('#screen-program-note').textContent=codex?'舞台大屏 · 主持人同步':'主持人统一选片';
   document.querySelector('#hall-screen-controls nav').hidden=codex;
   document.querySelector('#screen-time').hidden=codex;
@@ -88,12 +89,15 @@ on(canvas,'webglcontextrestored',()=>{
 });
 for(const type of ['pointerdown','keydown'])on(window,type,()=>floodSensory?.unlock(),{capture:true});
 on(canvas,'pointerdown',event=>{
+  if(!disposed&&!paused&&!returning&&!contextLost&&!floodRunning&&activateCodexAt(event)){event.preventDefault();resetInput();return;}
+  codexScreen?.close();
   if(!usable())return;canvas.focus({preventScroll:true});
   if(event.pointerType==='mouse')return;
   event.preventDefault();canvas.setPointerCapture(event.pointerId);
   if(event.clientX<innerWidth*.47&&!joy){joy={id:event.pointerId,x:event.clientX,y:event.clientY};stick.style.left=`${joy.x}px`;stick.style.top=`${joy.y}px`;stick.firstElementChild.style.transform='';stick.hidden=false;}
   else if(!look)look={id:event.pointerId,x:event.clientX,y:event.clientY};
 });
+on(document,'pointerdown',event=>{if(event.target!==canvas&&!event.target.closest?.('.hall-codex-reply'))codexScreen?.close();},{capture:true});
 on(canvas,'pointermove',event=>{
   if(!usable())return;
   if(joy?.id===event.pointerId){const dx=event.clientX-joy.x,dy=event.clientY-joy.y,l=Math.hypot(dx,dy),s=Math.min(1,l/(42*controlsPreference.joystickScale)),gain=s<.12?0:(s-.12)/.88;axes={forward:l?-dy/l*gain:0,sideways:l?dx/l*gain:0};stick.firstElementChild.style.transform=`translate(${l?dx/l*s*36:0}px,${l?dy/l*s*36:0}px)`;}
@@ -180,6 +184,15 @@ if(!disposed)try{
   }}),'video-screen');
   codexScreen=resources.own(createC118CodexScreen({THREE,screen:interior.videoScreen,onInvalidate(){screenNeedsRender=true;},onOpenChange(open){document.body.dataset.codexReply=String(open);resetInput();lock.release();}}),'codex-screen');
   on(document.querySelector('#screen-codex-open'),'click',()=>codexScreen.open());
+  on(document.querySelector('#screen-codex-new'),'click',()=>codexScreen.newChat());
+  const codexRay=new THREE.Raycaster(),codexPointer=new THREE.Vector2();
+  activateCodexAt=event=>{
+    if(event.button!==0||screenControl?.mediaId!=='codex'||!interior.videoScreen.visible)return false;
+    const rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return false;
+    codexPointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);
+    camera.updateMatrixWorld();interior.videoScreen.updateWorldMatrix(true,false);codexRay.setFromCamera(codexPointer,camera);
+    const hit=codexRay.intersectObject(interior.videoScreen,false)[0];return hit?codexScreen.activate(hit.uv):false;
+  };
   syncScreenProgramme();
   for(const [id,action] of [['screen-play','togglePlayback'],['screen-sound','toggleSound'],['screen-restart','restart']])on(document.querySelector(`#${id}`),'click',event=>{screenPlayer[action]();if(event.detail>0)canvas.focus({preventScroll:true});});
   const screenFrustum=new THREE.Frustum(),projectionView=new THREE.Matrix4();
