@@ -8,7 +8,7 @@ export function mountAnnouncementNotice(element, {
   cancel = clearTimeout,
   onDismiss = () => {},
 } = {}) {
-  element.innerHTML = '<button class="live-announcement-close" type="button" aria-label="关闭公告" hidden disabled>×</button><span class="live-announcement-tag">校园广播</span><h2></h2><p></p><span class="live-announcement-time"></span>';
+  element.innerHTML = '<button class="live-announcement-close" type="button" aria-label="关闭公告" hidden disabled>×</button><span class="live-announcement-tag">codex</span><h2></h2><p></p><span class="live-announcement-time"></span>';
   const close = element.querySelector('.live-announcement-close');
   const dismissed = new Set();
   let currentKey = '', shownAt = 0, timer, disposed = false;
