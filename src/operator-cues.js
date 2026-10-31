@@ -78,16 +78,11 @@ export function mountCueSidebar({ host, toggle, onUse, actionRole, actionLabel }
   for (const [value, label] of [['', '全部环节'], ...[...new Set(SCRIPT.entries.map(entry => entry.chapter))].map(value => [value, value])]) {
     const option = make('option', '', label); option.value = value; chapter.append(option);
   }
-  const roles = make('div', 'cue-roles'); roles.setAttribute('role', 'group'); roles.setAttribute('aria-label', '台词类型');
-  let selectedRole = '';
-  for (const [value, label] of [['', '全部'], ...Object.entries(ROLES)]) {
-    const control = button(label, () => {
-      selectedRole = value;
-      roles.querySelectorAll('button').forEach(node => node.setAttribute('aria-pressed', String(node === control)));
-      render();
-    });
-    control.setAttribute('aria-pressed', String(!value)); roles.append(control);
+  const roles = make('select', 'cue-roles'); roles.setAttribute('aria-label', '台词类型');
+  for (const [value, label] of [['', '全部台词与提示'], ...Object.entries(ROLES)]) {
+    const option = make('option', '', label); option.value = value; roles.append(option);
   }
+  roles.addEventListener('change', render);
   filters.append(search, chapter, roles);
   const summary = make('p', 'cue-summary'), list = make('div', 'cue-list');
   const status = make('p', 'cue-status', store.warning || '文字可直接编辑 · 修改保存在当前浏览器');
@@ -125,7 +120,7 @@ export function mountCueSidebar({ host, toggle, onUse, actionRole, actionLabel }
     }
   }
   function render() {
-    const entries = filterCues(store.entries(), { role: selectedRole, chapter: chapter.value, query: search.value });
+    const entries = filterCues(store.entries(), { role: roles.value, chapter: chapter.value, query: search.value });
     summary.textContent = `显示 ${entries.length} / ${SCRIPT.entries.length} 条 · 按剧本顺序`;
     list.replaceChildren();
     let previousChapter = '';
