@@ -110,7 +110,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(hit?.item.mode==='spider'&&!ensureSpider())return {ok:false,reason:'战衣暂未准备成功'};
     return interaction.interact();
   }
-  function clampLookPitch(value){return Math.max(motion.state.mode==='walk'?WALK_MIN_PITCH:-.35,Math.min(.85,value));}
+  function clampLookPitch(value){return Math.max(motion.state.mode==='walk'||motion.state.mode==='spider'?WALK_MIN_PITCH:-.35,Math.min(.85,value));}
   function recenter(preserveVehicleCamera=false,smooth=false){mouseLook=null;yawOffset=0;pitch=view==='first'?.04:motion.state.mode==='spider'?.18:motion.state.mode==='hoverboard'?.12:motion.state.mode==='roadster'?.15:.25;distance=undefined;manualPitch=false;lookHold=0;spiderCamera.reset(motion.state);if(smooth)vehicleCamera.recenter(motion.state);else if(!preserveVehicleCamera)vehicleCamera.reset(motion.state,motion.state.yaw);}
   function setImmersive(value){immersive=!!value;document.body.classList.toggle('spider-immersive',active&&motion.state.mode==='spider'&&immersive);document.body.classList.toggle('drive-immersive',active&&['roadster','hoverboard'].includes(motion.state.mode)&&driveImmersive);window.dispatchEvent(new Event('resize'));}
   function stopSuitView(){if(!suitView)return;suitView=false;recenter();updateUI();}
@@ -488,7 +488,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(interaction?.mounted&&saved.mode==='scooter')models.setScooterAppearance(interaction.mounted.item.appearance);
     initialized=true;
     enter(saved.mode);if(!active||motion.state.mode!==saved.mode)return false;
-    view=saved.view;pitch=Number.isFinite(saved.pitch)?Math.max(saved.mode==='walk'?WALK_MIN_PITCH:-1.4,Math.min(1.4,saved.pitch)):.25;
+    view=saved.view;pitch=Number.isFinite(saved.pitch)?Math.max(saved.mode==='walk'||saved.mode==='spider'?WALK_MIN_PITCH:-1.4,Math.min(1.4,saved.pitch)):.25;
     camera.near=view==='first'?.06:.12;camera.updateProjectionMatrix();
     yawOffset=Number.isFinite(saved.yawOffset)?saved.yawOffset:0;manualPitch=!!saved.manualPitch;distance=Number.isFinite(saved.distance)?Math.max(1,Math.min(100,saved.distance)):undefined;
     const restoredHeading=Number.isFinite(saved.lookHeading)?saved.lookHeading:motion.state.yaw;

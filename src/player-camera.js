@@ -11,7 +11,7 @@ const CAMERA = {
   spider: { distance: 5.8, aim: 1.05, eye: 1.65 },
 };
 const CLEARANCE = .24;
-// A walker can look almost straight up without crossing the vertical pole.
+// Walking and Spider-Man can look almost straight up without crossing the pole.
 export const WALK_MIN_PITCH = -1.5;
 const footprintBounds = new WeakMap();
 const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
@@ -140,7 +140,7 @@ export function calculatePlayerCamera(state, { view = 'third', yawOffset = 0, pi
   const actionFov = 2.4*action.launch-1.2*action.approach;
   const framing = spider ? { fov: (view === 'first' ? 56 : 58) + (comfortable ? 0 : (view === 'first' ? 10 : 12) * speedFactor + zipPulse * 2 + actionFov), speedFactor } : null;
   const yaw = finite(heading, finite(state.yaw, 0)) + finite(yawOffset, 0);
-  const angle = Math.max(view === 'first' && state.mode === 'walk' ? WALK_MIN_PITCH : -.65, Math.min(1.3, finite(pitch, .25)));
+  const angle = Math.max(view === 'first' && (state.mode === 'walk' || spider) ? WALK_MIN_PITCH : -.65, Math.min(1.3, finite(pitch, .25)));
   const origin = { x: finite(state.x, 0), y: finite(state.y, 0), z: finite(state.z, 0) };
   const sin = Math.sin(yaw), cos = Math.cos(yaw);
   if (view === 'first') {
@@ -217,11 +217,11 @@ const damp=(a,b,rate,dt)=>a+(b-a)*(1-Math.exp(-rate*dt));
  * pulls the existing boom around turns; instantaneous velocity never becomes
  * camera yaw. Manual orbit owns heading while the user is looking around. */
 export function createTraversalCameraRig(){
-  let heading=0,firstHeading=0,ready=false,position=null,target=null,speed=0,fov=58,roll=0,traversalPitch=.18,firstPitch=.18;
+  let heading=0,firstHeading=0,ready=false,position=null,target=null,speed=0,fov=58,roll=0,traversalPitch=.18,firstPitch=.18,skyPitch=0;
   let actionFraming={approach:0,perch:0,launch:0,trick:0};
   let focusPoint=null;
   let velocity={x:0,y:0,z:0};
-  function reset(state,angle=state.yaw||0){heading=angle;firstHeading=angle;ready=false;position=null;target=null;speed=Math.hypot(state.vx||0,state.vz||0);fov=58;velocity={x:0,y:0,z:0};roll=0;traversalPitch=.18;firstPitch=.18;actionFraming={approach:0,perch:0,launch:0,trick:0};focusPoint=null;}
+  function reset(state,angle=state.yaw||0){heading=angle;firstHeading=angle;ready=false;position=null;target=null;speed=Math.hypot(state.vx||0,state.vz||0);fov=58;velocity={x:0,y:0,z:0};roll=0;traversalPitch=.18;firstPitch=.18;skyPitch=0;actionFraming={approach:0,perch:0,launch:0,trick:0};focusPoint=null;}
   function rotate(delta){heading=wrapAngle(heading+delta);}
   function update(state,dt,options={}){
     const h=Math.max(0,Math.min(.1,dt)),snap=options.snap||!ready;
@@ -248,9 +248,14 @@ export function createTraversalCameraRig(){
     const requestedAngle=options.pitch??traversalPitch;
     firstPitch=snap?requestedAngle:damp(firstPitch,requestedAngle,40,h);
     const angle=options.view==='first'?firstPitch:requestedAngle;
+    const manualSky=options.view!=='first'&&Number.isFinite(options.pitch)&&options.pitch<0;
+    const skyTarget=manualSky?Math.max(WALK_MIN_PITCH,options.pitch):0;
+    skyPitch=snap?skyTarget:skyPitch+Math.max(-4.5*h,Math.min(4.5*h,damp(skyPitch,skyTarget,24,h)-skyPitch));
     const framedState=focusPoint&&!state.pointTarget?{...state,pointTarget:focusPoint}:state;
     firstHeading=snap?heading:wrapAngle(firstHeading+wrapAngle(heading-firstHeading)*(1-Math.exp(-40*h)));
-    const desired=calculatePlayerCamera(framedState,{...options,heading:options.view==='first'?firstHeading:heading,yawOffset:0,pitch:angle,visualSpeed:speed,actionFraming});
+    // Keep the boom at body height when the user looks up. Tilting the boom
+    // down instead makes ground collision prevent an overhead view.
+    const desired=calculatePlayerCamera(framedState,{...options,heading:options.view==='first'?firstHeading:heading,yawOffset:0,pitch:manualSky?0:angle,visualSpeed:speed,actionFraming});
     if(snap||options.view==='first'){
       position={...desired.position};target={...desired.target};velocity={x:0,y:0,z:0};
     }else{
@@ -269,7 +274,17 @@ export function createTraversalCameraRig(){
     fov=snap?desired.fov:damp(fov,desired.fov,4,h);
     const bank=options.comfortable||options.view==='first'||options.lookLocked?0:Math.max(-.018,Math.min(.018,(state.lean||0)*.045));
     roll=snap?bank:damp(roll,bank,5,h);
-    return {...safe,fov,roll,heading};
+    let outputTarget=safe.target;
+    if(options.view!=='first'&&skyPitch<0){
+      // Tilt only the optical axis after collision checks. Keep the internal
+      // structural target for the next spring/collision update and web swing.
+      const dx=target.x-position.x,dy=target.y-position.y,dz=target.z-position.z;
+      const horizontal=Math.hypot(dx,dz),length=Math.max(.1,Math.hypot(horizontal,dy));
+      const baseAngle=Math.atan2(-dy,horizontal),lookAngle=baseAngle+(WALK_MIN_PITCH-baseAngle)*(skyPitch/WALK_MIN_PITCH);
+      const forwardX=horizontal>1e-6?dx/horizontal:-Math.sin(heading),forwardZ=horizontal>1e-6?dz/horizontal:-Math.cos(heading);
+      outputTarget={x:position.x+forwardX*Math.cos(lookAngle)*length,y:position.y-Math.sin(lookAngle)*length,z:position.z+forwardZ*Math.cos(lookAngle)*length};
+    }
+    return {...safe,target:outputTarget,fov,roll,heading};
   }
   return {reset,rotate,update,get heading(){return heading;}};
 }

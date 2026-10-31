@@ -298,6 +298,68 @@ test('an overhead walking pose survives activity return and recentres to the ori
   assert.equal(f.experience.captureActivityPose().pitch,-.35,'mounting a vehicle restores its existing first-person range');
 });
 
+function assertSpiderOverhead(f){
+  const direction=f.camera.getWorldDirection(new THREE.Vector3());
+  const elevation=Math.atan2(direction.y,Math.hypot(direction.x,direction.z))*180/Math.PI;
+  assert.ok(elevation>85.5&&elevation<86.1,`Spider camera must actually face the overhead sky, got ${elevation.toFixed(3)} degrees`);
+  assert.equal(f.experience.captureActivityPose().pitch,-1.5);
+  assert.equal(f.experience.state.mode,'spider');
+  assert.equal(f.experience.state.anchor,null,'looking at the sky must not fire a web');
+}
+
+for(const view of ['third','first']){
+  test(`Spider overhead ${view}: mouse look survives activity return and explicit recenter`,t=>{
+    const f=fixture(t,{buildings:false,legacyControls:false,classicControls:false});
+    f.experience.enter('spider');if(view==='first')f.key('KeyV');f.tick(.6);
+    const initialDirection=f.camera.quaternion.clone(),initialEye=f.camera.position.clone();
+    const start={x:f.experience.state.x,y:f.experience.state.y,z:f.experience.state.z};
+    for(let gesture=0;gesture<2;gesture++){
+      f.canvas.emit('pointerenter',{clientX:600,clientY:650});
+      f.canvas.emit('pointermove',{clientX:600,clientY:0,buttons:0});f.tick(.6);
+    }
+    assertSpiderOverhead(f);
+    assert.deepEqual({x:f.experience.state.x,y:f.experience.state.y,z:f.experience.state.z},start,'mouse look never moves the character');
+    if(view==='first')assert.ok(f.camera.position.distanceTo(initialEye)<1e-8,'first-person sky look rotates the eye in place');
+    else assert.ok(f.camera.position.y>=f.experience.state.y+1,'third-person sky look keeps the camera above the feet');
+    f.canvas.emit('pointerleave');f.tick(2);assertSpiderOverhead(f);
+    const saved=f.experience.captureActivityPose(),looking=f.camera.quaternion.clone();
+    f.experience.exit();assert.equal(f.experience.restoreActivityPose(saved),true);f.tick(1);
+    assertSpiderOverhead(f);assert.equal(f.experience.captureActivityPose().view,view);
+    assert.ok(looking.angleTo(f.camera.quaternion)<.001,'the restored view persists beyond the initial restored frame');
+    f.key('KeyC');f.key('KeyC','keyup');f.tick(1);
+    assert.equal(f.experience.captureActivityPose().manualPitch,false);
+    assert.ok(initialDirection.angleTo(f.camera.quaternion)<.001,'C returns to the normal Spider framing');
+  });
+
+  test(`Spider overhead ${view}: pointer lock reaches the sky and preserves the downward bound`,t=>{
+    const f=fixture(t,{buildings:false,legacyControls:false});enablePointerLock(f);
+    f.experience.enter('spider');if(view==='first')f.key('KeyV');f.tick(.5);f.key('KeyL');
+    assert.equal(f.doc.pointerLockElement,f.canvas);
+    f.doc.emit('mousemove',{movementX:0,movementY:-1200});f.tick(.8);assertSpiderOverhead(f);
+    f.doc.emit('mousemove',{movementX:0,movementY:2000});f.tick(.8);
+    assert.equal(f.experience.captureActivityPose().pitch,.85);
+    assert.ok(Math.abs(f.camera.getWorldDirection(new THREE.Vector3()).y+Math.sin(.85))<.001,'downward look retains its existing camera angle');
+    assert.equal(f.experience.state.anchor,null);
+  });
+
+  test(`Spider overhead ${view}: right-side touch reaches the sky and mobile recenter restores framing`,t=>{
+    const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true,classicControls:false});
+    f.experience.enter('spider');if(view==='first')f.mobileAction('view').emit('click',{detail:0});f.tick(.6);
+    const initialDirection=f.camera.quaternion.clone(),start={x:f.experience.state.x,z:f.experience.state.z};
+    for(const pointerId of [21,22]){
+      assert.equal(sceneTouchDown(f,pointerId,{clientX:600,clientY:360}).propagationStopped,true);
+      touch(f.canvas,'pointermove',pointerId,{clientX:600,clientY:0});
+      touch(f.canvas,'pointerup',pointerId);f.tick(.6);
+    }
+    assertSpiderOverhead(f);f.tick(2);assertSpiderOverhead(f);
+    assert.equal(f.experience.captureActivityPose().view,view);
+    assert.deepEqual({x:f.experience.state.x,z:f.experience.state.z},start,'right-side look never starts the movement joystick');
+    f.mobileAction('recenter').emit('click',{detail:0});f.tick(1);
+    assert.equal(f.experience.captureActivityPose().manualPitch,false);
+    assert.ok(initialDirection.angleTo(f.camera.quaternion)<.001,'mobile recenter returns to normal Spider framing');
+  });
+}
+
 test('mouse look and Spider web hold coexist, but entering from a pressed HUD button cannot fire a web',t=>{
   const f=fixture(t);f.experience.enter('spider');
   f.canvas.emit('pointerenter',{clientX:200,clientY:200,buttons:1});f.canvas.emit('pointermove',{clientX:240,clientY:200,buttons:1});f.tick(.2);

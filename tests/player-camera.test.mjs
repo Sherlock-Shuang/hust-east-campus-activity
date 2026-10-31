@@ -49,7 +49,7 @@ test('a thin building wall shortens the trailing camera without putting it throu
   assert.ok(aboveRoof.position.z > 17);
 });
 
-test('a first-person walker can look almost straight up while other stateless camera limits stay unchanged', () => {
+test('first-person walking and Spider-Man can look overhead while other stateless camera limits stay unchanged', () => {
   const state = { mode: 'walk', x: 24, y: 10, z: -35, yaw: .7 };
   const eyePitch = pose => Math.atan2(pose.position.y - pose.target.y, Math.hypot(pose.position.x - pose.target.x, pose.position.z - pose.target.z));
   const up = calculatePlayerCamera(state, { view: 'first', pitch: -10 });
@@ -59,7 +59,7 @@ test('a first-person walker can look almost straight up while other stateless ca
   for (const mode of ['walk', 'boat', 'scooter', 'roadster', 'helicopter', 'hoverboard', 'spider']) {
     const subject = { ...state, mode };
     assert.deepEqual(calculatePlayerCamera(subject, { view: 'third', pitch: -10 }), calculatePlayerCamera(subject, { view: 'third', pitch: -.65 }));
-    if (mode !== 'walk') near(eyePitch(calculatePlayerCamera(subject, { view: 'first', pitch: -10 })), -.65);
+    near(eyePitch(calculatePlayerCamera(subject, { view: 'first', pitch: -10 })), mode === 'walk' || mode === 'spider' ? -1.5 : -.65);
   }
 });
 
@@ -143,6 +143,51 @@ test('dragged boom does not snap to a reversed velocity and cannot create a came
   for(let i=0;i<120;i++)rig.update({...s,x:i*.15,vx:9,vz:0,yaw:-Math.PI/2},1/60,{lookLocked:true});
   near(rig.heading,locked);
   rig.rotate(.4);rig.update(s,1/60,{lookLocked:true});near(rig.heading,locked+.4);
+});
+
+test('Spider-Man overhead look preserves the collision-safe boom across swing and action transitions',()=>{
+  const world={buildings:[{rings:[rectangle(-4,2,4,2.03)],height:60}]};
+  const groundAt=()=>5.5;
+  for(const view of ['first','third']){
+    const rig=createTraversalCameraRig();
+    const initial={mode:'spider',x:0,y:5.5,z:0,yaw:0,vx:0,vz:0,speed:0,grounded:true};
+    rig.reset(initial);
+    for(let i=0;i<180;i++){
+      const airborne=i>=30;
+      const state={...initial,y:airborne?15:5.5,grounded:!airborne,vz:airborne?-20:0,speed:airborne?20:0,verticalSpeed:airborne?8:0,
+        pointPhase:i>=60&&i<90?'approach':i<120?'perch':'launch',pointTarget:{x:0,y:25,z:-12},trickBlend:i>=140?1:0};
+      const pose=rig.update(state,1/60,{view,pitch:-1.5,world,groundAt,lookLocked:true});
+      const elevation=Math.atan2(pose.target.y-pose.position.y,Math.hypot(pose.target.x-pose.position.x,pose.target.z-pose.position.z));
+      near(elevation,1.5,.001);
+      assert.ok(pose.position.y>=5.74,'the camera stays above the raised ground');
+      assert.ok(pose.position.z<2,'the boom stays in front of the thin wall');
+      for(const point of [pose.position,pose.target])for(const value of Object.values(point))assert.ok(Number.isFinite(value));
+      if(view==='first')near(pose.position.y,state.y+1.65);
+    }
+  }
+});
+
+test('Spider-Man third-person overhead tilt eases in and returns to the normal framing without retaining the sky target',()=>{
+  const state={mode:'spider',x:0,y:0,z:0,yaw:.6,vx:0,vz:0,speed:0,grounded:true};
+  const rig=createTraversalCameraRig();rig.reset(state);
+  const options={view:'third',lookLocked:true,groundAt:()=>0};
+  const baseline=rig.update(state,0,{...options,snap:true});
+  const elevation=pose=>Math.atan2(pose.target.y-pose.position.y,Math.hypot(pose.target.x-pose.position.x,pose.target.z-pose.position.z));
+  let previous=baseline;
+  for(let i=0;i<60;i++){
+    const pose=rig.update(state,1/60,{...options,pitch:-1.5});
+    assert.ok(Math.abs(elevation(pose)-elevation(previous))<.12,'optical tilt plus boom settling remains below seven degrees per frame');
+    assert.ok(pose.position.y>=.24,'raising the view cannot put the camera underground');
+    near(Math.atan2(pose.position.x-pose.target.x,pose.position.z-pose.target.z),state.yaw,.001);
+    previous=pose;
+  }
+  near(elevation(previous),1.5,.001);
+  let restored;
+  for(let i=0;i<180;i++)restored=rig.update(state,1/60,options);
+  for(const key of ['x','y','z']){
+    near(restored.position[key],baseline.position[key],.001);
+    near(restored.target[key],baseline.target[key],.001);
+  }
 });
 
 test('spring-rendered poses are re-clipped at thin corners after a rapid turn',()=>{
