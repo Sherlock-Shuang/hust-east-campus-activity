@@ -17,7 +17,7 @@ test('new activities have no beacons or admission until the host explicitly open
 test('host selection atomically enables only chosen activities, clears old schedules and preserves coordinates',()=>{
   const original=activityPortals().map(p=>({...p,startAt:9999999999999,endAt:99999999999999}));
   const opened=selectActivitiesNow(original,['point-library','point-tasay']);
-  assert.deepEqual(opened.map(p=>isEventActive(p)),[true,false,true,true]);
+  assert.deepEqual(opened.map(p=>isEventActive(p)),[true,false,true,false]);
   assert.deepEqual(opened.map(({id,x,z,url,radius})=>({id,x,z,url,radius})),original.map(({id,x,z,url,radius})=>({id,x,z,url,radius})));
   assert.ok(original.every(p=>p.enabled===false));
   assert.ok(selectActivitiesNow(opened,[]).every(p=>!isEventActive(p)));

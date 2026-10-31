@@ -25,15 +25,17 @@ export function activityPortals(){
 }
 
 export const SHE_LOVE_POINT_ID='point-she-love-me';
+// Retained for compatibility with older consumers; this only identifies the
+// former linked entry and no longer implies shared admission or scheduling.
 export function isTasayLinkedPortal(portal){return portal?.workId==='she-love-me'||portal?.id===SHE_LOVE_POINT_ID;}
 export function getTasayPortal(portals){return portals.find(portal=>portal.id==='point-tasay'&&portal.workId==='tasay')||portals.find(portal=>portal.workId==='tasay');}
-// A read-time projection also upgrades existing three-point databases. It never
-// changes the master's location/schedule, drops a custom point, or writes storage.
+// Read-time migration upgrades existing three-point databases with a closed
+// independent entry. Existing portal settings, URLs and schedules stay intact.
 export function synchronizeActivityPortals(portals,{occupiedIds=[]}={}){
   const master=getTasayPortal(portals);
   let points=portals;
   if(master&&!points.some(point=>point.id===SHE_LOVE_POINT_ID)&&points.length<12&&!occupiedIds.includes(SHE_LOVE_POINT_ID)){
     points=[...points,activityPortals().find(point=>point.id===SHE_LOVE_POINT_ID)];
   }
-  return points.map(point=>isTasayLinkedPortal(point)?{...point,workId:'she-love-me',url:'/works/she-love-me/',enabled:master?.enabled===true,startAt:master?.startAt??null,endAt:master?.endAt??null}:point);
+  return points;
 }

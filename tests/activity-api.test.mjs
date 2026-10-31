@@ -153,7 +153,7 @@ test('host admission survives handler restart and closed activities reject new v
   assert.ok((await (await f.request('/api/live/state',{},1)).json()).state.portals.every(p=>!p.enabled));
 });
 
-test('old production rows project a fourth linked point for snapshots, SSE, statistics and audience admission',async t=>{
+test('old production rows gain an independently controlled fourth point for snapshots, SSE, statistics and admission',async t=>{
   const f=await fixture(t),initial=(await (await f.request('/api/live/state')).json()).state,now=Date.now();
   const legacy={...initial,revision:17,portals:initial.portals.filter(point=>point.workId!=='she-love-me').map(point=>point.workId==='tasay'?{...point,enabled:true,startAt:now-1000,endAt:now+600000,x:71,z:31}:point)};
   const raw=JSON.stringify(legacy);await f.dbs[0].prepare('UPDATE activity_state SET revision=?,payload=? WHERE key=?').bind(17,raw,'current').run();
@@ -161,23 +161,31 @@ test('old production rows project a fourth linked point for snapshots, SSE, stat
   let current=(await (await f.request('/api/live/state',{},1)).json()).state;
   const linked=()=>current.portals.find(point=>point.id==='point-she-love-me');
   assert.equal(current.revision,17);assert.equal(current.portals.length,4);assert.deepEqual(current.portals.slice(0,3),legacy.portals);
-  assert.deepEqual([linked().enabled,linked().startAt,linked().endAt],[true,now-1000,now+600000]);
+  assert.deepEqual([linked().enabled,linked().startAt,linked().endAt],[false,null,null]);
   assert.equal((await f.dbs[1].prepare('SELECT payload FROM activity_state WHERE key=?').bind('current').first()).payload,raw,'reads do not rewrite the old database');
   const reader=await f.stream(1),packet=new TextDecoder().decode((await reader.read()).value);assert.equal(JSON.parse(/^data: (.+)$/m.exec(packet)[1]).state.portals.length,4);await reader.cancel();
   const viewer=await f.join('独立广场观众','einstein');let sequence=0;
   const event=(type='opening')=>f.post(viewer,{type,eventId:'event-'+ ++sequence,tabId:'einstein',pointId:'point-she-love-me',workId:'she-love-me',attemptId:'attempt-'+sequence,position:{x:linked().x,y:0,z:linked().z}},1);
+  assert.equal((await event('visit')).status,409,'migration cannot open a new work through the tasay control');
+  current=await f.save({...current,portals:current.portals.map(point=>point.workId==='she-love-me'?{...point,enabled:true}:point)});
   assert.equal((await event('visit')).status,200,'visit only the independent square point');
   assert.equal((await event()).status,200,'no tasay visit or completion is required');
   assert.ok((await f.stats()).summary.points.some(point=>point.id==='point-she-love-me'));
   current=await f.save({...current,portals:current.portals.map(point=>point.workId==='tasay'?{...point,startAt:now+60000,endAt:now+120000}:point)});
-  assert.deepEqual([linked().startAt,linked().endAt],[now+60000,now+120000]);assert.equal((await event()).status,409);
+  assert.deepEqual([linked().startAt,linked().endAt],[null,null]);assert.equal((await event()).status,200,'tasay scheduling cannot close she-love');
+  const tasayBeforeSheChange=structuredClone(current.portals.find(point=>point.workId==='tasay'));
+  current=await f.save({...current,portals:current.portals.map(point=>point.workId==='she-love-me'?{...point,startAt:now+60000,endAt:now+120000,url:'/works/she-love-me/?custom=1'}:point)});
+  assert.deepEqual(current.portals.find(point=>point.workId==='tasay'),tasayBeforeSheChange,'she-love scheduling does not alter tasay');
+  assert.equal(linked().url,'/works/she-love-me/?custom=1');assert.equal((await event()).status,409,'its own future schedule still guards admission');
   current=await f.save({...current,portals:current.portals.map(point=>point.workId==='tasay'?{...point,enabled:false}:point.workId==='she-love-me'?{...point,enabled:true,startAt:null,endAt:null,x:850}:point)});
-  assert.equal(linked().enabled,false);assert.equal(linked().x,850);assert.equal((await event()).status,409);
+  assert.equal(linked().enabled,true);assert.equal(linked().x,850);assert.equal(linked().url,'/works/she-love-me/?custom=1');assert.equal((await event()).status,200,'tasay closure does not alter independent she-love admission');
   const stale=await f.request('/api/admin/state',{method:'PUT',headers:{Cookie:f.admin.cookie,'X-CSRF-Token':f.admin.csrf},body:JSON.stringify({state:legacy,expectedRevision:17})});assert.equal(stale.status,409);
   current=await f.save({...current,paused:true,portals:current.portals.map(point=>point.workId==='tasay'?{...point,enabled:true,startAt:null,endAt:null}:point)});
   assert.equal(linked().enabled,true);assert.equal((await event()).status,409,'pause continues to block both entries');
   current=await f.save({...current,paused:false,portals:current.portals.filter(point=>point.workId!=='tasay')});
-  assert.equal(linked().enabled,false);assert.equal((await event()).status,409,'deleting the master cannot leave the dependency open');
+  assert.equal(linked().enabled,true);assert.equal((await event()).status,200,'she-love can remain open when tasay is removed');
+  current=await f.save({...current,portals:current.portals.map(point=>point.workId==='she-love-me'?{...point,enabled:false}:point)});
+  assert.equal((await event()).status,409,'its own close control revokes new admission');
   await f.restart();assert.deepEqual((await (await f.request('/api/live/state',{},1)).json()).state,current);
 });
 
