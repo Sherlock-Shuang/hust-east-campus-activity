@@ -41,7 +41,31 @@
         ><button id="export">GeoJSON</button>
       </nav>
     </header>
+    <!-- Keep recovery independent of external JS and CSS downloads. -->
+    <style>
+      #campus-startup-help[hidden]{display:none!important}
+      #campus-startup-help{position:fixed;z-index:100;left:50%;top:50%;transform:translate(-50%,-50%);width:min(420px,calc(100% - 36px));box-sizing:border-box;padding:24px;border-radius:18px;background:#f3f8f2f5;color:#244b3e;box-shadow:0 12px 60px #132f3a55;font:14px/1.7 system-ui}
+      #campus-startup-help strong{font-size:18px}#campus-startup-help p{margin:12px 0 18px}#campus-startup-help button{min-height:46px;width:100%;border:0;border-radius:10px;padding:12px;background:#2e6350;color:#fff;font:inherit;touch-action:manipulation}
+    </style>
     <section id="campus-startup-help" role="status" aria-live="polite" hidden><strong>校园暂未准备完成</strong><p></p><button type="button">以流畅画质重新载入</button></section>
+    <script>
+      (()=>{
+        const panel=document.getElementById('campus-startup-help');
+        const message=panel.querySelector('p');
+        let completed=false;
+        const show=text=>{if(!completed){message.textContent=text;panel.hidden=false;}};
+        const timer=setTimeout(()=>show('加载仍在进行。如果现场 Wi-Fi 较慢，可以继续等待，或切换手机流量后重试。请避免连续刷新。'),30000);
+        panel.querySelector('button').addEventListener('click',()=>{
+          try{localStorage.setItem('campus-quality-mode-v1','smooth');}catch{}
+          location.reload();
+        });
+        window.addEventListener('campus:ready',()=>{completed=true;clearTimeout(timer);panel.hidden=true;},{once:true});
+        window.addEventListener('campus:startup-error',event=>{
+          clearTimeout(timer);
+          show(event.detail||'校园数据尚未准备完成，请检查网络后重试。');
+        });
+      })();
+    </script>
     <noscript>校园需要启用 JavaScript，请在手机系统浏览器中打开。</noscript>
     <main id="viewport">
       <canvas id="map-canvas" tabindex="0" aria-label="东校区三维建筑与道路；玩家模式使用 WASD 移动"></canvas>

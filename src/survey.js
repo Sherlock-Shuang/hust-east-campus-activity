@@ -15,6 +15,7 @@ import {createCampusAtmosphere,mountAtmosphereUI} from "./campus-atmosphere.js";
 import "./campus-atmosphere.css";
 import {getCampusPlayerSpawn} from './player-experience.js';
 import {mergeCampusExtension} from './campus-data-merge.js';
+import {getCampusStartupData} from './campus-startup-data.js';
 import {campusLandmarkArrival} from './campus-landmark-arrival.js';
 import { createCommuteExperience } from "./commute-experience.js";
 import { mountCampusReferenceAtlas } from './campus-reference-atlas.js';
@@ -47,6 +48,13 @@ const $ = (id) => document.getElementById(id),
 const startupStarted=performance.now(),startupTimings={};
 const frameMetrics=createFrameMetrics();
 const yieldBrowserTask=()=>new Promise(resolve=>setTimeout(resolve,0));
+// Once walking is available, give input and rendering priority over decoration.
+// A timeout keeps progress moving on busy phones; individual geometry jobs are
+// still synchronous, so this is a scheduling budget, not a hard frame-time cap.
+const yieldCampusDetailsTask=()=>new Promise(resolve=>{
+  if(typeof window.requestIdleCallback==='function')window.requestIdleCallback(resolve,{timeout:250});
+  else setTimeout(resolve,32);
+});
 const spiderGeometryReady=preloadSpiderGeometry();
 canvas.dataset.spiderPreparation='preparing';
 spiderGeometryReady.then(ready=>{canvas.dataset.spiderPreparation=ready?'prepared':'on-demand';});
@@ -653,6 +661,7 @@ function normalizeImport(data) {
 async function loadDataset(data, manifest = {}) {
   if(datasetLoading)throw new Error('地图正在加载，请完成后再导入。');
   datasetLoading=true;$("load-screen").hidden=false;suspendCampus();
+  let datasetBuildAbort=null;
   try{
   fc = normalizeImport(data);
   sourceManifest = manifest;
@@ -682,7 +691,7 @@ async function loadDataset(data, manifest = {}) {
   });
   commute?.dispose();
   commute = null;
-  campusBuildAbort?.abort();campusBuildAbort=new AbortController();
+  campusBuildAbort?.abort();campusBuildAbort=new AbortController();datasetBuildAbort=campusBuildAbort;
   fieldGroupQr?.dispose();fieldGroupQr=null;
   campus?.dispose();
   campusSports?.dispose();
@@ -698,7 +707,7 @@ async function loadDataset(data, manifest = {}) {
   campusSports=createCampusSports(THREE,model,{surfaces});model.sportsInfrastructure=campusSports.infrastructure;scene.add(campusSports.group);
   const campusStarted=performance.now();
   const initialPosition=getCampusPlayerSpawn(model)||{x:0,z:0};
-  campus = await createCampus3DProgressive(THREE, model, { frame, geoToLocal },{initialPosition,getPosition:()=>commute?.player?.state||initialPosition,signal:campusBuildAbort.signal,yieldTask:yieldBrowserTask,onProgress:({stage})=>{if(datasetLoading)$('load-screen').querySelector('small').textContent=stage;needsRender=true;}});
+  campus = await createCampus3DProgressive(THREE, model, { frame, geoToLocal },{initialPosition,getPosition:()=>commute?.player?.state||initialPosition,signal:campusBuildAbort.signal,yieldTask:yieldBrowserTask,deferDetails:true,backgroundYieldTask:yieldCampusDetailsTask,backgroundBudgetMs:3,onProgress:({stage})=>{if(datasetLoading)$('load-screen').querySelector('small').textContent=stage;needsRender=true;}});
   campus.canteenStreetLife?.setTimeOfDay(atmosphere.mode);
   startupTimings.campusBuildMs=performance.now()-campusStarted;
   canvas.dataset.campusDetails='preparing';
@@ -774,7 +783,8 @@ async function loadDataset(data, manifest = {}) {
   if (model.warnings.length)
     console.warn("Data layer warnings:", model.warnings);
   if(campus.warnings?.length)console.warn("Reconstruction warnings:",campus.warnings);
-  }finally{datasetLoading=false;$("load-screen").hidden=true;suspendCampus();}
+  }catch(error){datasetBuildAbort?.abort();throw error;}
+  finally{datasetLoading=false;$("load-screen").hidden=true;suspendCampus();}
 }
 function exteriorView(name) {
   const r = model?.buildings.find(r => r.feature.properties.name?.includes(name));
@@ -1136,7 +1146,14 @@ function render(now) {
     lastFrameRendered=true;renderedSamples++;
     if(firstDrawPending){
       firstDrawPending=false;startupTimings.firstDrawSubmittedMs=performance.now()-startupStarted;
-      requestAnimationFrame(()=>{startupTimings.firstFrameObservedMs=performance.now()-startupStarted;canvas.dataset.startupTimings=JSON.stringify(startupTimings);});
+      const presentedCampus=campus;
+      requestAnimationFrame(()=>{
+        if(campus!==presentedCampus||presentedCampus?.disposed)return;
+        startupTimings.firstFrameObservedMs=performance.now()-startupStarted;
+        startupTimings.detailsStartedMs=startupTimings.firstFrameObservedMs;
+        canvas.dataset.startupTimings=JSON.stringify(startupTimings);
+        presentedCampus?.startDetails();
+      });
     }
     if(inputObservation&&(camera.position.distanceToSquared(inputObservation.position)>.0001||camera.quaternion.angleTo(inputObservation.quaternion)>.0001)){
       const inputAt=inputObservation.at;inputObservation=null;
@@ -1176,14 +1193,7 @@ liveControl = createLiveExperience({THREE,scene,camera,canvas,container,
 liveControl.setPerformanceBudget?.(qualityBudget);
 requestAnimationFrame(render);
 try {
-  const [data, manifest, extension] = await Promise.all([
-    fetch("./data/east-campus.geojson").then((r) => {
-      if (!r.ok) throw new Error("建筑数据尚未就绪");
-      return r.json();
-    }),
-    fetch("./data/source-manifest.json").then((r) => (r.ok ? r.json() : {})),
-    fetch('./data/opto-southeast.geojson').then(r=>{if(!r.ok)throw new Error('光电大楼补充地图未能载入');return r.json();}),
-  ]);
+  const [data, manifest, extension] = await getCampusStartupData();
   await loadDataset(mergeCampusExtension(data,extension), manifest);
 } catch (error) {
   $("load-screen").querySelector("span").textContent = "数据尚未加载";

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import * as THREE from 'three';
 import {createGeoScene} from '../src/geo-scene.js';
 import {createLocalFrame,geoToLocal} from '../src/geospatial.js';
@@ -15,6 +16,15 @@ function fixture(){const model=createGeoScene(THREE,new THREE.Scene(),source,fra
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 function segmentDistance(p,a,b){const dx=b.x-a.x,dz=b.z-a.z,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.z-a.z)*dz)/(dx*dx+dz*dz||1)));return Math.hypot(p.x-a.x-dx*t,p.z-a.z-dz*t);}
 function edgeSamples(poly){return poly.flatMap((a,i)=>Array.from({length:9},(_,k)=>{const b=poly[(i+1)%poly.length],t=k/8;return{x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t};}));}
+function visualDigest(group){
+  const hash=createHash('sha256'),bytes=array=>hash.update(Buffer.from(array.buffer,array.byteOffset,array.byteLength));
+  group.traverse(o=>{if(!o.isMesh)return;hash.update(o.name);
+    for(const [name,a]of Object.entries(o.geometry.attributes)){hash.update(`${name}:${a.itemSize}:${a.normalized}`);bytes(a.array);}
+    if(o.geometry.index)bytes(o.geometry.index.array);
+    if(o.instanceMatrix)bytes(o.instanceMatrix.array);if(o.instanceColor)bytes(o.instanceColor.array);
+    for(const material of Array.isArray(o.material)?o.material:[o.material])if(material.map?.image?.data)bytes(material.map.image.data);
+  });return hash.digest('hex');
+}
 
 test('photograph-guided canteen plan is deterministic and leaves all source coordinates unchanged',()=>{
   const {model,options}=fixture(),before=JSON.stringify(source);
@@ -66,5 +76,55 @@ test('street trees use shared instances and LOD; time modes update stable ground
     layer.setTimeOfDay('night');assert.equal(dapple.visible,false);assert.equal(shader.uniforms.csStrength.value,0);assert.ok(pool.uniforms.csStrength.value>.4);assert.equal(layer.group.userData.timeOfDay,'night');
     const camera=new THREE.PerspectiveCamera(60,1,.1,2500);camera.position.set(510,1.8,246);camera.lookAt(515,8,190);layer.update(camera,{detailDistanceScale:1});layer.setTimeOfDay('day');assert.equal(pools.visible,false);assert.equal(dapple.visible,true);
     let disposed=0;dapple.geometry.addEventListener('dispose',()=>disposed++);layer.dispose();layer.dispose();assert.equal(disposed,1);assert.equal(layer.group.children.length,0);
+  }finally{layer.dispose();model.dispose();}
+});
+
+test('deferred ground keeps final collision and visible trees/lamps, then matches complete plan, geometry and texture pixels',()=>{
+  const {model,options}=fixture(),normal=createCanteenStreetLife(THREE,model,options),staged=createCanteenStreetLife(THREE,model,{...options,deferGroundDetails:true});
+  try{
+    const {dapplePatches:normalPatches,...normalCore}=normal.plan,{dapplePatches:stagedPatches,...stagedCore}=staged.plan;
+    assert.deepEqual(stagedCore,normalCore);assert.ok(normalPatches.length>500);assert.equal(stagedPatches.length,0);
+    assert.deepEqual(staged.infrastructure,normal.infrastructure);assert.deepEqual(staged.counts,normal.counts);
+    assert.ok(staged.group.getObjectByName('canteen-street-canopy').children.some(o=>o.isInstancedMesh&&o.count>0));
+    assert.equal(staged.group.getObjectByName('canteen-lamp-poles').count,normal.plan.lamps.length);
+    const dapple=staged.group.getObjectByName('canteen-world-fixed-dapple'),pools=staged.group.getObjectByName('canteen-warm-ground-pools'),geometry=dapple.geometry;
+    assert.equal(dapple.visible,false);assert.equal(pools.visible,false);assert.equal(geometry.attributes.position.count,0);assert.equal(pools.geometry,geometry);
+    // A background completion must retain host lighting and the last view.
+    staged.setTimeOfDay('night');const camera=new THREE.PerspectiveCamera();camera.position.set(5000,2,5000);staged.update(camera);
+    const stages=[];for(const progress of staged.buildGroundDetails())stages.push(progress);
+    assert.ok(stages.filter(p=>p.stage==='食堂树影规划').length>50);assert.ok(stages.some(p=>p.stage==='食堂树影几何'));
+    assert.equal(dapple.geometry,geometry);assert.equal(pools.geometry,geometry);assert.ok(geometry.attributes.position.count>0);
+    assert.deepEqual(staged.plan,normal.plan);assert.equal(visualDigest(staged.group),visualDigest(normal.group));
+    assert.equal(staged.group.userData.timeOfDay,'night');assert.equal(dapple.visible,false);assert.equal(pools.visible,false);
+    camera.position.set(510,2,246);staged.update(camera);assert.equal(dapple.visible,false);assert.equal(pools.visible,true);
+    const shader={uniforms:{},vertexShader:'#include <begin_vertex>',fragmentShader:'#include <color_fragment>'};pools.material.onBeforeCompile(shader);assert.equal(shader.uniforms.csStrength.value,.68);
+    assert.equal([...staged.buildGroundDetails()].length,0,'completed construction is idempotent');
+  }finally{normal.dispose();staged.dispose();model.dispose();}
+});
+
+test('cancelled ground planning or geometry cannot install late or change ready movement plans',()=>{
+  const {model,options}=fixture();
+  try{for(const stopStage of['食堂树影规划','食堂树影几何']){
+    const layer=createCanteenStreetLife(THREE,model,{...options,deferGroundDetails:true});
+    const core=JSON.stringify({trees:layer.plan.trees,parking:layer.plan.parking,lamps:layer.plan.lamps,infrastructure:layer.infrastructure,viewpoints:layer.viewpoints});
+    const geometry=layer.group.getObjectByName('canteen-world-fixed-dapple').geometry,iterator=layer.buildGroundDetails();let step;
+    do{step=iterator.next();assert.equal(step.done,false);}while(step.value.stage!==stopStage);
+    iterator.return();assert.equal(iterator.next().done,true);assert.equal([...layer.buildGroundDetails()].length,0);
+    assert.equal(geometry.attributes.position.count,0);
+    assert.equal(JSON.stringify({trees:layer.plan.trees,parking:layer.plan.parking,lamps:layer.plan.lamps,infrastructure:layer.infrastructure,viewpoints:layer.viewpoints}),core);
+    let disposed=0;geometry.addEventListener('dispose',()=>disposed++);layer.dispose();layer.dispose();assert.equal(disposed,1);assert.equal(layer.group.children.length,0);
+  }}finally{model.dispose();}
+});
+
+test('disposal while ground build is suspended releases owned resources once and prevents resumption',()=>{
+  const {model,options}=fixture(),layer=createCanteenStreetLife(THREE,model,{...options,deferGroundDetails:true});
+  try{
+    const resources=new Set(),disposed=new Map();
+    layer.group.traverse(o=>{if(o.geometry)resources.add(o.geometry);for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){resources.add(m);if(m.map)resources.add(m.map);}});
+    for(const resource of resources)resource.addEventListener('dispose',()=>disposed.set(resource,(disposed.get(resource)||0)+1));
+    const geometry=layer.group.getObjectByName('canteen-world-fixed-dapple').geometry,iterator=layer.buildGroundDetails();assert.equal(iterator.next().done,false);
+    layer.dispose();layer.dispose();assert.equal(iterator.next().done,true);assert.equal([...layer.buildGroundDetails()].length,0);
+    assert.equal(geometry.attributes.position.count,0);assert.equal(layer.group.children.length,0);
+    for(const resource of resources)assert.equal(disposed.get(resource),1,'each geometry/material/texture released exactly once');
   }finally{layer.dispose();model.dispose();}
 });

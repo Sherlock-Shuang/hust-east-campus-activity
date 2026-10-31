@@ -17,7 +17,7 @@ function disk(x,z,r,n=12){return Array.from({length:n},(_,i)=>({x:x+Math.cos(i/n
 /** The photograph guides form and density, not surveyed positions. Every new
  * trunk and complete scooter footprint is checked against the final campus.
  * The mapped 2.4 m footway stays completely empty, including all eight walkers. */
-export function planCanteenStreetLife(model,{frame,geoToLocal,southPlan,existingTrees=[],existingParking=[],reserved=[],groundAt}={}){
+function* buildCanteenStreetPlan(model,{frame,geoToLocal,southPlan,existingTrees=[],existingParking=[],reserved=[],groundAt}={}){
   const plan={id:'canteen-street',accepted:false,sources:CANTEEN_STREET_SOURCES,trees:[],parking:[],lamps:[],barriers:[],dapplePatches:[],viewpoints:{},evidence:{photo:'4e2948926e9e705d9346beda566ad0ed.jpg',basis:'user photograph: broad overlapping plane-tree crowns, forked mottled trunks, white bases and loose angled scooter clusters',dimensions:'photo-informed estimates; source geometries unchanged'}};
   if(!frame||typeof geoToLocal!=='function'||!model?.records)return plan;
   const south=southPlan??planYunyuanSouthPrecinct(model,{frame,geoToLocal});if(!south.accepted)return plan;
@@ -85,10 +85,19 @@ export function planCanteenStreetLife(model,{frame,geoToLocal,southPlan,existing
     }if(placed)break;
     }
   }
+  const gallery=south.galleries.find(g=>g.length>40),galleryPoint=gallery?atZ([gallery.a,gallery.b],228):null;
+  const view=atZ(main.points,263),nearView=atZ(main.points,246),north=atZ(main.points,184);
+  plan.viewpoints={canteenStreet:{x:view.x+.6,z:263,y:.14,yaw:.14,mode:'walk',view:'first'},canteenStreetNear:{x:nearView.x+.8,z:246,y:.14,yaw:.14,mode:'walk',view:'first'},canteenStreetSouth:{x:north.x-.6,z:184,y:.14,yaw:Math.PI+.12,mode:'walk',view:'first'},canteenStreetGallery:{x:(galleryPoint?.x??483)+.55,z:228,y:south.galleryY,yaw:-.42,mode:'walk',view:'first'}};
+  plan.accepted=plan.trees.length>0;plan.counts={trees:plan.trees.length,parking:plan.parking.length,lamps:plan.lamps.length};
+  // Movement, parking and visible trees/lamps are final before optional ground
+  // shading. Keep the original placement tests and their ordering unchanged.
+  yield {stage:'食堂树木与停车准备完成',coreReady:plan};
+  let groundCandidates=0;
   // Ground masks sit on the actual source road/pavement tops. They are not a
   // raised transparent rectangle spanning stairs, buildings or the grass.
   const groundRoads=roads.filter(r=>[main.id,walk.id,'way/1483567170','way/1483567180','way/1483567175','way/1483567176'].includes(r.id));
   for(const road of groundRoads)for(let z=Math.max(148,Math.ceil(Math.min(...road.points.map(p=>p.z))));z<Math.min(345,Math.max(...road.points.map(p=>p.z)))-2;z+=2){
+    if(++groundCandidates%8===0)yield {stage:'食堂树影规划',completed:groundCandidates};
     const a=atZ(road.points,z),b=atZ(road.points,z+2);if(!a||!b)continue;
     const d=distance(a,b),nx=-(b.z-a.z)/d*(road.width/2-.018),nz=(b.x-a.x)/d*(road.width/2-.018);
     plan.dapplePatches.push({polygon:[{x:a.x+nx,z:a.z+nz},{x:a.x-nx,z:a.z-nz},{x:b.x-nx,z:b.z-nz},{x:b.x+nx,z:b.z+nz}],y:.14+(road.motor?.002:0)+.007,sourceId:road.id});
@@ -98,15 +107,18 @@ export function planCanteenStreetLife(model,{frame,geoToLocal,southPlan,existing
   // kerbs; reject stair treads, walls and columns before laying small tiles.
   const boundary=south.boundary;
   for(let x=Math.floor(Math.min(...boundary.map(p=>p.x)));x<Math.max(...boundary.map(p=>p.x));x+=1.5)for(let z=158;z<248;z+=1.5){
+    if(++groundCandidates%8===0)yield {stage:'食堂树影规划',completed:groundCandidates};
     const poly=streetFootprint(x+.75,z+.75,1.5,1.5);
     if(!poly.every(p=>inside(p,boundary)))continue;
     if(blocks.some(b=>footprintIntersectsRing(poly,b.rings[0]))||reservedSurfaces.some(s=>footprintIntersectsRing(poly,s.polygon)))continue;
     plan.dapplePatches.push({polygon:poly,y:.022,sourceId:south.sourceId,surfaceType:'open-lower-forecourt'});
   }
-  const gallery=south.galleries.find(g=>g.length>40),galleryPoint=gallery?atZ([gallery.a,gallery.b],228):null;
-  const view=atZ(main.points,263),nearView=atZ(main.points,246),north=atZ(main.points,184);
-  plan.viewpoints={canteenStreet:{x:view.x+.6,z:263,y:.14,yaw:.14,mode:'walk',view:'first'},canteenStreetNear:{x:nearView.x+.8,z:246,y:.14,yaw:.14,mode:'walk',view:'first'},canteenStreetSouth:{x:north.x-.6,z:184,y:.14,yaw:Math.PI+.12,mode:'walk',view:'first'},canteenStreetGallery:{x:(galleryPoint?.x??483)+.55,z:228,y:south.galleryY,yaw:-.42,mode:'walk',view:'first'}};
-  plan.accepted=plan.trees.length>0;plan.counts={trees:plan.trees.length,parking:plan.parking.length,lamps:plan.lamps.length};return plan;
+  return plan;
+}
+
+export function planCanteenStreetLife(model,options={}){
+  const iterator=buildCanteenStreetPlan(model,options);let step;
+  do{step=iterator.next();}while(!step.done);return step.value;
 }
 
 const noiseGLSL=`
@@ -139,8 +151,10 @@ function fineCanopyTexture(THREE){
 }
 
 export function createCanteenStreetLife(THREE,model,options={}){
-  const plan=planCanteenStreetLife(model,options),group=new THREE.Group();group.name='canteen-street-life';group.userData={component:'canteen-street-life',...plan.evidence};
+  const {deferGroundDetails=false}=options,planBuilder=buildCanteenStreetPlan(model,options);let planStep=planBuilder.next();
+  const plan=planStep.done?planStep.value:planStep.value.coreReady,group=new THREE.Group();group.name='canteen-street-life';group.userData={component:'canteen-street-life',...plan.evidence};
   const infrastructure={barriers:plan.barriers,viewpoints:plan.viewpoints},geometries=new Set(),materials=new Set(),textures=new Set();let disposed=false,mode='day';
+  let groundReady=false,groundBuilding=false,groundCancelled=false,groundNear=true;
   const bark=barkMaterial(THREE);materials.add(bark);
   const treeLayer=createTreeLayer(THREE,plan.trees,{name:'canteen-street-canopy',detail:'street',whitewash:true,barkMaterial:bark});group.add(treeLayer.group);
   // The precomputed ground mask works in smooth quality too; thousands of
@@ -160,12 +174,7 @@ export function createCanteenStreetLife(THREE,model,options={}){
       o.material.needsUpdate=true;
     }
   }});
-  const positions=[],weights=[];
-  for(const patch of plan.dapplePatches)for(const i of[0,2,1,0,3,2]){
-    const p=patch.polygon[i];positions.push(p.x,patch.y,p.z);
-    weights.push(Math.min(1,plan.trees.reduce((v,t)=>v+Math.max(0,1-distance(p,t)/(t.radius*1.55)),0)));
-  }
-  const groundGeo=new THREE.BufferGeometry();groundGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));groundGeo.setAttribute('canopyWeight',new THREE.Float32BufferAttribute(weights,1));groundGeo.computeVertexNormals();geometries.add(groundGeo);
+  const groundGeo=new THREE.BufferGeometry();groundGeo.setAttribute('position',new THREE.Float32BufferAttribute([],3));groundGeo.setAttribute('canopyWeight',new THREE.Float32BufferAttribute([],1));geometries.add(groundGeo);
   const strength={value:.46},warmth={value:0},nightStrength={value:0};
   function groundMaterial(pool){
     const m=new THREE.MeshBasicMaterial({color:pool?'#ffce83':'#243528',transparent:true,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
@@ -189,8 +198,36 @@ diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.28,.17,.08),csWarmth);diffuseColor.a
   for(const [name,g,m,size,y]of[['poles',cylinder,poleMaterial,[.08,5.1,.08],2.55],['caps',cylinder,poleMaterial,[.48,.14,.48],5.05],['bulbs',bulb,bulbMaterial,[.29,.19,.29],4.85]]){
     const mesh=new THREE.InstancedMesh(g,m,plan.lamps.length);mesh.name=`canteen-lamp-${name}`;for(const [i,p]of plan.lamps.entries()){dummy.position.set(p.x,p.y+y,p.z);dummy.scale.set(...size);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);}mesh.computeBoundingSphere();group.add(mesh);
   }
-  function setTimeOfDay(next){mode=['day','sunset','night'].includes(next)?next:'day';strength.value=mode==='day'?.46:mode==='sunset'?.19:0;warmth.value=mode==='sunset'?1:0;nightStrength.value=mode==='night'?.68:mode==='sunset'?.12:0;bulbMaterial.emissiveIntensity=mode==='night'?4.2:mode==='sunset'?.65:.08;dapple.visible=mode!=='night';pools.visible=mode!=='day';group.userData.timeOfDay=mode;}
-  function update(camera,{detailDistanceScale=1}={}){if(disposed)return;treeLayer.update(camera,{detailDistanceScale});const p=camera?.position;const near=!p||Math.hypot(p.x-510,p.z-235)<300*detailDistanceScale;dapple.visible=near&&mode!=='night';pools.visible=near&&mode!=='day';}
-  function dispose(){if(disposed)return;disposed=true;treeLayer.dispose();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.removeFromParent();group.clear();}
-  setTimeOfDay('day');return{group,plan,infrastructure,viewpoints:plan.viewpoints,update,setTimeOfDay,dispose,counts:plan.counts};
+  function* buildGroundDetails(){
+    if(disposed||groundReady||groundBuilding||groundCancelled)return;
+    groundBuilding=true;
+    try{
+      while(!planStep.done){
+        if(disposed)return;
+        planStep=planBuilder.next();
+        if(!planStep.done)yield planStep.value;
+      }
+      const positions=[],weights=[];let completed=0;
+      for(const patch of plan.dapplePatches){
+        if(disposed)return;
+        for(const i of[0,2,1,0,3,2]){
+          const p=patch.polygon[i];positions.push(p.x,patch.y,p.z);
+          weights.push(Math.min(1,plan.trees.reduce((v,t)=>v+Math.max(0,1-distance(p,t)/(t.radius*1.55)),0)));
+        }
+        if(++completed%64===0)yield {stage:'食堂树影几何',completed};
+      }
+      if(disposed)return;
+      groundGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));groundGeo.setAttribute('canopyWeight',new THREE.Float32BufferAttribute(weights,1));groundGeo.computeVertexNormals();
+      groundGeo.boundingBox=null;groundGeo.boundingSphere=null;groundReady=true;
+      dapple.visible=groundNear&&mode!=='night';pools.visible=groundNear&&mode!=='day';
+    }finally{
+      groundBuilding=false;
+      if(!groundReady){groundCancelled=true;planBuilder.return();}
+    }
+  }
+  function setTimeOfDay(next){mode=['day','sunset','night'].includes(next)?next:'day';strength.value=mode==='day'?.46:mode==='sunset'?.19:0;warmth.value=mode==='sunset'?1:0;nightStrength.value=mode==='night'?.68:mode==='sunset'?.12:0;bulbMaterial.emissiveIntensity=mode==='night'?4.2:mode==='sunset'?.65:.08;dapple.visible=groundReady&&mode!=='night';pools.visible=groundReady&&mode!=='day';group.userData.timeOfDay=mode;}
+  function update(camera,{detailDistanceScale=1}={}){if(disposed)return;treeLayer.update(camera,{detailDistanceScale});const p=camera?.position;groundNear=!p||Math.hypot(p.x-510,p.z-235)<300*detailDistanceScale;dapple.visible=groundReady&&groundNear&&mode!=='night';pools.visible=groundReady&&groundNear&&mode!=='day';}
+  function dispose(){if(disposed)return;disposed=true;planBuilder.return();treeLayer.dispose();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());group.removeFromParent();group.clear();}
+  if(!deferGroundDetails)for(const _ of buildGroundDetails()){/* Default construction remains synchronous and complete. */}
+  setTimeOfDay('day');return{group,plan,infrastructure,viewpoints:plan.viewpoints,update,setTimeOfDay,dispose,buildGroundDetails,counts:plan.counts};
 }

@@ -512,7 +512,7 @@ function* buildCampus3D(THREE, model, { frame, geoToLocal, progressive=false,ini
       walkSurfaces:[...(access.walkSurfaces||[]),...einsteinSquare.infrastructure.walkSurfaces,...(opto.walkSurfaces||[]),...(life.walkSurfaces||[]),...south.walkSurfaces,...optoApproach.infrastructure.walkSurfaces,...campusGates.infrastructure.walkSurfaces]};
   }
   yield {stage:'食堂林荫街道'};
-  const canteenStreetLife=createCanteenStreetLife(THREE,model,{frame,geoToLocal,southPlan:southPrecinct.plan,existingTrees:forestPlan.trees});
+  const canteenStreetLife=createCanteenStreetLife(THREE,model,{frame,geoToLocal,southPlan:southPrecinct.plan,existingTrees:forestPlan.trees,deferGroundDetails:progressive});
   layer('environment').add(canteenStreetLife.group);detailDisposers.push(canteenStreetLife.dispose);
   model.architectureInfrastructure.barriers.push(...canteenStreetLife.infrastructure.barriers);
   counts.canteenStreetTrees=canteenStreetLife.plan.trees.length;
@@ -618,6 +618,9 @@ function* buildCampus3D(THREE, model, { frame, geoToLocal, progressive=false,ini
     // Every collider, doorway and support surface is final before this yield.
     // Only visual facades/vegetation remain; moving here cannot change physics.
     yield {stage:'出生区可探索',playable:api};
+    // Tree trunks, lamp poles and parking already exist. Only their visual
+    // ground shading is planned here, after the player can start walking.
+    yield* canteenStreetLife.buildGroundDetails();
     lawnLandmarks=yield* buildCampusLawnLandmarks(THREE,model,lawnOptions);
     if(disposed){lawnLandmarks.dispose();return api;}
     layer('environment').add(lawnLandmarks.group);detailDisposers.push(lawnLandmarks.dispose);cacheStaticTransforms(lawnLandmarks.group);
@@ -669,6 +672,7 @@ export async function createCampus3DAsync(THREE,model,options={}, {
 export async function createCampus3DProgressive(THREE,model,options={}, {
   initialPosition={x:0,z:0},getPosition=()=>initialPosition,signal,
   budgetMs=6,now=()=>performance.now(),yieldTask=()=>new Promise(resolve=>setTimeout(resolve,0)),onProgress=()=>{},onTask,
+  deferDetails=false,backgroundYieldTask=yieldTask,backgroundBudgetMs=budgetMs,
 }={}){
   const iterator=buildCampus3D(THREE,model,{...options,progressive:true,initialPosition,getPosition});
   let previousTask={stage:'校园公共材质'};
@@ -679,15 +683,36 @@ export async function createCampus3DProgressive(THREE,model,options={}, {
     if(now()-sliceStart>=budgetMs){onProgress(step.value);await yieldTask();sliceStart=now();}
   }
   const campus=step.value?.playable||step.value;
+  let releaseStart,releaseCancellation,finished=false;
+  const startGate=new Promise(resolve=>{releaseStart=resolve;});
+  const cancellation=new Promise(resolve=>{releaseCancellation=resolve;});
+  const cancel=()=>{if(!finished)releaseCancellation();};
+  const stopped=()=>campus.disposed||signal?.aborted;
+  const dispose=campus.dispose;
+  campus.dispose=()=>{try{dispose();}finally{cancel();}};
+  // Resolving the same gate repeatedly cannot start a second generator loop.
+  campus.startDetails=()=>{releaseStart();return campus.whenDetailedReady;};
+  signal?.addEventListener('abort',cancel,{once:true});
+  if(signal?.aborted)cancel();
+  const yieldBackground=()=>Promise.race([backgroundYieldTask(),cancellation]);
   campus.whenDetailedReady=(async()=>{
     try{
-      await yieldTask();sliceStart=now();
-      while(!campus.disposed&&!signal?.aborted&&!(step=next()).done){
-        if(now()-sliceStart>=budgetMs){onProgress(step.value);await yieldTask();sliceStart=now();}
+      // The caller can present the playable world before any decoration work.
+      // Cancellation also releases this wait if the world is never presented.
+      await Promise.race([startGate,cancellation]);
+      if(!stopped())await yieldBackground();sliceStart=now();
+      while(!stopped()&&!(step=next()).done){
+        if(now()-sliceStart>=backgroundBudgetMs){onProgress(step.value);if(!stopped())await yieldBackground();sliceStart=now();}
       }
-      if(campus.disposed||signal?.aborted){iterator.return();campus.dispose();return{cancelled:true};}
+      if(stopped()){iterator.return();campus.dispose();return{cancelled:true};}
       onProgress({stage:'校园细节完成',done:true});return{cancelled:false};
     }catch(error){iterator.return();return{cancelled:false,error};}
+    finally{
+      finished=true;signal?.removeEventListener('abort',cancel);
+      // Release the losing race branches, including a gate never started.
+      releaseStart();releaseCancellation();
+    }
   })();
+  if(!deferDetails)campus.startDetails();
   return campus;
 }

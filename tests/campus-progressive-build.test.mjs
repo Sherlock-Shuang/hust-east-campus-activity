@@ -19,22 +19,56 @@ function geometryDigest(group){const records=[];group.traverse(o=>{if(!o.isMesh|
 
 test('playable handoff has full collision, three opto entries and walk surfaces; deferred decoration preserves final export',async()=>{
   const a=model(),b=model(),source=JSON.stringify(data),normal=createCampus3D(THREE,a,{frame,geoToLocal});
-  let release;const blocked=new Promise(resolve=>release=resolve);let handoff=false;
-  const progressive=await createCampus3DProgressive(THREE,b,{frame,geoToLocal},{initialPosition:getCampusPlayerSpawn(b),budgetMs:Infinity,yieldTask:()=>blocked});
+  let release;const blocked=new Promise(resolve=>release=resolve);let backgroundYields=0,tasks=0,progressUpdates=0;
+  const progressive=await createCampus3DProgressive(THREE,b,{frame,geoToLocal},{initialPosition:getCampusPlayerSpawn(b),budgetMs:Infinity,
+    deferDetails:true,backgroundBudgetMs:0,yieldTask:()=>assert.fail('foreground with an infinite budget must not yield'),
+    backgroundYieldTask:()=>{backgroundYields++;return blocked;},onTask:()=>tasks++,onProgress:()=>progressUpdates++,
+  });
   try{
+    const handoffTasks=tasks;await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(tasks,handoffTasks,'the explicit gate prevents all deferred geometry work');assert.equal(backgroundYields,0);
     cacheStaticTransforms(progressive.group);assert.equal(progressive.dynamicGroups.length,0);assert.equal(progressive.tick(.016,new THREE.PerspectiveCamera()),false);
     assert.ok(progressive.group.userData.progressive.pendingFacades>0);assert.equal(progressive.group.userData.progressive.complete,false);
     const worldA=createPlayerWorld(a),worldReady=createPlayerWorld(b);
     assert.deepEqual(worldReady.buildings,worldA.buildings);assert.deepEqual(worldReady.walkSurfaces,worldA.walkSurfaces);assert.deepEqual(progressive.optoEntries,normal.optoEntries);
     assert.deepEqual(b.photoForecourtReservations,a.photoForecourtReservations);assert.deepEqual(b.bridgeInfrastructure,a.bridgeInfrastructure);
-    progressive.releaseDecorativeResources();release();const completion=await progressive.whenDetailedReady;assert.equal(completion.error,undefined);assert.equal(completion.cancelled,false);
+    progressive.releaseDecorativeResources();
+    assert.equal(progressive.startDetails(),progressive.whenDetailedReady);assert.equal(progressive.startDetails(),progressive.whenDetailedReady);
+    await new Promise(resolve=>setImmediate(resolve));assert.equal(backgroundYields,1,'repeated start calls share one background loop');assert.equal(tasks,handoffTasks);
+    release();const completion=await progressive.whenDetailedReady;assert.equal(completion.error,undefined);assert.equal(completion.cancelled,false);
+    assert.ok(backgroundYields>1);assert.ok(progressUpdates>1,'background uses its own budget instead of the foreground infinite budget');
     assert.equal(progressive.decorationStats.batches.reduce((sum,x)=>sum+x.residentBytes,0),0,'foreground pause cannot install uploaded detail');
     assert.equal(progressive.decorationStats.trees.reduce((sum,x)=>sum+x.residentBytes,0),0);
     assert.ok(progressive.dynamicGroups.length>0,'late people register in the same public array');for(const group of progressive.dynamicGroups)group.traverse(o=>{assert.equal(o.matrixAutoUpdate,true);assert.equal(o.matrixWorldAutoUpdate,true);});
     const worldAfter=createPlayerWorld(b);assert.deepEqual(worldAfter.buildings,worldReady.buildings);assert.deepEqual(worldAfter.walkSurfaces,worldReady.walkSurfaces);
     progressive.resumeDecorativeResources();progressive.update(null);normal.update(null);
     assert.deepEqual(progressive.counts,normal.counts);assert.equal(geometryDigest(progressive.group),geometryDigest(normal.group));assert.equal(JSON.stringify(data),source);
-  }finally{release();await progressive.whenDetailedReady;progressive.dispose();normal.dispose();a.dispose();b.dispose();}
+  }finally{release();progressive.startDetails();await progressive.whenDetailedReady;progressive.dispose();normal.dispose();a.dispose();b.dispose();}
+});
+
+test('dispose and abort before starting details promptly settle cancellation and remove the abort listener',async t=>{
+  for(const action of ['dispose','abort'])await t.test(action,async()=>{
+    const m=model(),controller=new AbortController(),listeners=new Set();let backgroundYields=0;
+    const signal={get aborted(){return controller.signal.aborted;},
+      addEventListener:(type,handler,options)=>{listeners.add(handler);controller.signal.addEventListener(type,handler,options);},
+      removeEventListener:(type,handler)=>{listeners.delete(handler);controller.signal.removeEventListener(type,handler);},
+    };
+    const campus=await createCampus3DProgressive(THREE,m,{frame,geoToLocal},{initialPosition:getCampusPlayerSpawn(m),signal,budgetMs:Infinity,deferDetails:true,
+      backgroundYieldTask:()=>{backgroundYields++;return Promise.resolve();},
+    });
+    let result;campus.whenDetailedReady.then(value=>{result=value;});
+    try{
+      assert.equal(listeners.size,1);assert.equal(backgroundYields,0);
+      if(action==='dispose')campus.dispose();else controller.abort();
+      const before=campus.group.children.length;
+      await new Promise(resolve=>setImmediate(resolve));
+      assert.deepEqual(result,{cancelled:true},'cancellation must settle without calling startDetails');
+      assert.equal(campus.disposed,true);assert.equal(listeners.size,0);assert.equal(backgroundYields,0);
+      assert.equal(campus.startDetails(),campus.whenDetailedReady);await campus.whenDetailedReady;
+      assert.equal(campus.group.children.length,before);assert.equal(campus.group.userData.progressive.complete,false);
+      assert.equal(backgroundYields,0,'starting an already-cancelled build cannot install late geometry');
+    }finally{campus.dispose();campus.startDetails();await campus.whenDetailedReady;m.dispose();}
+  });
 });
 
 test('dispose at playable handoff cancels background and settles without late installs or promise rejection',async()=>{
