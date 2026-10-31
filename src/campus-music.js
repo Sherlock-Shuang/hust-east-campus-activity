@@ -4,7 +4,7 @@ export const MUSIC_STORAGE_KEY='east-campus-music-v1';
 export const CAMPUS_TRACKS=Object.freeze({
   campus:{title:'Forrest Gump Suite',url:'/audio/forrest-gump-v1.m4a'},
   opto:{title:'Cornfield Chase',url:'/audio/cornfield-chase-v1.m4a'},
-  vehicle:{title:'Sunflower',url:null,source:'https://postmalone.lnk.to/Sunflower'},
+  vehicle:{title:'Sunflower (Guy Arthur Flip)',url:'/audio/sunflower-guy-arthur-flip-v1.m4a',source:'https://guyarthur.com/sunflower-remix-download'},
   spider:{title:'Scared of the Dark',url:null,source:'https://www.youtube.com/watch?v=KCp_I6ZlfE4'},
   evening:{title:'Another Day of Sun',url:'/audio/another-day-of-sun-v1.m4a'},
   tasay:{title:'只要为你活一天',url:'/audio/live-for-you-v1.m4a'},
