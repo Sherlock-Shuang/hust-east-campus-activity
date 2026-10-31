@@ -1164,20 +1164,18 @@ test('desktop and touch water inputs dive, surface and clear held controls on su
   assert.equal(f.scene.getObjectByName('campus-surfboards').visible,false);
 });
 
-for(const mode of ['walk','scooter','roadster','helicopter','hoverboard','spider'])test(`${mode}: fresh comfort profile ignores hover but supports deliberate mouse drag`,t=>{
+for(const mode of ['walk','scooter','roadster','helicopter','hoverboard','spider'])test(`${mode}: comfortable camera retains direct mouse looking without any held button`,t=>{
   const f=fixture(t,{buildings:false,legacyControls:false,classicControls:false});f.experience.enter(mode);f.tick(1);
   assert.equal(f.el('player-hud').dataset.comfortableCamera,'true');assert.equal(f.el('player-look-reticle').hidden,false);
-  const start=horizontalView(f);
+  const start=horizontalView(f),position={x:f.experience.state.x,z:f.experience.state.z},fov=f.camera.fov;
   f.canvas.emit('pointerenter',{clientX:100,clientY:150});
   f.canvas.emit('pointermove',{clientX:400,clientY:150,buttons:0});f.tick(.4);
-  assert.ok(horizontalView(f).dot(start)>.9999,'moving toward controls does not turn the world');
-  f.canvas.emit('pointerdown',{clientX:400,clientY:150,button:2,buttons:2});
-  f.canvas.emit('pointermove',{clientX:600,clientY:150,buttons:2});f.tick(.6);
-  const after=horizontalView(f);assert.ok(after.dot(start)<.96,'right-drag intentionally rotates camera');
-  assert.equal(f.experience.state.anchor,null,'right-drag never fires a web');
-  f.canvas.emit('pointerup',{clientX:600,clientY:150,button:2});
-  f.canvas.emit('pointermove',{clientX:900,clientY:150,buttons:0});f.tick(.2);
-  assert.ok(horizontalView(f).dot(after)>.999,'release stops input instead of resuming hover');
+  const turned=horizontalView(f);assert.ok(turned.dot(start)<.9,'hover rotates without pointerdown, even in comfort mode');
+  f.canvas.emit('pointermove',{clientX:600,clientY:150,buttons:0});f.tick(.4);
+  assert.ok(horizontalView(f).dot(turned)<.96,'continued mouse movement remains responsive');
+  assert.equal(f.experience.state.anchor,null,'looking never fires a web');
+  assert.equal(f.experience.state.x,position.x);assert.equal(f.experience.state.z,position.z);
+  assert.equal(f.camera.fov,fov,'comfort field of view remains stable');
 });
 
 test('comfort defaults and reference point remain usable on touch and can restore saved classic controls',t=>{
