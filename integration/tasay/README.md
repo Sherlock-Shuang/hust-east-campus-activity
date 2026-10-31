@@ -33,9 +33,9 @@ node integration/tasay/build.mjs --source /absolute/path/to/ta-say
 
 独立页面源码在 `public/works/she-love-me/`，提供开源仓库、MIT 许可链接、可复制使用指令及手动复制降级；沿用公共 activity bridge 的暂停和返回校园功能。项目在电脑的 AI 编程助手中运行，页面不上传或分析聊天记录。
 
-新地图点 `point-she-love-me` 位于爱因斯坦雕像东南侧铺装（x=848.45、z=-61.39，触发半径6米），开放和定时设置始终跟随过拟合恋人。旧活动配置读取时补齐，不修改现有活动坐标、修订号或主持人设置，下一次正常保存时持久化。没有过拟合恋人主入口时，这个关联入口保持关闭。
+新地图点 `point-she-love-me` 位于爱因斯坦雕像东南侧铺装（x=848.45、z=-61.39，触发半径6米）。后台可独立勾选该作品，也提供立即生效的“单独开启／单独关闭”按钮，只修改该作品。开放状态、定时、位置和 URL 独立保存，不受过拟合恋人的开关、排期或删除影响。旧三点配置读取时补入默认关闭的入口，不修改现有活动坐标、修订号或主持人设置，下一次正常保存时持久化。全场暂停仍同时生效。
 
-验证：`TASAY_SOURCE=/absolute/path/to/ta-say node --test integration/tasay/she-love-project.test.mjs`；构建后运行 `QA_OUTPUT_DIR=/absolute/path/to/evidence node scripts/verify-she-love-entry.mjs` 验证旧配置补齐、广场进入、外链、手机布局、暂停返回及同步关闭。
+独立控制回归：`node --test tests/activity-launch.test.mjs tests/linked-activity-state.test.mjs tests/activity-api.test.mjs`。作品适配验证：`TASAY_SOURCE=/absolute/path/to/ta-say node --test integration/tasay/she-love-project.test.mjs`；构建后运行 `QA_OUTPUT_DIR=/absolute/path/to/evidence node scripts/verify-she-love-entry.mjs` 验证旧配置默认关闭、单独开启、广场进入、外链、手机布局、暂停返回及独立关闭。
 
 ## 手机微信布局（2026-10-28）
 

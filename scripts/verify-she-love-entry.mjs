@@ -23,7 +23,7 @@ try{
   app=await createLiveServer({rootDir:root,dataDir,password,initialState:{...createDefaultLiveState(),portals:oldPortals},works:ACTIVITY_WORKS,workEnv:{}});
   const {port}=await app.listen(0),origin=`http://127.0.0.1:${port}`;
   const state=app.getState(),point=state.portals.find(p=>p.workId==='she-love-me');
-  check('Old three-point state gains the linked Einstein entry',point?.enabled&&state.portals.length===4);
+  check('Old three-point state gains a closed independent Einstein entry',point?.enabled===false&&point.startAt===null&&point.endAt===null&&state.portals.length===4);
   check('Existing point coordinates and settings are preserved',isDeepStrictEqual(state.portals.filter(p=>p.workId!=='she-love-me'),oldPortals));
   browser=await chromium.launch({headless:true,executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
   const context=await browser.newContext({viewport:{width:1280,height:850}});
@@ -37,6 +37,10 @@ try{
     if(url.pathname.startsWith('/api/works/')){apiCalls.push(url.href);return route.abort();}
     return route.continue();
   });
+  const login=await context.request.post(origin+'/api/admin/login',{headers:{Origin:origin},data:{password}}),{csrfToken}=await login.json();
+  const change=async patch=>{const prior=app.getState();const r=await context.request.put(origin+'/api/admin/state',{headers:{Origin:origin,'x-csrf-token':csrfToken},data:{expectedRevision:prior.revision,state:{...prior,...patch}}});assert.equal(r.status(),200,await r.text());};
+  await change({portals:app.getState().portals.map(p=>({...p,enabled:p.workId==='she-love-me'}))});
+  check('Host can open only she-love without opening tasay',app.getState().portals.every(p=>p.enabled===(p.workId==='she-love-me')));
   page=await context.newPage();page.setDefaultTimeout(20000);page.on('pageerror',e=>errors.push(e.message));
   await page.goto(origin+'/?place=einstein');
   await page.getByLabel('你的昵称').fill('广场独立入口本地验收');await page.locator('.audience-welcome button').click();
@@ -67,8 +71,6 @@ try{
     check(`${name}: frame stays inside the host viewport`,bounds.top>=0&&bounds.bottom<=bounds.height+1,bounds);
     await page.screenshot({path:path.join(out,`${name}-project.png`)});
   }
-  const login=await context.request.post(origin+'/api/admin/login',{headers:{Origin:origin},data:{password}}),{csrfToken}=await login.json();
-  const change=async patch=>{const prior=app.getState();const r=await context.request.put(origin+'/api/admin/state',{headers:{Origin:origin,'x-csrf-token':csrfToken},data:{expectedRevision:prior.revision,state:{...prior,...patch}}});assert.equal(r.status(),200,await r.text());};
   await change({paused:true});await page.locator('.live-pause').waitFor({state:'visible'});
   await frame.waitForFunction(()=>document.querySelector('main').inert);
   check('Host pause freezes the standalone guide',await page.locator('.live-portal-view').evaluate(el=>el.inert)&&await frame.locator('main').evaluate(el=>el.inert));
@@ -76,15 +78,21 @@ try{
   await frame.locator('#return-to-campus').click();await page.locator('.live-portal-view').waitFor({state:'hidden'});
   await page.locator('.live-portal-prompt').waitFor({state:'visible'});
   check('Child return brings visitor back to the same square',await page.locator('.live-portal-frame iframe').count()===0);
+  await change({portals:app.getState().portals.map(p=>p.workId==='tasay'?{...p,enabled:true}:p)});
   await change({portals:app.getState().portals.map(p=>p.workId==='tasay'?{...p,enabled:false}:p)});
-  await page.locator('.live-portal-prompt').waitFor({state:'hidden'});
-  check('Closing tasay synchronously closes the square entry',app.getState().portals.filter(p=>['tasay','she-love-me'].includes(p.workId)).every(p=>p.enabled===false));
+  await page.locator('.live-portal-prompt').waitFor({state:'visible'});
+  check('Closing tasay leaves she-love independently open',app.getState().portals.find(p=>p.workId==='she-love-me').enabled&&!app.getState().portals.find(p=>p.workId==='tasay').enabled);
   const start=Date.now()+3600000,end=start+1800000;
   await change({portals:app.getState().portals.map(p=>p.workId==='tasay'?{...p,enabled:true,startAt:start,endAt:end}:p)});
-  check('Future schedule is identical on both entries',app.getState().portals.filter(p=>['tasay','she-love-me'].includes(p.workId)).every(p=>p.startAt===start&&p.endAt===end));
-  await change({portals:app.getState().portals.map(p=>p.workId==='tasay'?{...p,enabled:true,startAt:null,endAt:null}:p)});
+  const independent=app.getState().portals.find(p=>p.workId==='she-love-me');
+  check('Tasay future schedule cannot overwrite she-love settings',independent.enabled&&independent.startAt===null&&independent.endAt===null);
   await page.locator('.live-portal-prompt').waitFor({state:'visible'});
-  check('Reopening tasay restores the independent entry',app.getState().portals.find(p=>p.workId==='she-love-me').enabled);
+  await change({portals:app.getState().portals.map(p=>p.workId==='she-love-me'?{...p,enabled:false}:p)});
+  await page.locator('.live-portal-prompt').waitFor({state:'hidden'});
+  const tasayAfter=app.getState().portals.find(p=>p.workId==='tasay');
+  check('Only its own closure removes she-love access while tasay settings stay unchanged',!app.getState().portals.find(p=>p.workId==='she-love-me').enabled&&tasayAfter.enabled&&tasayAfter.startAt===start&&tasayAfter.endAt===end);
+  await change({portals:app.getState().portals.map(p=>p.workId==='she-love-me'?{...p,enabled:true}:p)});
+  await page.locator('.live-portal-prompt').waitFor({state:'visible'});
   // Use a separate page for the former chat entry; never seed a real player's progress.
   const chat=await context.newPage();chat.on('pageerror',e=>errors.push(e.message));
   await chat.goto(origin+'/works/tasay/chat');await chat.locator('.desktop-chat-input').waitFor();
@@ -93,9 +101,12 @@ try{
   await chat.reload();await chat.locator('.game-ending').waitFor();
   check('The old post-completion project entry is also removed',await chat.getByRole('button',{name:'她不一样 · 恋情分析室',exact:true}).count()===0);
   const admin=await context.newPage();await admin.goto(origin+'/admin');await admin.locator('#dashboard').waitFor({state:'visible'});
-  const linked=admin.locator('#activity-choices input[value="point-she-love-me"]');
-  check('Admin shows linked entry with no independent launch switch',await linked.isDisabled());
-  await admin.screenshot({path:path.join(out,'admin-linked-entry.png')});
+  await admin.locator('#tab-portal').click();
+  const selection=admin.locator('#activity-choices input[value="point-she-love-me"]');
+  check('Admin allows selecting she-love independently',await selection.isEnabled());
+  const toggle=admin.locator('#activity-choices [data-action="toggle-independent"]');
+  check('Admin exposes an enabled dedicated she-love toggle',await toggle.count()===1&&await toggle.isEnabled());
+  await admin.screenshot({path:path.join(out,'admin-independent-entry.png')});
   check('No model calls or browser runtime errors',!apiCalls.length&&!errors.length,{apiCalls,errors});
   passed=true;
 }catch(error){failure=error.stack||String(error);console.error(failure);process.exitCode=1;if(page)await page.screenshot({path:path.join(out,'failure.png')}).catch(()=>{});}
