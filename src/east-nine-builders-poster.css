@@ -1,0 +1,6 @@
+.east-nine-builders-original{position:absolute;left:50%;bottom:max(82px,calc(env(safe-area-inset-bottom) + 65px));transform:translateX(-50%);z-index:6;max-width:calc(100% - 32px);box-sizing:border-box;padding:10px 16px;border:1px solid #c9d8cd99;border-radius:14px;background:#eff7efed;color:#315448;font:500 12px/1.4 system-ui,sans-serif;text-decoration:none;box-shadow:0 3px 14px #142c2720;pointer-events:auto;white-space:nowrap}
+.east-nine-builders-original[hidden]{display:none}
+.east-nine-builders-original:hover{background:#fff;border-color:#8da995}
+.east-nine-builders-original:focus-visible{outline:2px solid #ebcd91;outline-offset:3px}
+.touch-controls .east-nine-builders-original{min-height:44px;display:flex;align-items:center;justify-content:center;bottom:max(72px,calc(env(safe-area-inset-bottom) + 62px));font-size:11px;padding:8px 13px}
+.touch-controls .east-nine-builders-original[hidden]{display:none}

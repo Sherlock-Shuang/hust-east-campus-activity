@@ -1,4 +1,6 @@
 import {createFieldGroupQr} from './field-group-qr.js';
+import {createEastNineBuildersPoster} from './east-nine-builders-poster.js';
+import './east-nine-builders-poster.css';
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import {
@@ -151,6 +153,7 @@ let fc,
   waterDetails,
   riverTerrain,
   fieldGroupQr,
+  eastNineBuildersPoster,
   commute,
   selected,
   selectedBox,
@@ -693,6 +696,7 @@ async function loadDataset(data, manifest = {}) {
   commute = null;
   campusBuildAbort?.abort();campusBuildAbort=new AbortController();datasetBuildAbort=campusBuildAbort;
   fieldGroupQr?.dispose();fieldGroupQr=null;
+  eastNineBuildersPoster?.dispose();eastNineBuildersPoster=null;
   campus?.dispose();
   campusSports?.dispose();
   waterDetails?.dispose();
@@ -721,6 +725,7 @@ async function loadDataset(data, manifest = {}) {
   await yieldBrowserTask();
   scene.add(campus.group);
   fieldGroupQr=createFieldGroupQr({THREE,scene,model,invalidate:()=>{needsRender=true;}});
+  eastNineBuildersPoster=createEastNineBuildersPoster({THREE,scene,model,frame,geoToLocal,host:container,canvas,getPlayer:()=>commute?.player,anisotropy:renderer.capabilities.getMaxAnisotropy(),invalidate:()=>{needsRender=true;}});
   riverTerrain=applyRiverTerrain(THREE,{model,datum,surfaces});
   scene.add(riverTerrain.group);
   waterDetails=createWaterDetails(THREE,{records:model.water,reflection:renderProfile.reflection});
@@ -1129,6 +1134,7 @@ function render(now) {
     atmosphere.update(camera,{overviewLift});
     campus?.update?.(camera, { viewportHeight,detailDistanceScale:qualityBudget.detailDistanceScale });
     fieldGroupQr?.update(camera,{visible:layerSettings.symbolic&&layerSettings.building&&!liveControl?.portalOpen});
+    eastNineBuildersPoster?.update(camera,{visible:layerSettings.symbolic&&layerSettings.building&&!liveControl?.portalOpen,interactive:!liveFrozen});
     if(now-lastLabelAt>=100){updateLabels();lastLabelAt=now;}
     if(!frozen)waterDetails?.renderReflection(renderer,scene,camera,now);
     lastPasses.reflectionCalls=renderer.info.render.calls;lastPasses.reflectionTriangles=renderer.info.render.triangles;
