@@ -92,7 +92,7 @@ async function makeComparison(){
  report.imageStats=await comparisonPage.evaluate(()=>[...document.images].map(img=>{
   const canvas=document.createElement('canvas');canvas.width=160;canvas.height=90;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,0,0,160,90);const data=ctx.getImageData(16,23,128,55).data,values=[];
   for(let n=0;n<data.length;n+=4)values.push(.2126*data[n]+.7152*data[n+1]+.0722*data[n+2]);const mean=values.reduce((a,b)=>a+b,0)/values.length;
-  const full=document.createElement('canvas');full.width=img.naturalWidth;full.height=img.naturalHeight;const fc=full.getContext('2d',{willReadFrequently:true});fc.drawImage(img,0,0);const leaves=fc.getImageData(Math.floor(full.width*.25),Math.floor(full.height*.10),Math.floor(full.width*.38),Math.floor(full.height*.28)).data;
+  const full=document.createElement('canvas');full.width=img.naturalWidth;full.height=img.naturalHeight;const fc=full.getContext('2d',{willReadFrequently:true});fc.drawImage(img,0,0);const leaves=fc.getImageData(Math.floor(full.width*.25),Math.floor(full.height*.10),Math.floor(full.width*.38),Math.floor(full.height*.48)).data;
   let bright=0;for(let n=0;n<leaves.length;n+=4)if(Math.min(leaves[n],leaves[n+1],leaves[n+2])>150&&Math.max(leaves[n],leaves[n+1],leaves[n+2])>180)bright++;
   return{label:img.alt,canopyBrightFraction:bright/(leaves.length/4),meanLuminance:mean,luminanceDeviation:Math.sqrt(values.reduce((a,b)=>a+(b-mean)**2,0)/values.length),nonBlackFraction:values.filter(v=>v>5).length/values.length};
  }));
@@ -119,7 +119,7 @@ try{
 
  await makeComparison();const night=report.imageStats.find(s=>s.label.startsWith('夜间'));assert.ok(night.nonBlackFraction>.5&&night.luminanceDeviation>5,'Night screenshot must retain non-black, differentiated scene detail; inspect the saved image for visual readability');
 
- assert.ok(night.canopyBrightFraction<.025,'Night canopies must not contain white alpha-coverage halos when MSAA is disabled');
+ assert.ok(night.canopyBrightFraction<.005,'Night canopies must not contain white alpha-coverage halos when MSAA is disabled');
 
  // Persist the user-selected night setting through a real document reload.
  await page.reload({timeout:90000});await page.waitForFunction(()=>globalThis.__canteenQA?.ready(),null,{timeout:90000});await page.waitForTimeout(850);report.reloaded=await read();assert.equal(report.reloaded.mode,'night');assert.equal(report.reloaded.selected,'night');assert.equal(report.reloaded.stored,'night');assertInventory(report.reloaded);assertPreserved(report.reloaded);

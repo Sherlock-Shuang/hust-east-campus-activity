@@ -77,12 +77,14 @@ export function* buildTreeLayer(THREE, trees, {name='photo-informed-trees',detai
   const own=m=>{ownedMaterials.add(m);return m;};
   const bark=barkMaterial||own(new THREE.MeshStandardMaterial({color:'#706c56',roughness:.98}));
   const canopyTexture=createSprayTexture(THREE);textures.add(canopyTexture);
-  const foliage=own(foliageMaterial?foliageMaterial.clone():new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.9,metalness:0,side:THREE.DoubleSide,vertexColors:true}));foliage.map=canopyTexture;foliage.alphaTest=.43;foliage.alphaToCoverage=true;foliage.side=THREE.DoubleSide;foliage.vertexColors=true;
+  // Hard cutouts also work when handheld WebGL disables multisampling.
+  // Alpha-to-coverage on a single-sample framebuffer leaves bright leaf fringes.
+  const foliage=own(foliageMaterial?foliageMaterial.clone():new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.9,metalness:0,side:THREE.DoubleSide,vertexColors:true}));foliage.map=canopyTexture;foliage.alphaTest=.43;foliage.alphaToCoverage=false;foliage.side=THREE.DoubleSide;foliage.vertexColors=true;
   const lime=own(new THREE.MeshStandardMaterial({color:'#d5d5bb',roughness:1}));
   // Crown mass is supplied by 120/160 folded sprays, while true leaf blades
   // preserve close silhouettes. This cuts near-crown triangles by over 75%.
   const leafCount=detail==='forest'?240:420,sprayCount=detail==='forest'?120:160,variantCount=6,farLeafCount=64;
-  const distantFoliage=own(new THREE.MeshStandardMaterial({color:'#ffffff',map:canopyTexture,alphaTest:.43,alphaToCoverage:true,roughness:.92,side:THREE.DoubleSide,vertexColors:true}));
+  const distantFoliage=own(new THREE.MeshStandardMaterial({color:'#ffffff',map:canopyTexture,alphaTest:.43,alphaToCoverage:false,roughness:.92,side:THREE.DoubleSide,vertexColors:true}));
   for(let variant=0;variant<variantCount;variant++) {
     yield {stage:`树冠形态 ${variant+1}/${variantCount}`};
     const random=randomFrom(17339+variant*7717),branches=[],painted=[];
@@ -200,7 +202,7 @@ export function* buildTreeLayer(THREE, trees, {name='photo-informed-trees',detai
  * polyhedra. Both LODs fit the supplied height and radius and share two batches. */
 export function createShrubLayer(THREE,shrubs,{name='source-low-shrub-clusters'}={}){
   const group=new THREE.Group();group.name=name;
-  const texture=createSprayTexture(THREE,81927),material=new THREE.MeshStandardMaterial({color:'#ffffff',map:texture,alphaTest:.43,alphaToCoverage:true,roughness:.97,side:THREE.DoubleSide,vertexColors:true});
+  const texture=createSprayTexture(THREE,81927),material=new THREE.MeshStandardMaterial({color:'#ffffff',map:texture,alphaTest:.43,alphaToCoverage:false,roughness:.97,side:THREE.DoubleSide,vertexColors:true});
   const random=randomFrom(51893),clumps=Array.from({length:7},(_,i)=>{const angle=i*2.399;return{x:Math.cos(angle)*.36,y:.55+(i%3)*.12,z:Math.sin(angle)*.36,rx:.47+random()*.14,ry:.3+random()*.15,rz:.47+random()*.14};});
   const near=sprayGeometry(THREE,clumps,{random:randomFrom(9182),count:64,folded:true,scale:.75}),far=sprayGeometry(THREE,clumps,{random:randomFrom(9182),count:24,scale:1});
   let radius=0,minY=Infinity,maxY=-Infinity;for(const g of [near,far]){const p=g.attributes.position;for(let i=0;i<p.count;i++){radius=Math.max(radius,Math.hypot(p.getX(i),p.getZ(i)));minY=Math.min(minY,p.getY(i));maxY=Math.max(maxY,p.getY(i));}}
