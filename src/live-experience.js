@@ -92,6 +92,10 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   });
   const interactionRoots=[document.querySelector('body > header'),document.querySelector('.transport-selector'),canvas,...container.querySelectorAll('.view-toolbar,#inspect,#measurement,#mobile-controls,#mobile-orientation-hint,#mobile-enable-touch,#transport-interact,#resume-exploration')].filter(Boolean);
   const setInert=frozen=>interactionRoots.forEach(el=>{el.inert=frozen;});
+  function syncSkyQrPlayer(player=getPlayer()){
+    player?.setSkyQrVisible?.(client?.state.skyQrVisible===true);
+    return player;
+  }
   function updateFrozen(){
     const frozen=!!client?.state.paused||civilization.active||!!opened||!!skyQr?.isOpen||!audienceUI?.registered;
     onMusicStateChange({registered:!!audienceUI?.registered,experience:opened?(opened.workId||opened.kind||opened.id):null,
@@ -102,7 +106,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       setInert(frozen);setSuspended(frozen);
       if(!frozen&&restoreFocus?.isConnected)restoreFocus.focus({preventScroll:true});
     }
-    if(!frozen&&pendingInteriorReturn&&getPlayer()?.restoreActivityPose?.(pendingInteriorReturn)){
+    if(!frozen&&pendingInteriorReturn&&syncSkyQrPlayer()?.restoreActivityPose?.(pendingInteriorReturn)){
       pendingInteriorReturn=null;previousInteriorPosition=null;
     }
     updateRuntimeBudget();
@@ -269,6 +273,9 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   function refresh(force=false){
     if(!client||disposed)return;
     const state=client.state,now=client.now(),activeAnnouncement=isEventActive(state.announcement,now)?state.announcement:null;
+    // Synchronize even when the UI signature is unchanged: the campus player
+    // may have been created or replaced since the last host snapshot.
+    syncSkyQrPlayer();
     const markers=state.markers.filter(m=>isEventActive(m,now)),portals=state.portals.filter(p=>isEventActive(p,now));
     const signature=JSON.stringify([markers,portals]);
     if(signature!==visualSignature){visualSignature=signature;rebuild(markers,portals);}
@@ -289,7 +296,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     }
     const player=getPlayer();nearest=null;
     if(restorePending&&audienceUI?.registered&&!lastFrozen&&player){
-      restorePending=false;try{const stored=JSON.parse(sessionStorage.getItem('campus-return-pose'));if(stored?.audienceId===audienceUI.client.identity.id)player.restoreActivityPose?.(stored.pose);}catch{}
+      restorePending=false;try{const stored=JSON.parse(sessionStorage.getItem('campus-return-pose'));if(stored?.audienceId===audienceUI.client.identity.id)syncSkyQrPlayer(player)?.restoreActivityPose?.(stored.pose);}catch{}
     }
     if(player?.active&&audienceUI?.registered&&client.connected&&!state.paused&&!civilization.active&&!opened){
       let distance=Infinity;
@@ -325,7 +332,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     get runtimeBudget(){return runtimeBudget();},
     setPerformanceBudget(next){visualBudget=campusEffectBudget(next);const changed=campusTsunami.setQuality(visualBudget.level===0?'low':handheld?'mobile':'desktop');if(changed)invalidate();updateRuntimeBudget();return changed;},
     sync(){refresh(true);setSuspended(lastFrozen);if(restorePending&&audienceUI.registered&&!lastFrozen&&getPlayer()){
-      restorePending=false;try{const stored=JSON.parse(sessionStorage.getItem('campus-return-pose'));if(stored?.audienceId===audienceUI.client.identity.id)getPlayer().restoreActivityPose?.(stored.pose);}catch{}
+      restorePending=false;try{const stored=JSON.parse(sessionStorage.getItem('campus-return-pose'));if(stored?.audienceId===audienceUI.client.identity.id)syncSkyQrPlayer()?.restoreActivityPose?.(stored.pose);}catch{}
     }},
     tick(now){
       // The shared catastrophe animates even when the host has no map markers.

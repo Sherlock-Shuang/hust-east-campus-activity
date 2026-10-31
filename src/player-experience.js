@@ -60,7 +60,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   const interaction=worldTransport||transportSources?createTransportInteraction({motion,sources:transportSources||[worldTransport,scooterTransport],notify,onChange:mode=>{if(mode==='scooter')models.setScooterAppearance(interaction.mounted.item.appearance);enter(mode);}}):null;
   const keys = new Set(), held = new Set(), pulses = new Map(), listeners = [];
   const mobileHeld=new Set();let mobileControls=null,waterControls=null,mobileAxes={forward:0,sideways:0},preferencesUI=null;
-  let active=false, suspended=false, initialized=false, view='third', yawOffset=0, pitch=.25, distance, drag=null, mouseLook=null,
+  let active=false, suspended=false, initialized=false, skyQrVisible=false, view='third', yawOffset=0, pitch=.25, distance, drag=null, mouseLook=null,
     cruise=false, liftTarget=null, landing=false, uiElapsed=0, savedNear=camera.near, savedFov=camera.fov, disposed=false, immersive=true, driveImmersive=true, suitView=false, lookHold=0, manualPitch=false, steeringSideways=false, suitAngle=0, suitPitch=.03, suitDistance=3.15;
   const aimPosition=new THREE.Vector3();
   let storage;try{storage=window.localStorage;}catch{}
@@ -110,7 +110,24 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(hit?.item.mode==='spider'&&!ensureSpider())return {ok:false,reason:'战衣暂未准备成功'};
     return interaction.interact();
   }
-  function clampLookPitch(value){return Math.max(motion.state.mode==='walk'||motion.state.mode==='spider'?WALK_MIN_PITCH:-.35,Math.min(.85,value));}
+  function minimumLookPitch(mode=motion.state.mode){return skyQrVisible&&(mode==='walk'||mode==='spider')?WALK_MIN_PITCH:-.35;}
+  function clampLookPitch(value){return Math.max(minimumLookPitch(),Math.min(.85,value));}
+  function setSkyQrVisible(value){
+    const next=value===true;if(next===skyQrVisible)return;
+    skyQrVisible=next;
+    if(!next&&(motion.state.mode==='walk'||motion.state.mode==='spider')){
+      const minimum=minimumLookPitch();
+      // Input can already be legal while the rendered camera is still looking
+      // up during damping or a view transition. Check both before freezing it.
+      const outside=pitch<minimum||active&&!suitView&&camera.getWorldDirection(new THREE.Vector3()).y>Math.sin(-minimum)+1e-6;
+      pitch=Math.max(minimum,pitch);
+      if(outside&&active&&!suitView){
+        if(motion.state.mode==='walk'&&vehicleCamera.transitioning)vehicleCamera.reset(motion.state,vehicleCamera.heading);
+        cameraFrame(0,true);
+      }
+    }
+    invalidate();
+  }
   function recenter(preserveVehicleCamera=false,smooth=false){mouseLook=null;yawOffset=0;pitch=view==='first'?.04:motion.state.mode==='spider'?.18:motion.state.mode==='hoverboard'?.12:motion.state.mode==='roadster'?.15:.25;distance=undefined;manualPitch=false;lookHold=0;spiderCamera.reset(motion.state);if(smooth)vehicleCamera.recenter(motion.state);else if(!preserveVehicleCamera)vehicleCamera.reset(motion.state,motion.state.yaw);}
   function setImmersive(value){immersive=!!value;document.body.classList.toggle('spider-immersive',active&&motion.state.mode==='spider'&&immersive);document.body.classList.toggle('drive-immersive',active&&['roadster','hoverboard'].includes(motion.state.mode)&&driveImmersive);window.dispatchEvent(new Event('resize'));}
   function stopSuitView(){if(!suitView)return;suitView=false;recenter();updateUI();}
@@ -488,7 +505,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(interaction?.mounted&&saved.mode==='scooter')models.setScooterAppearance(interaction.mounted.item.appearance);
     initialized=true;
     enter(saved.mode);if(!active||motion.state.mode!==saved.mode)return false;
-    view=saved.view;pitch=Number.isFinite(saved.pitch)?Math.max(saved.mode==='walk'||saved.mode==='spider'?WALK_MIN_PITCH:-1.4,Math.min(1.4,saved.pitch)):.25;
+    view=saved.view;pitch=Number.isFinite(saved.pitch)?Math.max(saved.mode==='walk'||saved.mode==='spider'?minimumLookPitch(saved.mode):-1.4,Math.min(1.4,saved.pitch)):.25;
     camera.near=view==='first'?.06:.12;camera.updateProjectionMatrix();
     yawOffset=Number.isFinite(saved.yawOffset)?saved.yawOffset:0;manualPitch=!!saved.manualPitch;distance=Number.isFinite(saved.distance)?Math.max(1,Math.min(100,saved.distance)):undefined;
     const restoredHeading=Number.isFinite(saved.lookHeading)?saved.lookHeading:motion.state.yaw;
@@ -522,6 +539,6 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(saved?.mode==='spider')await ready;
     return !disposed&&restoreActivityPose(saved);
   }
-  return {get active(){return active;},get suspended(){return suspended;},state:motion.state,setFloodState(value){worldTransport?.setFloodState(value);motion.campusWater.setFlood(value);if(!active||suspended||!value)surfboards.root.visible=false;waterControls.update();},enter,enterAt,exit,tick,setSuspended,captureActivityPose,restoreActivityPose,restorePreparedActivityPose,
+  return {get active(){return active;},get suspended(){return suspended;},state:motion.state,setFloodState(value){worldTransport?.setFloodState(value);motion.campusWater.setFlood(value);if(!active||suspended||!value)surfboards.root.visible=false;waterControls.update();},enter,enterAt,exit,tick,setSuspended,setSkyQrVisible,captureActivityPose,restoreActivityPose,restorePreparedActivityPose,
     dispose(){exit();disposed=true;waterControls.dispose();surfboards.dispose();preferencesUI.dispose();mobileControls.dispose();pointerLock.dispose();listeners.forEach(remove=>remove());worldTransport?.dispose();models.dispose();webAudio.dispose();disposeReferences();disposeHoverboardReferences();}};
 }

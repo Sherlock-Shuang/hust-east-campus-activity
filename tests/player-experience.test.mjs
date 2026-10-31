@@ -235,7 +235,7 @@ test('mouse look keeps first-person aim when idle and rebases after HUD exit, bl
 });
 
 test('walking first-person mouse look reaches the overhead sky without moving the eye and both views accept the same range',t=>{
-  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enterAt({x:24,z:-35,yaw:.7});f.tick(.5);
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.setSkyQrVisible(true);f.experience.enterAt({x:24,z:-35,yaw:.7});f.tick(.5);
   const eye=f.camera.position.clone();
   f.canvas.emit('pointerenter',{clientX:600,clientY:650});
   f.canvas.emit('pointermove',{clientX:600,clientY:0});f.tick(.5);
@@ -250,7 +250,7 @@ test('walking first-person mouse look reaches the overhead sky without moving th
 });
 
 test('default walking third-person mouse look reaches the sky and survives return without changing pause behavior',t=>{
-  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter('walk');f.tick(.5);
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.setSkyQrVisible(true);f.experience.enter('walk');f.tick(.5);
   assert.equal(f.experience.captureActivityPose().view,'third');
   const start={x:f.experience.state.x,z:f.experience.state.z};
   f.canvas.emit('pointerenter',{clientX:600,clientY:700});f.canvas.emit('pointermove',{clientX:600,clientY:0});f.tick(.8);
@@ -273,7 +273,7 @@ test('default walking third-person mouse look reaches the sky and survives retur
 });
 
 test('walking first-person pointer lock can look overhead while retaining its downward bound',t=>{
-  const f=fixture(t,{buildings:false,legacyControls:false});enablePointerLock(f);f.experience.enterAt({x:24,z:-35,yaw:0});f.key('KeyL');
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.setSkyQrVisible(true);enablePointerLock(f);f.experience.enterAt({x:24,z:-35,yaw:0});f.key('KeyL');
   assert.equal(f.doc.pointerLockElement,f.canvas);
   f.doc.emit('mousemove',{movementX:0,movementY:-1200});f.tick(.5);
   assert.equal(f.experience.captureActivityPose().pitch,-1.5);
@@ -285,6 +285,7 @@ test('walking first-person pointer lock can look overhead while retaining its do
 
 test('an overhead walking pose survives activity return and recentres to the original forward pitch',t=>{
   const f=fixture(t,{buildings:false,legacyControls:false});
+  f.experience.setSkyQrVisible(true);
   f.experience.enterAt({x:24,z:-35,yaw:.7,pitch:-2});f.tick(.5);
   const saved=f.experience.captureActivityPose(),looking=f.camera.quaternion.clone();
   assert.equal(saved.pitch,-1.5,'enterAt accepts the full look-up range and safely clamps beyond it');
@@ -310,6 +311,7 @@ function assertSpiderOverhead(f){
 for(const view of ['third','first']){
   test(`Spider overhead ${view}: mouse look survives activity return and explicit recenter`,t=>{
     const f=fixture(t,{buildings:false,legacyControls:false,classicControls:false});
+    f.experience.setSkyQrVisible(true);
     f.experience.enter('spider');if(view==='first')f.key('KeyV');f.tick(.6);
     const initialDirection=f.camera.quaternion.clone(),initialEye=f.camera.position.clone();
     const start={x:f.experience.state.x,y:f.experience.state.y,z:f.experience.state.z};
@@ -333,6 +335,7 @@ for(const view of ['third','first']){
 
   test(`Spider overhead ${view}: pointer lock reaches the sky and preserves the downward bound`,t=>{
     const f=fixture(t,{buildings:false,legacyControls:false});enablePointerLock(f);
+    f.experience.setSkyQrVisible(true);
     f.experience.enter('spider');if(view==='first')f.key('KeyV');f.tick(.5);f.key('KeyL');
     assert.equal(f.doc.pointerLockElement,f.canvas);
     f.doc.emit('mousemove',{movementX:0,movementY:-1200});f.tick(.8);assertSpiderOverhead(f);
@@ -344,6 +347,7 @@ for(const view of ['third','first']){
 
   test(`Spider overhead ${view}: right-side touch reaches the sky and mobile recenter restores framing`,t=>{
     const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true,classicControls:false});
+    f.experience.setSkyQrVisible(true);
     f.experience.enter('spider');if(view==='first')f.mobileAction('view').emit('click',{detail:0});f.tick(.6);
     const initialDirection=f.camera.quaternion.clone(),start={x:f.experience.state.x,z:f.experience.state.z};
     for(const pointerId of [21,22]){
@@ -359,6 +363,136 @@ for(const view of ['third','first']){
     assert.ok(initialDirection.angleTo(f.camera.quaternion)<.001,'mobile recenter returns to normal Spider framing');
   });
 }
+
+function lookAboveSkyQr(f,input='mouse'){
+  for(const pointerId of [81,82]){
+    if(input==='touch'){
+      assert.equal(sceneTouchDown(f,pointerId,{clientX:600,clientY:360}).propagationStopped,true);
+      touch(f.canvas,'pointermove',pointerId,{clientX:620,clientY:0});
+      touch(f.canvas,'pointerup',pointerId);
+    }else{
+      f.canvas.emit('pointerenter',{clientX:600,clientY:650});
+      f.canvas.emit('pointermove',{clientX:620,clientY:0,buttons:0});
+    }
+    f.tick(.7);
+  }
+}
+function assertSkyQrLookRange(f,visible){
+  assert.equal(f.experience.captureActivityPose().pitch,visible?-1.5:-.35);
+  const direction=f.camera.getWorldDirection(new THREE.Vector3());
+  if(visible)assert.ok(direction.y>.995,'visible QR permits an actual overhead camera direction');
+  else assert.ok(direction.y<=Math.sin(.35)+.001,'hidden QR immediately keeps the rendered view within the ordinary look-up range');
+}
+function playerLocationAndHeading(f){
+  const {x,y,z,yaw}=f.experience.state;
+  return {x,y,z,yaw,lookHeading:f.experience.captureActivityPose().lookHeading};
+}
+
+for(const mode of ['walk','spider'])for(const view of ['third','first'])for(const input of ['mouse','touch']){
+  test(`sky QR gate ${mode} ${view} ${input}: live visibility controls look and cannot be bypassed by activity return`,t=>{
+    const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:input==='touch',classicControls:false});
+    f.experience.enter(mode);
+    if(view==='first')input==='touch'?f.mobileAction('view').emit('click',{detail:0}):f.key('KeyV');
+    f.tick(.6);
+    lookAboveSkyQr(f,input);assertSkyQrLookRange(f,false);
+    const ordinary=f.camera.quaternion.clone(),ordinaryEye=f.camera.position.clone(),beforeOpen=playerLocationAndHeading(f);
+    f.experience.setSkyQrVisible(false);assertSkyQrLookRange(f,false);
+    f.experience.setSkyQrVisible(true);
+    assert.ok(ordinary.angleTo(f.camera.quaternion)<1e-7,'showing the QR unlocks input without turning the player camera');
+    assert.ok(ordinaryEye.distanceTo(f.camera.position)<1e-8,'showing the QR does not move the eye');
+    assert.deepEqual(playerLocationAndHeading(f),beforeOpen);
+    lookAboveSkyQr(f,input);assertSkyQrLookRange(f,true);
+    const overhead=f.experience.captureActivityPose();
+    f.experience.setSuspended(true);
+    const beforeHide=playerLocationAndHeading(f);
+    f.experience.setSkyQrVisible(false);
+    assertSkyQrLookRange(f,false); // No tick: a paused activity must be clamped immediately.
+    assert.equal(f.experience.captureActivityPose().view,view);
+    assert.deepEqual(playerLocationAndHeading(f),beforeHide,'hiding the QR changes neither physical pose nor the horizontal look heading');
+    const closed=f.camera.quaternion.clone();f.tick(.5);
+    assert.ok(closed.angleTo(f.camera.quaternion)<1e-7,'pause preserves the newly constrained view');
+    f.experience.setSuspended(false);lookAboveSkyQr(f,input);assertSkyQrLookRange(f,false);
+    f.experience.exit();assert.equal(f.experience.restoreActivityPose(overhead),true);f.tick(.6);
+    assertSkyQrLookRange(f,false);
+    assert.equal(f.experience.captureActivityPose().view,view);
+    assert.equal(overhead.pitch,-1.5,'restoring against a hidden QR must not rewrite the saved pose');
+    const beforeReopen=f.camera.quaternion.clone();f.experience.setSkyQrVisible(true);
+    assert.ok(beforeReopen.angleTo(f.camera.quaternion)<1e-7,'reopening does not restore a discarded skyward angle automatically');
+    assert.equal(f.experience.restoreActivityPose(overhead),true);f.tick(.6);assertSkyQrLookRange(f,true);
+  });
+}
+
+for(const mode of ['walk','spider'])for(const view of ['third','first']){
+  test(`sky QR gate ${mode} ${view}: hiding clamps a rendered sky view before pending downward input reaches the camera`,t=>{
+    const f=fixture(t,{buildings:false,legacyControls:false,classicControls:false});
+    f.experience.setSkyQrVisible(true);f.experience.enter(mode);if(view==='first')f.key('KeyV');f.tick(.6);
+    lookAboveSkyQr(f);assertSkyQrLookRange(f,true);
+    f.canvas.emit('pointerenter',{clientX:600,clientY:0});
+    f.canvas.emit('pointermove',{clientX:600,clientY:2000});
+    assert.equal(f.experience.captureActivityPose().pitch,.85,'input has already requested a legal downward pitch');
+    assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y>.995,'the rendered camera has not consumed the pending input yet');
+    f.experience.setSuspended(true);const beforeHide=playerLocationAndHeading(f);
+    f.experience.setSkyQrVisible(false);
+    assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y<=Math.sin(.35)+.001,'hiding must constrain the rendered camera even when logical pitch is already legal');
+    assert.equal(f.experience.captureActivityPose().pitch,.85,'hiding preserves an already legal downward request');
+    assert.deepEqual(playerLocationAndHeading(f),beforeHide);
+    f.experience.setSuspended(false);
+    for(let frame=0;frame<30;frame++){
+      f.tick(1/60);
+      assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y<=Math.sin(.35)+.001,'an old sky interpolation cannot return after resume');
+    }
+  });
+}
+
+test('sky QR gate walk third-to-first transition: hiding immediately removes the retained sky direction',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,classicControls:false});
+  f.experience.setSkyQrVisible(true);f.experience.enter('walk');f.tick(.6);
+  lookAboveSkyQr(f);assertSkyQrLookRange(f,true);f.key('KeyV');
+  const transitioning=f.experience.captureActivityPose();
+  assert.equal(transitioning.view,'first');assert.equal(transitioning.pitch,.04);
+  assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y>.995,'V initially keeps the old sky direction during its camera transition');
+  f.experience.setSuspended(true);const beforeHide=playerLocationAndHeading(f);
+  f.experience.setSkyQrVisible(false);
+  assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y<=Math.sin(.35)+.001,'the host hide must override a paused camera transition immediately');
+  assert.deepEqual(playerLocationAndHeading(f),beforeHide);
+  assert.equal(f.experience.captureActivityPose().view,'first');assert.equal(f.experience.captureActivityPose().pitch,.04);
+  f.experience.setSuspended(false);
+  for(let frame=0;frame<30;frame++){
+    f.tick(1/60);
+    assert.ok(f.camera.getWorldDirection(new THREE.Vector3()).y<=Math.sin(.35)+.001,'the discarded third-person sky transition must not restart');
+  }
+});
+
+for(const mode of ['walk','spider'])test(`sky QR gate ${mode}: only boolean true unlocks the overhead range`,t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter(mode);f.key('KeyV');f.tick(.5);
+  for(const value of [1,'true',{},null,undefined,false]){
+    f.experience.setSkyQrVisible(value);lookAboveSkyQr(f);assertSkyQrLookRange(f,false);
+    f.experience.setSkyQrVisible(true);lookAboveSkyQr(f);assertSkyQrLookRange(f,true);
+  }
+});
+
+test('sky QR gate also constrains an explicit walking entry pitch while hidden',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});
+  assert.equal(f.experience.enterAt({x:24,z:-35,yaw:.7,pitch:-2}).ok,true);
+  assertSkyQrLookRange(f,false);
+  f.experience.setSkyQrVisible(true);
+  assert.equal(f.experience.enterAt({x:24,z:-35,yaw:.7,pitch:-2}).ok,true);
+  assertSkyQrLookRange(f,true);
+});
+
+for(const mode of ['scooter','roadster','helicopter','hoverboard'])test(`sky QR visibility never widens the ${mode} look range`,t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter(mode);f.tick(.6);
+  for(const view of ['third','first']){
+    if(view==='first'){f.key('KeyV');f.tick(.6);}
+    for(const visible of [true,false]){
+      f.experience.setSkyQrVisible(visible);lookAboveSkyQr(f);
+      assert.equal(f.experience.captureActivityPose().pitch,-.35,`${view} ${visible}: vehicle upward input keeps its ordinary limit`);
+      f.canvas.emit('pointerenter',{clientX:600,clientY:0});
+      f.canvas.emit('pointermove',{clientX:600,clientY:2000});f.tick(.7);
+      assert.equal(f.experience.captureActivityPose().pitch,.85,`${view} ${visible}: vehicle downward input keeps its ordinary limit`);
+    }
+  }
+});
 
 test('mouse look and Spider web hold coexist, but entering from a pressed HUD button cannot fire a web',t=>{
   const f=fixture(t);f.experience.enter('spider');
@@ -942,7 +1076,7 @@ test('touch look has 1.5 times mouse sensitivity while ordinary mouse gain stays
 });
 
 test('right-side touch drags can look overhead in first person and mobile recenter restores forward view',t=>{
-  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enterAt({x:24,z:-35,yaw:0});f.tick(.5);
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.setSkyQrVisible(true);f.experience.enterAt({x:24,z:-35,yaw:0});f.tick(.5);
   const start={x:f.experience.state.x,z:f.experience.state.z};
   for(const pointerId of [21,22]){
     assert.equal(sceneTouchDown(f,pointerId,{clientX:600,clientY:360}).propagationStopped,true);
@@ -959,7 +1093,7 @@ test('right-side touch drags can look overhead in first person and mobile recent
 });
 
 test('default walking third-person touch look reaches the sky and mobile recenter is gradual',t=>{
-  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('walk');f.tick(.5);
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.setSkyQrVisible(true);f.experience.enter('walk');f.tick(.5);
   assert.equal(f.experience.captureActivityPose().view,'third');
   const start={x:f.experience.state.x,z:f.experience.state.z};
   for(const pointerId of [21,22]){
