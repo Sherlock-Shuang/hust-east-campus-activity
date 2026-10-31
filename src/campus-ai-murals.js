@@ -43,7 +43,8 @@ function wallEdges(record) {
 function onWall(id,record,edge,{lines,width,height,y,along=0,out=.04,color='#666e65',surface,background=null,style='paint',priority='ambient',opacity=.72}) {
   return {id,featureId:record.id,building:record.feature.properties?.name||record.id,lines,width,height,
     x:edge.cx+edge.tx*along+edge.nx*out,y,z:edge.cz+edge.tz*along+edge.nz*out,
-    nx:edge.nx,nz:edge.nz,yaw:Math.atan2(edge.nx,edge.nz),color,surface,background,style,priority,opacity,fadeStart:24,maxDistance:65};
+    nx:edge.nx,nz:edge.nz,yaw:Math.atan2(edge.nx,edge.nz),color,surface,background,style,priority,opacity,
+    fadeStart:style==='large-copy'?45:24,maxDistance:style==='large-copy'?150:65};
 }
 
 function pathEdge(path) {
@@ -108,8 +109,8 @@ export function planCampusAIMurals(model,records,{frame,geoToLocal}) {
     const edges=wallEdges(gym).filter(e=>e.length>28&&e.nz<.3).sort((a,b)=>a.nz-b.nz).slice(0,2);
     const messages=[['浏览器也能由 Agent 操作','线上仿真模拟，让 AI 辅助你探索'],['微信、QQ、飞书','让 AI 帮你回复消息']];
     edges.forEach((edge,i)=>{
-      const low=8.6,high=gymBuilt.height-.7,height=Math.min(1.2,high-low);
-      if(height>1)plan.push(onWall(`gym-${i}`,gym,edge,{lines:messages[i],width:Math.min(10,edge.length-5),height,y:low+height/2,out:.14,color:'#66716f',surface:'gym-upper-blank-wall'}));
+      const low=8.6,high=gymBuilt.height-.7,height=Math.min(3.2,high-low);
+      if(height>1)plan.push(onWall(`gym-${i}`,gym,edge,{lines:messages[i],width:Math.min(24,edge.length-5),height,y:low+height/2,out:.14,color:'#40554f',surface:'gym-upper-blank-wall',style:'large-copy',opacity:.9}));
     });
   }
 
@@ -120,7 +121,7 @@ export function planCampusAIMurals(model,records,{frame,geoToLocal}) {
     const a=local([114.4221113,30.5161631]),b=local([114.4221485,30.5163435]);
     const length=Math.hypot(b.x-a.x,b.z-a.z),tx=(b.x-a.x)/length,tz=(b.z-a.z)/length;
     plan.push(onWall('east-nine-a',eastNine,{tx,tz,nx:-tz,nz:tx,cx:(a.x+b.x)/2,cz:(a.z+b.z)/2},{
-      lines:['配环境太烦？','让 Agent 来','把时间留给真正想学的东西'],width:4.6,height:1.8,y:4.6,along:-4.35,out:.06,surface:'east-nine-a-blank-end-wall',
+      lines:['配环境太烦？','让 Agent 来','把时间留给真正想学的东西'],width:8,height:2.8,y:4.2,along:-4.35,out:.06,surface:'east-nine-a-blank-end-wall',style:'large-copy',color:'#405047',opacity:.9,
     }));
   }
 
@@ -174,7 +175,7 @@ export function planCampusAIMurals(model,records,{frame,geoToLocal}) {
     if(chosen.length===AI_WALL_MESSAGES.length)break;
   }
   chosen.forEach(({r,edge,height,y},i)=>plan.push(onWall(`scattered-${i}`,r,edge,{
-    lines:[AI_WALL_MESSAGES[i]],width:Math.min(11,edge.length-3),height:Math.min(.48,height),y,color:i%3===1?'#64716e':'#756b62',surface:'generic-clear-spandrel',
+    lines:[AI_WALL_MESSAGES[i]],width:Math.min(18,edge.length-3),height:Math.min(.82,height),y,color:i%3===1?'#40554e':'#5b4b3e',surface:'generic-clear-spandrel',style:'large-copy',opacity:.9,
   })));
   for(const placement of planCampusPoetryPlacements(model,records,{frame,geoToLocal})){
     const poem=CAMPUS_POETRY.find(p=>p.id===placement.poetryId);

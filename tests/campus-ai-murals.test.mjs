@@ -109,7 +109,24 @@ test('several ambient messages remain beside mapped surface roads on their viewi
     }
     assert.ok(distance<=24.05,`${p.id}: a reachable viewing-side road should be within 24m, got ${distance}`);
     assert.ok(p.lines.length===1&&[...p.lines[0]].length<=24,'narrow roadside bands use concise copy');
-    assert.ok(p.height<=.5&&p.background===null,'roadside copy stays a quiet narrow line');
+    assert.ok(p.height<=.95&&p.background===null,'enlarged roadside copy stays inside the available window-free band');
+  }
+});
+
+test('enlarged activity copy outside the canteen stays on solid source facades with clear sightlines',()=>{
+  const signs=plan.filter(p=>!p.poetryId&&p.featureId!=='way/103814566');
+  assert.ok(signs.length>=6);
+  for(const item of signs){
+    const normal=new THREE.Vector3(item.nx,0,item.nz),distance=item.id.startsWith('gym-')?36:20;
+    const eye=new THREE.Vector3(item.x+item.nx*distance,1.79,item.z+item.nz*distance);
+    for(const u of [-.49,-.25,0,.25,.49])for(const v of [-.49,0,.49]){
+      const point=pointOnSign(item,item.width*u,item.height*v);
+      const support=new THREE.Raycaster(point.clone().addScaledVector(normal,.02),normal.clone().negate(),0,.7).intersectObject(facades,true)[0];
+      assert.ok(support,`${item.id}: unsupported paint at ${u},${v}`);
+      assert.equal(support.object.userData.featureId,item.featureId,`${item.id}: must stay on its source building`);
+      assert.ok(!/window|glaz|door|conditioner/i.test(support.object.name),`${item.id}: covers ${support.object.name}`);
+      assert.equal(Boolean(probe(eye,point)),false,`${item.id}: obscured lettering at ${u},${v}`);
+    }
   }
 });
 

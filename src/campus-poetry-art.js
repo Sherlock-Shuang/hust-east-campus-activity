@@ -49,6 +49,7 @@ function motif(ctx,w,h,kind,ink){
 export function paintCampusMural(ctx,canvas,item){
   const w=canvas.width,h=canvas.height,poem=item.poetryId;
   const prominent=poem&&poem!=='life-ai'&&poem!=='life-art';
+  const largeCopy=!poem&&item.style==='large-copy';
   const shallow=poem&&item.lines.length===1&&item.height/item.width<.35;
   ctx.clearRect(0,0,w,h);ctx.fillStyle=item.color;ctx.textBaseline='middle';ctx.textAlign='center';
   function drawText(value,x,y,size){
@@ -62,7 +63,7 @@ export function paintCampusMural(ctx,canvas,item){
   }
   if(poem&&!shallow)motif(ctx,w,h,item.motif,item.color);
   const family=item.latin?'Georgia, "Times New Roman", serif':item.vertical||item.motif==='mountains'?kai:song;
-  const weight=prominent?'600':'400';
+  const weight=prominent||largeCopy?'600':'400';
   if(item.vertical){
     const rows=Math.max(...item.lines.map(line=>[...line].length)),columns=item.lines.length;
     const size=Math.min(h*.82/rows,w*.82/(columns*1.1));
@@ -71,10 +72,10 @@ export function paintCampusMural(ctx,canvas,item){
     return;
   }
   const count=item.lines.length;
-  const blockHeight=h*(prominent?.72:poem?.46:count>1?.7:.8),step=blockHeight/count;
+  const blockHeight=h*(prominent?.72:poem?.46:largeCopy?.78:count>1?.7:.8),step=blockHeight/count;
   const first=shallow?h*.5:poem?(count===1?h*.46:prominent?(count>2?h*.15:h*.25):h*.28):h*.5-step*(count-1)/2;
   item.lines.forEach((line,i)=>{
-    let size=shallow?h*(prominent?.80:.60):poem?(count===1?h*(prominent?.76:.23):step*(prominent?.90:.77)):step*.65;
+    let size=shallow?h*(prominent?.80:.60):poem?(count===1?h*(prominent?.76:.23):step*(prominent?.90:.77)):step*(largeCopy?.80:.65);
     const font=n=>`${item.latin&&item.motif!=='orbit'?'italic ':''}${weight} ${n}px ${family}`;
     ctx.font=font(size);size*=Math.min(1,w*(prominent?.94:poem?.90:.94)/Math.max(1,ctx.measureText(line).width));ctx.font=font(size);
     if(item.motif==='orbit'){
