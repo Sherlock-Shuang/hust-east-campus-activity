@@ -45,10 +45,11 @@ globalThis.__eastNinePosterQA={
   group.updateWorldMatrix(true,true);camera.updateMatrixWorld(true);
   const link=experience.link,rect=posterQaRect(link),saved=commute.player.captureActivityPose(),point=(u,v)=>new THREE.Vector3(item.x+item.nz*item.width*u,item.y+item.height*v,item.z-item.nx*item.width*u);
   const screen=[[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]].map(([u,v])=>point(u,v).project(camera).toArray());
+  const qrScreen=[[680,1040],[900,1040],[900,1260],[680,1260]].map(([x,y])=>point(x/987-.5,.5-y/1347).project(camera).toArray());
   const mobileRoot=document.getElementById('mobile-controls');
   const controls=[...document.querySelectorAll('#mobile-joystick, #mobile-controls button, .transport-selector button')].filter(element=>{const r=element.getBoundingClientRect(),s=getComputedStyle(element);return !element.hidden&&r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';}).map(element=>({id:element.id||element.dataset.mobileAction||element.dataset.mobileHold||element.textContent.trim(),rect:posterQaRect(element)}));
   const center=rect&&document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);
-  return{placement:item,state:experience.state,nearby:experience.nearby,group:posterQaObject(group.name),panel:{uuid:panel?.uuid,side:panel?.material?.side,texture:!!texture,width:texture?.image?.naturalWidth??texture?.image?.width,height:texture?.image?.naturalHeight??texture?.image?.height,repeat:texture?.repeat.toArray(),offset:texture?.offset.toArray(),src:texture?.image?.currentSrc||texture?.image?.src},screen,
+  return{placement:item,state:experience.state,nearby:experience.nearby,group:posterQaObject(group.name),panel:{uuid:panel?.uuid,side:panel?.material?.side,texture:!!texture,width:texture?.image?.naturalWidth??texture?.image?.width,height:texture?.image?.naturalHeight??texture?.image?.height,repeat:texture?.repeat.toArray(),offset:texture?.offset.toArray(),src:texture?.image?.currentSrc||texture?.image?.src},screen,qrScreen,
    front:(camera.position.x-item.x)*item.nx+(camera.position.z-item.z)*item.nz,link:{exists:!!link,hidden:link?.hidden,href:link?.href,target:link?.target,rel:link?.rel,text:link?.textContent,rect,topmost:!!link&&(center===link||link.contains(center)),count:document.querySelectorAll('.east-nine-builders-original').length},
    player:{...posterQaPose(commute.player.state),active:commute.player.active,mode:commute.player.state.mode,view:saved?.view},camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray(),fov:camera.fov},portalOpen:!!liveControl?.portalOpen,host:{paused:liveControl?.state?.paused,skyQrVisible:liveControl?.state?.skyQrVisible,phase:liveControl?.state?.phase},
    legacy:{field:posterQaObject('yunyuan16-group-qr'),sky:posterQaObject('activity-sky-qr')},mobile:{visible:!!mobileRoot&&!mobileRoot.hidden,view:mobileRoot?.dataset.view,coarse:matchMedia('(any-pointer: coarse)').matches,controls},viewport:{width:innerWidth,height:innerHeight},mode:atmosphere.mode};
@@ -67,7 +68,7 @@ globalThis.__eastNinePosterQA={
  }
 };`;
 
-const report={passed:false,root,mobileViewport:mobile,startedAt:new Date().toISOString(),errors:[],consoleErrors:[],shaderErrors:[],resourceErrors:[],screenshots:[],scope:'Isolated production build and temporary audience. Real first-person walking viewpoints, original unmodified portrait texture and native image-tab link, popup return, static wall transform, existing QR objects, distance gates, day/night screenshots, and optional touch/viewport emulation. Mobile results are browser emulation, not a physical-phone GPU test or an assertion that an external Xiaohongshu app opens.'};
+const report={passed:false,root,mobileViewport:mobile,startedAt:new Date().toISOString(),errors:[],consoleErrors:[],shaderErrors:[],resourceErrors:[],screenshots:[],scope:'Isolated production build and temporary audience. Real first-person walking viewpoints, a building-height north-wall wrap with reversible window-detail masking, original unmodified portrait texture and native image-tab link, popup return, static wall transform, existing QR objects, distance gates, day/night screenshots, and optional touch/viewport emulation. Mobile results are browser emulation, not a physical-phone GPU test or an assertion that an external Xiaohongshu app opens.'};
 let app,browser,context,page;
 await mkdir(out,{recursive:true});
 const read=()=>page.evaluate(()=>__eastNinePosterQA.read());
@@ -85,12 +86,12 @@ function assertStatic(before,after){
   for(const key of ['field','sky']){assert.equal(after.legacy[key].count,1);assert.equal(after.legacy[key].uuid,before.legacy[key].uuid);assert.deepEqual(after.legacy[key].matrix,before.legacy[key].matrix);}
   assert.deepEqual(after.host,before.host,'Opening the card must not alter host/activity state');
 }
-function assertCard(state){
+function assertCard(state,{full=false}={}){
   assert.equal(state.state,'ready');assert.equal(state.group.visible,true);assert.equal(state.group.count,1);assert.equal(state.panel.side,0,'The wall uses a front-facing plane');
   assert.equal(state.panel.width,987);assert.equal(state.panel.height,1347);assert.deepEqual(state.panel.repeat,[1,1]);assert.deepEqual(state.panel.offset,[0,0]);
   assert.ok(state.front>0&&state.placement.nz<-.98);assert.equal(state.player.mode,'walk');assert.equal(state.player.view,'first');
   assert.ok(state.camera.position[1]-state.player.y>1.3&&state.camera.position[1]-state.player.y<1.9,'The camera remains at a real first-person eye height');
-  assert.ok(state.screen.every(([x,y,z])=>Math.abs(x)<1&&Math.abs(y)<1&&z>-1&&z<1),'All four image corners must fit in the visible first-person viewport');
+  assert.ok((full?state.screen:state.qrScreen).every(([x,y,z])=>Math.abs(x)<1&&Math.abs(y)<1&&z>-1&&z<1),full?'The full building-height poster fits in the road viewpoint':'The complete QR region fits in the near viewing position');
   assert.equal(state.link.count,1);assert.equal(state.link.hidden,false);assert.equal(state.link.target,'_blank');assert.match(state.link.rel,/(^|\s)noopener(\s|$)/);assert.equal(state.link.topmost,true);
   const r=state.link.rect;assert.ok(r.x>=0&&r.y>=0&&r.right<=state.viewport.width&&r.bottom<=state.viewport.height,'The original-image link fits the viewport');
   if(mobile){
@@ -101,9 +102,9 @@ function assertCard(state){
 async function view(kind){
   await page.evaluate(kind=>__eastNinePosterQA.view(kind),kind);
   await page.waitForFunction(()=>__eastNinePosterQA.read().state==='ready',null,{timeout:30000});
-  await page.waitForTimeout(450);const state=await read();assertCard(state);
+  await page.waitForTimeout(450);const state=await read();assertCard(state,{full:kind==='approach'});
   const probes=await page.evaluate(()=>__eastNinePosterQA.probes());assert.deepEqual(probes.blocked,[],kind+' must have clear whole-card sightlines');
-  assert.ok(probes.support.every(hit=>hit.component==='teaching-wing'&&hit.featureId==='way/1023544717'&&Math.abs(hit.distance-.71)<.002),'The full card must stay on its original blank north wall');
+  assert.ok(probes.support.every(hit=>hit.component==='teaching-wing'&&hit.featureId==='way/1023544717'&&Math.abs(hit.distance-.662)<.002),'The full card must stay flush to the original north wall after local facade covering');
   return{state,probes};
 }
 

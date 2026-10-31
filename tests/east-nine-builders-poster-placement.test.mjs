@@ -9,6 +9,7 @@ import {createCampus3D} from '../src/campus-3d.js';
 import {createPlayerWorld} from '../src/player-experience.js';
 import {createPlayerMotion} from '../src/player-motion.js';
 import {EAST_NINE_BUILDERS_POSTER_SOURCE_ID,planEastNineBuildersPoster} from '../src/east-nine-builders-poster-placement.js';
+import {createEastNinePosterFacadeCover} from '../src/east-nine-poster-facade-cover.js';
 
 const read=name=>JSON.parse(readFileSync(new URL(`../public/data/${name}`,import.meta.url),'utf8'));
 const data=mergeCampusExtension(read('east-campus.geojson'),read('opto-southeast.geojson'));
@@ -19,23 +20,41 @@ const campus=createCampus3D(THREE,model,{frame,geoToLocal});
 campus.group.updateMatrixWorld(true);
 const item=planEastNineBuildersPoster(model,{frame,geoToLocal});
 const world=createPlayerWorld(model);
+const collisionBefore=JSON.stringify(model.architectureInfrastructure);
+const doors=[],wings=[];
+campus.group.traverse(object=>{
+  if(object.userData.component==='double-glass-door')doors.push(object);
+  if(object.userData.component==='teaching-wing'&&object.userData.wingLabel==='A')wings.push(object);
+});
+const doorMatrices=doors.map(door=>door.matrixWorld.toArray());
+const cover=createEastNinePosterFacadeCover(THREE,{scene:campus.group,placement:item});
+cover.setVisible(true);campus.group.updateMatrixWorld(true);
 const player=createPlayerMotion({world,route:{points:[{x:400,z:400,y:.14},{x:1000,z:400,y:.14}]}});
 const pointOnPoster=(u,v)=>new THREE.Vector3(item.x+item.nz*u*item.width,item.y+v*item.height,item.z-item.nx*u*item.width);
 const grid=[-.5,-.25,0,.25,.5];
-after(()=>{campus.dispose();model.dispose();});
+after(()=>{cover.dispose();campus.dispose();model.dispose();});
 
-test('the portrait uses the actual north wall and preserves its original aspect without changing source data',()=>{
+test('the giant portrait nearly fills the actual north wall height and preserves its original aspect and source data',()=>{
   assert.ok(item);
   assert.equal(item.featureId,EAST_NINE_BUILDERS_POSTER_SOURCE_ID);
   assert.ok(item.nz<-.98,'the card faces north toward the road, not the east/lake facade');
   const normal=new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),item.yaw);
   assert.ok(normal.dot(new THREE.Vector3(item.nx,0,item.nz))>.99999);
   assert.ok(Math.abs(item.width/item.height-987/1347)<1e-12,'the uploaded portrait is neither stretched nor cropped');
+  assert.equal(wings.length,1);
+  const wall=new THREE.Box3().setFromObject(wings[0]);
+  assert.ok(item.height/(wall.max.y-wall.min.y)>.95,'the requested full-height card occupies nearly the whole existing wall');
+  assert.ok(Math.abs(item.y-item.height/2-wall.min.y-.35)<.001);
+  assert.ok(Math.abs(wall.max.y-item.y-item.height/2-.35)<.001);
+  assert.ok(item.width>14&&item.height>19,'this is a building-scale portrait');
+  assert.ok(Math.hypot(item.x-item.northEntrance.x,item.z-item.northEntrance.z)-item.width/2>35,'the poster stays far from the original north door');
   assert.equal(JSON.stringify(data),sourceBefore);
+  assert.equal(JSON.stringify(model.architectureInfrastructure),collisionBefore,'the visual facade treatment does not modify walking/collision infrastructure');
   assert.deepEqual(planEastNineBuildersPoster(model,{frame,geoToLocal}),item);
 });
 
-test('every part of the card is supported by blank teaching-wing wall, clear of windows, doorway, canopy and columns',()=>{
+test('the authorised window overlay reveals original wall behind every part of the full-height card',()=>{
+  assert.ok(cover.stats.affectedInstances>0,'the large card intentionally covers the selected window decorations');
   const normal=new THREE.Vector3(item.nx,0,item.nz);
   for(const u of grid)for(const v of grid){
     // Begin outside all facade details so a projecting window or canopy
@@ -44,39 +63,60 @@ test('every part of the card is supported by blank teaching-wing wall, clear of 
     const hit=new THREE.Raycaster(origin,normal.clone().negate(),0,1.3).intersectObject(campus.group,true)[0];
     assert.equal(hit?.object.userData.component,'teaching-wing',`poster (${u}, ${v}) covers ${hit?.object.userData.component||hit?.object.name||'empty space'}`);
     assert.equal(hit.object.userData.featureId,EAST_NINE_BUILDERS_POSTER_SOURCE_ID);
-    assert.ok(Math.abs(hit.distance-.71)<.002,'the image sits 6cm outside its supporting wall');
+    assert.ok(Math.abs(hit.distance-.662)<.002,'the image sits 1.2cm outside its supporting wall');
   }
 });
 
-test('ordinary footway approach and close scan viewpoint are walkable and see the complete portrait at eye level',()=>{
-  const road=model.records.find(record=>record.id===item.approach.sourceId);
-  const roadPoints=road.feature.geometry.coordinates.map(([longitude,latitude])=>geoToLocal({longitude,latitude,coordinateSystem:'EPSG:4326'},frame));
-  const roadStart=new THREE.Vector2(roadPoints[0].x,roadPoints[0].z),roadEnd=new THREE.Vector2(roadPoints[1].x,roadPoints[1].z);
-  const approachPoint=new THREE.Vector2(item.approach.x,item.approach.z);
-  assert.ok(Math.abs(approachPoint.distanceTo(roadStart)+approachPoint.distanceTo(roadEnd)-roadStart.distanceTo(roadEnd))<.001,'the ordinary viewpoint is on the real north entrance footway');
+test('the full-card approach and close QR viewpoint are walkable, unobstructed and fit ordinary first-person views',()=>{
   for(const [name,pose]of Object.entries({approach:item.approach,inspection:item.inspection})){
     assert.equal(player.placeWalker(pose).ok,true,`${name}: the ordinary player must fit at the viewpoint`);
     assert.ok(Math.abs(player.state.y-pose.y)<.02,`${name}: feet remain on the ground`);
-    const distance=Math.hypot(pose.x-item.x,pose.z-item.z);
-    assert.ok(name==='approach'?distance>12&&distance<15:distance>3&&distance<5);
+    const target=name==='approach'?item:item.qr,distance=Math.hypot(pose.x-target.x,pose.z-target.z);
+    assert.ok(name==='approach'?distance>31&&distance<33:distance>7&&distance<9);
     assert.ok(((pose.x-item.x)*item.nx+(pose.z-item.z)*item.nz)/distance>.9,'the viewer sees the front of the card');
     const eye=new THREE.Vector3(pose.x,player.state.y+1.65,pose.z);
+    const camera=new THREE.PerspectiveCamera(45,1280/720,.06,2000);
+    camera.position.copy(eye);camera.rotation.set(-pose.pitch,pose.yaw,0,'YXZ');camera.updateMatrixWorld(true);
     for(const u of grid)for(const v of grid){
-      const delta=pointOnPoster(u,v).sub(eye),length=delta.length();
+      const {qrRegion:r}=item;
+      const point=name==='approach'?pointOnPoster(u,v):pointOnPoster(r.left+(u+.5)*(r.right-r.left)-.5,.5-r.top-(v+.5)*(r.bottom-r.top));
+      const projected=point.clone().project(camera);
+      assert.ok(Math.abs(projected.x)<1&&Math.abs(projected.y)<1&&projected.z>-1&&projected.z<1,`${name}: intended image region fits the actual walking field of view`);
+      const delta=point.sub(eye),length=delta.length();
       const hit=new THREE.Raycaster(eye,delta.normalize(),0,length-.005).intersectObject(campus.group,true)[0];
       assert.equal(Boolean(hit),false,`${name} (${u}, ${v}) is obscured by ${hit?.object.userData.component||hit?.object.name}`);
     }
   }
   assert.equal(player.placeWalker(item.approach).ok,true);
-  for(let frameNumber=0;frameNumber<1800;frameNumber++){
+  for(let frameNumber=0;frameNumber<3600;frameNumber++){
     const dx=item.inspection.x-player.state.x,dz=item.inspection.z-player.state.z,distance=Math.hypot(dx,dz);
     if(distance<.14)break;
     const amount=Math.min(.45,Math.max(.035,distance*.16));
     player.step(1/60,{moveX:dx/distance*amount,moveZ:dz/distance*amount});
-    assert.equal(player.state.blockedReason,'','a normal walk from the source footway to the scan point stays clear');
+    assert.equal(player.state.blockedReason,'','a normal walk through the north forecourt to the scan point stays clear');
     assert.ok(Math.abs(player.state.y-.14)<.02,'the walk stays on the ground');
   }
   assert.ok(Math.hypot(player.state.x-item.inspection.x,player.state.z-item.inspection.z)<.14,'the scan point is reachable by walking, without teleporting across an obstacle');
+});
+
+test('the original north entrance doors and mapped walking approach remain intact and accessible',()=>{
+  assert.equal(doors.length,2);
+  const normal=new THREE.Vector3(item.nx,0,item.nz);
+  for(const [index,door]of doors.entries()){
+    assert.deepEqual(door.matrixWorld.toArray(),doorMatrices[index]);assert.equal(door.visible,true);
+    const target=door.getWorldPosition(new THREE.Vector3()),origin=target.clone().addScaledVector(normal,3);
+    const hit=new THREE.Raycaster(origin,normal.clone().negate(),0,3.2).intersectObject(campus.group,true)[0];
+    assert.equal(hit?.object.userData.component,'double-glass-door','north door glass remains the first visible entrance surface');
+  }
+  assert.equal(player.placeWalker(item.entranceApproach).ok,true);
+  const atDoor={x:item.northEntrance.x+item.nx*2.6,z:item.northEntrance.z+item.nz*2.6,y:.14,yaw:item.yaw};
+  for(let frameNumber=0;frameNumber<2400;frameNumber++){
+    const dx=atDoor.x-player.state.x,dz=atDoor.z-player.state.z,distance=Math.hypot(dx,dz);
+    if(distance<.14)break;
+    const amount=Math.min(.45,Math.max(.035,distance*.16));player.step(1/60,{moveX:dx/distance*amount,moveZ:dz/distance*amount});
+    assert.equal(player.state.blockedReason,'','the pre-existing north-door approach remains open');
+  }
+  assert.ok(Math.hypot(player.state.x-atDoor.x,player.state.z-atDoor.z)<.14);
 });
 
 test('the planner fails closed when the source building, north edge or mapped entrance footway is missing',()=>{

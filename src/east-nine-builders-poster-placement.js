@@ -1,3 +1,5 @@
+import {getBuildingProfile} from './building-profiles.js';
+
 export const EAST_NINE_BUILDERS_POSTER_SOURCE_ID = 'way/1023544717';
 export const EAST_NINE_BUILDERS_POSTER_IMAGE = '/images/activity/hust-ai-builders-xiaohongshu.jpg';
 
@@ -6,9 +8,9 @@ const NORTH_ENTRANCE = [114.4215014,30.5164424];
 const NORTH_FOOTWAY_ID = 'way/655063746';
 const sameCoordinate = (a,b) => Array.isArray(a)&&Array.isArray(b)&&Math.abs(a[0]-b[0])<1e-7&&Math.abs(a[1]-b[1])<1e-7;
 
-/** Activity artwork beside the existing A-north entrance. The source edge is
- * the northern facade, distinct from the east-facing stair tower. Its door
- * already leaves a small window-free bay; this plan changes no architecture.
+/** Full-height activity artwork on the A-wing's northern source facade,
+ * distinct from the east-facing stair tower. The authorised image covers
+ * window decorations in its footprint; the shell, source and entrance stay.
  * Viewpoint y values are the player's feet, with a 1.65m first-person eye. */
 export function planEastNineBuildersPoster(model,{frame,geoToLocal}={}) {
   if(!Array.isArray(model?.records)||!frame||typeof geoToLocal!=='function')return null;
@@ -38,19 +40,28 @@ export function planEastNineBuildersPoster(model,{frame,geoToLocal}={}) {
   const tx=(b.x-a.x)/length,tz=(b.z-a.z)/length,nx=-tz*direction,nz=tx*direction;
   if(nz>-.9)return null;
 
-  const out=.06,x=b.x-tx*3.10+nx*out,z=b.z-tz*3.10+nz*out,y=2.13;
-  const pose=(px,pz)=>({x:px,y:.14,z:pz,yaw:Math.atan2(px-x,pz-z),pitch:Math.atan2(.14+1.65-y,Math.hypot(px-x,pz-z))});
+  const profile=getBuildingProfile(source.feature),wallHeight=profile.height-profile.baseHeight;
+  const height=wallHeight-.70,width=height*987/1347,alongEast=43,out=.012;
+  if(height<=0||alongEast-width/2<5||alongEast+width/2>length-.35)return null;
+  const x=b.x-tx*alongEast+nx*out,z=b.z-tz*alongEast+nz*out,y=profile.baseHeight+wallHeight/2;
+  const pointOnImage=(u,v)=>({x:x+nz*width*(u-.5),y:y+height*(.5-v),z:z-nx*width*(u-.5)});
+  // Pixel bounds preserve the original QR and its surrounding quiet zone.
+  const qrRegion={left:680/987,right:900/987,top:1040/1347,bottom:1260/1347};
+  const qr=pointOnImage(790/987,1150/1347);
+  const pose=(px,pz,target={x,y,z})=>({x:px,y:.14,z:pz,yaw:Math.atan2(px-target.x,pz-target.z),pitch:Math.atan2(.14+1.65-target.y,Math.hypot(px-target.x,pz-target.z))});
   return {
     id:'east-nine-builders-poster',featureId:source.id,sourceId:source.id,
     imagePath:EAST_NINE_BUILDERS_POSTER_IMAGE,
-    x,y,z,nx,nz,yaw:Math.atan2(nx,nz),width:2.05,height:2.05*1347/987,
-    surface:'east-nine-north-entry-blank-wall',
+    x,y,z,nx,nz,yaw:Math.atan2(nx,nz),width,height,wallHeight,mountOffset:out,
+    surface:'east-nine-north-full-height-wall',
     sourceEdge:{start:[...NORTH_EDGE_START],end:[...NORTH_ENTRANCE]},
     expectedSupportNames:['teaching-wing'],
-    // The road junction itself contains a forecourt pedestrian; the quarter
-    // point remains on the mapped footway with a clear view of the whole card.
-    approach:{...pose(outer.x+(b.x-outer.x)*.25,outer.z+(b.z-outer.z)*.25),sourceId:NORTH_FOOTWAY_ID},
-    approachLabel:'东九 A 座北门步道',
-    inspection:pose(x+nx*4,z+nz*4),
+    // The full artwork fits the ordinary first-person field of view from the
+    // north forecourt. A separate close view aims at the actual lower QR.
+    approach:pose(x+nx*32,z+nz*32),
+    approachLabel:'东九 A 座北侧全幅观察点',
+    inspection:pose(qr.x+nx*8,qr.z+nz*8,qr),qr,qrRegion,
+    northEntrance:{x:b.x,y:profile.baseHeight,z:b.z,sourceFootwayId:NORTH_FOOTWAY_ID},
+    entranceApproach:{...pose(outer.x+(b.x-outer.x)*.25,outer.z+(b.z-outer.z)*.25,{x:b.x,y:1.79,z:b.z}),sourceId:NORTH_FOOTWAY_ID},
   };
 }
