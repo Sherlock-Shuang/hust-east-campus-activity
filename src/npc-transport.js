@@ -2,9 +2,10 @@ import {sampleFloodActorPose} from './campus-flood-actors.js';
 import {planNpcTransportRoutes,sampleNpcTransportRoute} from './npc-transport-routes.js';
 import {createNpcTransportModels} from './npc-transport-models.js';
 
-/** Decorative NPC fleet. Existing road commuters remain in their signal-aware
- * simulation; these aircraft/lake boats have independent certified loops and
- * never become player obstacles, pickups or activity participants. */
+/** Decorative NPC fleet. Aircraft appear only during the campus tsunami;
+ * lake boats remain part of ordinary campus life. Existing road commuters
+ * keep their signal-aware simulation, and these independent loops never
+ * become player obstacles, pickups or activity participants. */
 export function createNpcTransport({THREE,scene,model,route}={}){
   const group=new THREE.Group();group.name='ambient-npc-transport';group.userData.dynamic=true;
   group.matrixAutoUpdate=true;group.matrixWorldAutoUpdate=true;scene.add(group);
@@ -23,13 +24,14 @@ export function createNpcTransport({THREE,scene,model,route}={}){
       if(disposed||!enabled)return false;
       const advancing=Number.isFinite(dt)&&dt>0;
       if(advancing)elapsedSeconds+=Math.min(dt,.1);
-      const eye=camera?.position,limit=320*detailDistanceScale,limitSq=limit*limit;visibleCount=0;
+      const eye=camera?.position,limit=320*detailDistanceScale,limitSq=limit*limit;
+      const airVisible=!!floodState?.id&&Number.isFinite(floodState.elapsed);visibleCount=0;
       let changed=false;
       for(const item of entries){
         sampleNpcTransportRoute(item.plan,elapsedSeconds,item.pose);
         item.pose=sampleFloodActorPose({...item.pose,id:item.plan.id},floodState,item.plan.mode);
         const p=item.pose,dx=eye?p.x-eye.x:0,dy=eye?p.y-eye.y:0,dz=eye?p.z-eye.z:0;
-        const visible=!eye||dx*dx+dy*dy+dz*dz<limitSq;changed||=visible!==item.root.visible;item.root.visible=visible;
+        const visible=(item.plan.mode==='boat'||airVisible)&&(!eye||dx*dx+dy*dy+dz*dz<limitSq);changed||=visible!==item.root.visible;item.root.visible=visible;
         if(!item.root.visible)continue;visibleCount++;place(item);
       }
       return changed||(advancing&&visibleCount>0);

@@ -50,6 +50,7 @@ test('real campus fleet moves offscreen analytically, culls cheaply and resumes 
   const {scene,model,route}=fixture(),layer=createNpcTransport({THREE,scene,model,route});
   try{
     assert.equal(layer.group.name,'ambient-npc-transport');const initial=layer.getDiagnostics();assert.equal(initial.total,5);assert.deepEqual(initial.counts,{helicopter:1,roadster:1,hoverboard:2,boat:1});
+    layer.setFloodState({id:'distance-test',elapsed:0});
     const camera=new THREE.PerspectiveCamera();camera.position.set(1e6,1e6,1e6);assert.equal(layer.tick(.1,camera),false);
     let data=layer.getDiagnostics();assert.equal(data.visibleCount,0);assert.equal(data.drawCalls,0);assert.notDeepEqual(data.poses.map(p=>[p.x,p.y,p.z]),initial.poses.map(p=>[p.x,p.y,p.z]));
     const near=data.poses[0];camera.position.set(near.x,near.y,near.z);assert.equal(layer.tick(.1,camera),true);data=layer.getDiagnostics();assert.ok(data.visibleCount>0);
@@ -62,6 +63,7 @@ test('real campus fleet moves offscreen analytically, culls cheaply and resumes 
 test('hiding freezes NPC time, distance budget scales and repeated disposal removes only this layer',()=>{
   const {scene,model,route}=fixture(),sentinel=new THREE.Group();scene.add(sentinel);const layer=createNpcTransport({THREE,scene,model,route});
   try{
+    layer.setFloodState({id:'visibility-test',elapsed:0});
     layer.tick(.1);assert.equal(layer.getDiagnostics().visibleCount,5);const before=layer.getDiagnostics();layer.setVisible(false);assert.equal(layer.tick(.1),false);assert.equal(layer.getDiagnostics().elapsedSeconds,before.elapsedSeconds);assert.equal(layer.getDiagnostics().visibleCount,0);assert.equal(layer.group.visible,false);
     layer.setVisible(true);layer.tick(0);assert.equal(layer.getDiagnostics().visibleCount,5);
     const first=layer.getDiagnostics().poses[0],camera=new THREE.PerspectiveCamera();camera.position.set(first.x+200,first.y,first.z);layer.setDetailDistanceScale(1);layer.tick(0,camera);assert.equal(layer.getDiagnostics().poses[0].visible,true);
@@ -77,5 +79,48 @@ test('flood lifts low NPC fleet onto the water while high aircraft keep their fl
   layer.setFloodState({id:'test',elapsed:180});layer.tick(0);const wet=layer.getDiagnostics().poses;
   for(const p of wet){const b=dry.find(a=>a.id===p.id);if(b.y<2){assert.ok(p.y>6,p.id);const mesh=layer.group.getObjectByName(p.id);assert.equal(mesh.position.y,p.y);}else if(b.y>12)assert.equal(p.y,b.y);}
   layer.setFloodState(null);layer.tick(0);assert.deepEqual(layer.getDiagnostics().poses.map(p=>[p.x,p.y,p.z]),dry.map(p=>[p.x,p.y,p.z]));
+  assert.deepEqual(layer.getDiagnostics().poses.filter(p=>p.visible).map(p=>p.mode),['boat']);
  }finally{layer.dispose();model.dispose();}
+});
+
+test('airborne NPCs appear only during the tsunami including its approach and pause',()=>{
+  const {scene,model,route}=fixture(),layer=createNpcTransport({THREE,scene,model,route});
+  try{
+    layer.tick(0);
+    const ordinary=layer.getDiagnostics();
+    assert.equal(ordinary.total,5,'retain the full fleet for the tsunami');
+    assert.equal(ordinary.visibleCount,1);
+    assert.deepEqual(ordinary.poses.filter(p=>p.visible).map(p=>p.mode),['boat']);
+    for(const flood of[
+      {id:'approach',elapsed:-3},
+      {id:'arrival',elapsed:0},
+      {id:'paused',elapsed:60,paused:true},
+    ]){
+      layer.setFloodState(flood);layer.tick(0);
+      const active=layer.getDiagnostics();
+      assert.equal(active.visibleCount,5,flood.id);
+      assert.deepEqual(active.poses.filter(p=>p.visible&&p.mode!=='boat').map(p=>p.mode).sort(),['helicopter','hoverboard','hoverboard','roadster']);
+      layer.setFloodState(null);assert.equal(layer.tick(0),true,'ending the tsunami invalidates the visible scene');
+      assert.equal(layer.getDiagnostics().visibleCount,1);
+      assert.deepEqual(layer.getDiagnostics().poses.filter(p=>p.visible).map(p=>p.mode),['boat']);
+    }
+  }finally{layer.dispose();model.dispose();}
+});
+
+test('invalid flood identifiers or clocks cannot reveal airborne NPCs',()=>{
+  const {scene,model,route}=fixture(),layer=createNpcTransport({THREE,scene,model,route});
+  try{
+    for(const invalid of[
+      undefined,null,{},
+      {elapsed:0},{id:'',elapsed:0},{id:null,elapsed:0},
+      {id:'missing-clock'},{id:'invalid-clock',elapsed:NaN},
+      {id:'infinite-clock',elapsed:Infinity},{id:'string-clock',elapsed:'0'},
+    ]){
+      layer.setFloodState({id:'before-invalid',elapsed:0});layer.tick(0);
+      assert.equal(layer.getDiagnostics().visibleCount,5);
+      layer.setFloodState(invalid);layer.tick(0);
+      assert.equal(layer.getDiagnostics().visibleCount,1);
+      assert.deepEqual(layer.getDiagnostics().poses.filter(p=>p.visible).map(p=>p.mode),['boat']);
+    }
+  }finally{layer.dispose();model.dispose();}
 });
