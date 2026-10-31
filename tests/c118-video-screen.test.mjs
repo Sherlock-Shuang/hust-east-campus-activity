@@ -258,5 +258,5 @@ test('Codex owns the screen while delayed video posters, frames and metadata can
  f.visible();f.player.setScreenEnabled(false);const codex={name:'codex'};f.screen.material.map=codex;f.screen.visible=true;
  f.readyPoster();f.video.readyState=2;f.video.videoWidth=100;f.video.videoHeight=100;f.video.dispatch('loadedmetadata');f.video.dispatch('loadeddata');
  assert.equal(f.screen.material.map,codex);assert.equal(scale.x,1);
- f.player.setScreenEnabled(true);assert.equal(f.screen.material.map,f.textures[0]);f.player.dispose();
+ f.player.setScreenEnabled(true);assert.equal(f.screen.material.map,f.textures[0]);assert.ok(Math.abs(scale.x-9/16)<1e-10,'video metadata received during Codex is fitted when the film returns');f.player.dispose();
 });

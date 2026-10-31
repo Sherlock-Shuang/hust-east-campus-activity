@@ -23,12 +23,13 @@ import {createRenderCadence} from './render-cadence.js';
 import {createC118ResourceScope} from './c118-resource-scope.js';
 import {createGpuFrameTimer} from './gpu-frame-timer.js';
 import './c118-viewer.css';
+import './c118-codex-screen.css';
 
 const canvas=document.querySelector('#hall-canvas'),status=document.querySelector('#hall-status'),stick=document.querySelector('#hall-stick');
 let renderer,interior,motion,screenPlayer,raf,screenInView=false,disposed=false,paused=false,returning=false,previous=0,heading=0,pitch=0,joy=null,look=null,mouse=null,axes={forward:0,sideways:0};
 let activitySync,floodEffect,floodSensory,gpuTimer,floodEvent=null,floodRunning=false;
 let resetFloodView=()=>{};
-let codexScreen;
+let codexScreen,screenNeedsRender=false;
 let screenControl=null,audience,seating,seatedSeat=null,seatView=null,beforeSeatPose=null,seatTransition=null;
 let cinema=false,cinemaView=null,swimming,swimVertical=0,floodReturn=null;
 let enterSeat=()=>{},riseFromSeat=()=>{},faceStage=()=>{};
@@ -54,7 +55,7 @@ function syncScreenProgramme(){
   const codex=screenControl?.mediaId==='codex';
   screenPlayer?.setScreenEnabled(!codex);codexScreen?.select(codex?screenControl:null);
   document.querySelector('#screen-codex-open').hidden=!codex;
-  document.querySelector('#screen-program-note').textContent=codex?'主持人同步内容':'主持人统一选片';
+  document.querySelector('#screen-program-note').textContent=codex?'舞台大屏 · 主持人同步':'主持人统一选片';
   document.querySelector('#hall-screen-controls nav').hidden=codex;
   document.querySelector('#screen-time').hidden=codex;
   if(codex){document.querySelector('#screen-title').textContent='Codex';document.querySelector('#screen-status').textContent='';canvas.dataset.mediaId='codex';canvas.dataset.videoState='codex';}
@@ -176,7 +177,7 @@ if(!disposed)try{
     canvas.dataset.videoState=s.failed?'error':s.playing?'playing':s.loading?'loading':'paused';
     canvas.dataset.mediaId=s.mediaId||'vibe-coding';
   }}),'video-screen');
-  codexScreen=resources.own(createC118CodexScreen({THREE,screen:interior.videoScreen,onOpenChange(){resetInput();lock.release();}}),'codex-screen');
+  codexScreen=resources.own(createC118CodexScreen({THREE,screen:interior.videoScreen,onInvalidate(){screenNeedsRender=true;},onOpenChange(open){document.body.dataset.codexReply=String(open);resetInput();lock.release();}}),'codex-screen');
   on(document.querySelector('#screen-codex-open'),'click',()=>codexScreen.open());
   syncScreenProgramme();
   for(const [id,action] of [['screen-play','togglePlayback'],['screen-sound','toggleSound'],['screen-restart','restart']])on(document.querySelector(`#${id}`),'click',event=>{screenPlayer[action]();if(event.detail>0)canvas.focus({preventScroll:true});});
@@ -251,7 +252,12 @@ if(!disposed)try{
   let eyeY=motion.state.y+1.65,frame=0,ready=false;
   function renderFrame(now){
     if(disposed)return;raf=requestAnimationFrame(render);const elapsed=previous?Math.max(0,now-previous):0,dt=Math.min(.05,elapsed/1000);previous=now;
-    if(!usable()){lastFrameRendered=false;lastRenderedAt=0;pendingCpuMs=0;renderCadence.reset();return;}
+    if(!usable()){
+      // Reply focus and the host's pause freeze movement, but newly published
+      // text and local typing still need one draw on the physical stage screen.
+      if(screenNeedsRender&&!contextLost&&!pageLifecycle?.suspended&&!document.hidden){renderer.render(scene,camera);screenNeedsRender=false;}
+      lastFrameRendered=false;lastRenderedAt=0;pendingCpuMs=0;renderCadence.reset();return;
+    }
     const frameStart=performance.now();activeRafCallbacks++;
     const serverNow=activitySync.now(),floodElapsed=getC118FloodElapsed(floodEvent,serverNow);
     floodRunning=floodElapsed!==null&&floodElapsed>=0;
@@ -326,7 +332,7 @@ if(!disposed)try{
     const continuous=lastFrameRendered,drawElapsed=lastRenderedAt?now-lastRenderedAt:0;
     const nextBudget=performanceQuality.update({elapsedMs:drawElapsed,cpuMs:lastCpuMs,active:continuous,rendered:continuous,visible:true,targetFrameMs:1000/fps});
     if(nextBudget.revision!==qualityBudget.revision)applyQuality(nextBudget);
-    gpuTimer?.begin();try{renderer.render(scene,camera);}finally{gpuTimer?.end();}
+    gpuTimer?.begin();try{renderer.render(scene,camera);screenNeedsRender=false;}finally{gpuTimer?.end();}
     lastCpuMs=pendingCpuMs+performance.now()-frameStart;pendingCpuMs=0;
     frameMetrics.sample({frameMs:drawElapsed,cpuMs:lastCpuMs,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,active:continuous});lastFrameRendered=true;lastRenderedAt=now;
     if(now-lastReportAt>=1200){

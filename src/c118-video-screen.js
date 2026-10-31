@@ -108,7 +108,7 @@ export function createC118VideoScreen(THREE,{screen,document=globalThis.document
   }catch(error){dispose();throw error;}
   return {
     video,
-    setScreenEnabled(value){screenEnabled=!!value;if(!screenEnabled)pause();if(screenEnabled){if(hasFrame&&videoTexture)show(videoTexture);else if(posterTexture)show(posterTexture);else{screen.material.map=null;screen.visible=false;}}},
+    setScreenEnabled(value){screenEnabled=!!value;if(!screenEnabled)pause();if(screenEnabled){fitVideo();if(hasFrame&&videoTexture)show(videoTexture);else if(posterTexture)show(posterTexture);else{screen.material.map=null;screen.visible=false;}}},
     selectMedia(next){
       if(disposed||!next||!Number.isSafeInteger(next.revision)||next.revision<0)return false;
       const selected=getC118Media(next.mediaId);

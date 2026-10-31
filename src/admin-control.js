@@ -68,7 +68,7 @@ function renderC118Screen(){
   const selector=$('c118-screen-media');
   if(!screenSelectionDirty)selector.value=current.mediaId;
   $('c118-screen-status').textContent=ready?`当前：${screenTitles[current.mediaId]}`:'等待同步';
-  $('c118-screen-note').textContent=ready&&current.mediaId==='codex'?'后台发布文字，玩家可打开页面回复。':ready&&snapshot.state.paused?'全场暂停中，恢复后播放所选影片。':ready&&snapshot.state.c118Flood?'海啸演出期间视频暂停，恢复报告厅后播放所选影片。':'厅内玩家会统一切换到所选影片；音量由每位观众控制。';
+  $('c118-screen-note').textContent=ready&&current.mediaId==='codex'?'文字直接显示在舞台大屏，玩家可回复。':ready&&snapshot.state.paused?'全场暂停中，恢复后播放所选影片。':ready&&snapshot.state.c118Flood?'海啸演出期间视频暂停，恢复报告厅后播放所选影片。':'厅内玩家会统一切换到所选影片；音量由每位观众控制。';
   if(!codexDraftDirty)$('c118-codex-text').value=current.codexText||'';
   $('c118-codex-text').disabled=busy||!ready;$('publish-c118-codex').disabled=busy||!ready;
   selector.disabled=busy||!ready;
