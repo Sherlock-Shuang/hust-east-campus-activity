@@ -1,4 +1,5 @@
 export const ANNOUNCEMENT_CLOSE_DELAY = 5000;
+export const ANNOUNCEMENT_AUTO_DISMISS_DELAY = 6000;
 
 // Dismissal belongs to this viewer, never to the shared host state. Content is
 // part of the key so an edited announcement receives a fresh reading period.
@@ -19,21 +20,25 @@ export function mountAnnouncementNotice(element, {
   }
   function unlock() {
     if (disposed || !currentKey || element.hidden) return;
-    const remaining = ANNOUNCEMENT_CLOSE_DELAY - (now() - shownAt);
+    const elapsed = now() - shownAt;
+    if (elapsed >= ANNOUNCEMENT_AUTO_DISMISS_DELAY) { dismiss(); return; }
+    const remaining = ANNOUNCEMENT_CLOSE_DELAY - elapsed;
     if (remaining > 0) { timer = schedule(unlock, remaining); return; }
-    timer = undefined;
     close.hidden = false;
     close.disabled = false;
+    timer = schedule(unlock, ANNOUNCEMENT_AUTO_DISMISS_DELAY - elapsed);
   }
   function dismiss(event) {
-    event.stopPropagation();
-    if (disposed || !currentKey || element.hidden || now() - shownAt < ANNOUNCEMENT_CLOSE_DELAY) return;
+    event?.stopPropagation();
+    const delay = event ? ANNOUNCEMENT_CLOSE_DELAY : ANNOUNCEMENT_AUTO_DISMISS_DELAY;
+    if (disposed || !currentKey || element.hidden || now() - shownAt < delay) return;
+    const hadFocus = !!element.contains?.(element.ownerDocument?.activeElement);
     dismissed.add(currentKey);
     stopTimer();
     element.hidden = true;
     close.hidden = true;
     close.disabled = true;
-    onDismiss();
+    onDismiss({automatic: !event, hadFocus});
   }
   close.addEventListener('click', dismiss);
   element.hidden = true;

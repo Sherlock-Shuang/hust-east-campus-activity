@@ -32,8 +32,11 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   let loadingTimer,returnPose=null,restorePending=true,previousInteriorPosition=null,pendingInteriorReturn=null;
   const visited=new Set(),visiting=new Set(),visitRetry=new Map();
   let restoreFocus=null,wasPaused=false;
-  const announcementNotice=mountAnnouncementNotice(announcement,{onDismiss(){
-    if(opened)frame?.focus();else if(!lastFrozen)canvas.focus({preventScroll:true});
+  const announcementNotice=mountAnnouncementNotice(announcement,{onDismiss({automatic,hadFocus}){
+    // Automatic expiry must not take focus from chat, forms or other controls.
+    if(!automatic||hadFocus){
+      if(opened)frame?.focus();else if(!lastFrozen)canvas.focus({preventScroll:true});
+    }
     invalidate();
   }});
   const projected=new THREE.Vector3();
