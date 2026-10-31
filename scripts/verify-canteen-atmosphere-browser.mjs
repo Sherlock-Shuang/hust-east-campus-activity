@@ -57,7 +57,7 @@ globalThis.__canteenQA={
  reset(){frameMetrics.reset();frameMetrics.resetSession();}
 };`;
 
-const report={passed:false,root,mobileViewport:mobile,cpuThrottle:rate,startedAt:new Date().toISOString(),errors:[],consoleErrors:[],shaderErrors:[],screenshots:[],scope:'Isolated local production build and temporary audience. Same first-person street camera across actual day/sunset/night UI switches, persistence, scene-resource stability, source-photo gallery inspection, and real F/W/Space scooter pickup/return. Smooth quality and optional CPU throttling use desktop Chrome; mobile is touch/viewport emulation with keyboard vehicle input, not physical-phone GPU or real-device touch validation.'};
+const report={passed:false,root,mobileViewport:mobile,cpuThrottle:rate,startedAt:new Date().toISOString(),errors:[],consoleErrors:[],shaderErrors:[],resourceErrors:[],screenshots:[],scope:'Isolated local production build and temporary audience. Same first-person street camera across actual day/sunset/night UI switches, persistence, scene-resource stability, source-photo gallery inspection, and real F/W/Space scooter pickup/return. Smooth quality and optional CPU throttling use desktop Chrome; mobile is touch/viewport emulation with keyboard vehicle input, not physical-phone GPU or real-device touch validation.'};
 let app,browser,context,page;
 await mkdir(out,{recursive:true});
 const read=()=>page.evaluate(()=>__canteenQA.read());
@@ -92,7 +92,9 @@ async function makeComparison(){
  report.imageStats=await comparisonPage.evaluate(()=>[...document.images].map(img=>{
   const canvas=document.createElement('canvas');canvas.width=160;canvas.height=90;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,0,0,160,90);const data=ctx.getImageData(16,23,128,55).data,values=[];
   for(let n=0;n<data.length;n+=4)values.push(.2126*data[n]+.7152*data[n+1]+.0722*data[n+2]);const mean=values.reduce((a,b)=>a+b,0)/values.length;
-  return{label:img.alt,meanLuminance:mean,luminanceDeviation:Math.sqrt(values.reduce((a,b)=>a+(b-mean)**2,0)/values.length),nonBlackFraction:values.filter(v=>v>5).length/values.length};
+  const full=document.createElement('canvas');full.width=img.naturalWidth;full.height=img.naturalHeight;const fc=full.getContext('2d',{willReadFrequently:true});fc.drawImage(img,0,0);const leaves=fc.getImageData(Math.floor(full.width*.25),Math.floor(full.height*.10),Math.floor(full.width*.38),Math.floor(full.height*.28)).data;
+  let bright=0;for(let n=0;n<leaves.length;n+=4)if(Math.min(leaves[n],leaves[n+1],leaves[n+2])>150&&Math.max(leaves[n],leaves[n+1],leaves[n+2])>180)bright++;
+  return{label:img.alt,canopyBrightFraction:bright/(leaves.length/4),meanLuminance:mean,luminanceDeviation:Math.sqrt(values.reduce((a,b)=>a+(b-mean)**2,0)/values.length),nonBlackFraction:values.filter(v=>v>5).length/values.length};
  }));
  await comparisonPage.locator('main').screenshot({path:path.join(out,'comparison.png')});report.screenshots.push('comparison.png');await comparisonPage.close();
 }
@@ -103,7 +105,7 @@ try{
  browser=await chromium.launch({headless:true,executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});context=await browser.newContext({viewport:mobile?{width:844,height:390}:{width:1280,height:720},deviceScaleFactor:mobile?2:1,isMobile:mobile,hasTouch:mobile});
  await context.addInitScript(()=>localStorage.setItem('campus-quality-mode-v1','smooth'));
  const join=await context.request.post(origin+'/api/audience/join',{headers:{Origin:origin},data:{nickname:'隔离食堂街景验收',tabId:'canteen-atmosphere-verification'}});assert.equal(join.status(),200);
- page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));page.on('console',message=>{const text=message.text();if(message.type()==='error')report.consoleErrors.push(text);if(/THREE[.]WebGLProgram|shader.{0,40}(error|fail)|VALIDATE_STATUS.*false/i.test(text))report.shaderErrors.push(text);});const cdp=await context.newCDPSession(page);
+ page=await context.newPage();page.on('response',r=>{if(r.status()>=400)report.resourceErrors.push({path:new URL(r.url()).pathname,status:r.status()});});page.on('pageerror',e=>report.errors.push(e.message));page.on('console',message=>{const text=message.text();if(message.type()==='error')report.consoleErrors.push(text);if(/THREE[.]WebGLProgram|shader.{0,40}(error|fail)|VALIDATE_STATUS.*false/i.test(text))report.shaderErrors.push(text);});const cdp=await context.newCDPSession(page);
  await page.goto(origin+'/?diagnostics=1',{timeout:90000});await page.waitForFunction(()=>globalThis.__canteenQA?.ready(),null,{timeout:90000});await page.waitForTimeout(1000);
  report.initial=await read();assert.equal(report.initial.mode,'day');assert.ok(report.initial.inventory.length>=6,'Need a visible group of individually usable parked scooters');assertInventory(report.initial);assertPreserved(report.initial);
  report.viewpoint=await page.evaluate(()=>__canteenQA.view('canteenStreet'));await page.waitForTimeout(850);report.street=await read();assert.equal(report.street.player.view,'first');assert.equal(report.street.player.mode,'walk');assert.ok(report.street.camera.position[1]-report.street.player.y>1.3&&report.street.camera.position[1]-report.street.player.y<1.9);assert.ok(report.street.inventory.some(i=>i.visible),'Street walking view must show parked scooters');if(mobile)assert.equal(report.street.mobile.visible,true);
@@ -116,6 +118,8 @@ try{
  for(const mode of ['day','night','sunset','day','sunset','night']){const switched=await switchMode(mode);assert.deepEqual(switched.after.graph,stableGraph,'Switches must reuse the same scene objects, materials and lights');report.repeatedSwitches.push({mode,graph:switched.after.graph,resources:switched.after.resources});}
 
  await makeComparison();const night=report.imageStats.find(s=>s.label.startsWith('夜间'));assert.ok(night.nonBlackFraction>.5&&night.luminanceDeviation>5,'Night screenshot must retain non-black, differentiated scene detail; inspect the saved image for visual readability');
+
+ assert.ok(night.canopyBrightFraction<.025,'Night canopies must not contain white alpha-coverage halos when MSAA is disabled');
 
  // Persist the user-selected night setting through a real document reload.
  await page.reload({timeout:90000});await page.waitForFunction(()=>globalThis.__canteenQA?.ready(),null,{timeout:90000});await page.waitForTimeout(850);report.reloaded=await read();assert.equal(report.reloaded.mode,'night');assert.equal(report.reloaded.selected,'night');assert.equal(report.reloaded.stored,'night');assertInventory(report.reloaded);assertPreserved(report.reloaded);

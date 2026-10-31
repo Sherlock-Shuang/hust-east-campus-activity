@@ -146,7 +146,20 @@ export function createCanteenStreetLife(THREE,model,options={}){
   // The precomputed ground mask works in smooth quality too; thousands of
   // tiny alpha-cutout leaves never enter the dynamic shadow pass.
   const leafMask=fineCanopyTexture(THREE);textures.add(leafMask);
-  treeLayer.group.traverse(o=>{if(o.isMesh){o.castShadow=false;if(o.material.map){o.material.map=leafMask;o.material.needsUpdate=true;}}});
+  treeLayer.group.traverse(o=>{if(o.isMesh){
+    o.castShadow=false;
+    if(o.material.map){
+      o.material.map=leafMask;
+      // Handheld canvases disable MSAA. Alpha-to-coverage would then leave
+      // fractional framebuffer alpha at cutout edges, exposing the white page
+      // through the dark canopy. Hard cutouts keep surviving fragments opaque
+      // on both renderer paths; these materials belong only to this layer.
+      o.material.alphaToCoverage=false;
+      o.material.alphaTest=.43;
+      o.material.transparent=false;
+      o.material.needsUpdate=true;
+    }
+  }});
   const positions=[],weights=[];
   for(const patch of plan.dapplePatches)for(const i of[0,2,1,0,3,2]){
     const p=patch.polygon[i];positions.push(p.x,patch.y,p.z);

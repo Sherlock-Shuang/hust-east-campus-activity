@@ -49,6 +49,15 @@ test('additional reservations affect only inferred placements and missing source
 test('street trees use shared instances and LOD; time modes update stable ground shaders without lights or leaf shadow draws',()=>{
   const {model,options}=fixture(),layer=createCanteenStreetLife(THREE,model,options);try{
     const meshes=[],lights=[];layer.group.traverse(o=>{if(o.isMesh)meshes.push(o);if(o.isLight)lights.push(o);});assert.equal(lights.length,0);assert.ok(meshes.length<30);assert.ok(meshes.filter(m=>m.name.startsWith('canteen-street-canopy')).every(m=>m.isInstancedMesh&&!m.castShadow));
+    // The handheld renderer uses a transparent canvas without multisampling:
+    // alpha-to-coverage there exposes white page pixels at every leaf edge.
+    const foliage=meshes.filter(m=>m.name.startsWith('canteen-street-canopy')&&m.material.map);
+    assert.ok(foliage.length>=4,'near, distant and horizon foliage all covered');
+    for(const mesh of foliage){
+      assert.equal(mesh.material.alphaToCoverage,false,`${mesh.name}: safe without MSAA`);
+      assert.equal(mesh.material.transparent,false,`${mesh.name}: surviving pixels are opaque`);
+      assert.ok(mesh.material.alphaTest>=.4,`${mesh.name}: empty leaf mask pixels are discarded`);
+    }
     const dapple=layer.group.getObjectByName('canteen-world-fixed-dapple'),pools=layer.group.getObjectByName('canteen-warm-ground-pools');assert.equal(dapple.geometry,pools.geometry);assert.equal(dapple.material.depthWrite,false);assert.equal(dapple.userData.worksWithoutShadows,true);
     const compile=m=>{const shader={uniforms:{},vertexShader:'#include <begin_vertex>',fragmentShader:'#include <color_fragment>'};m.onBeforeCompile(shader);return shader;};
     const shader=compile(dapple.material),pool=compile(pools.material);assert.ok(shader.fragmentShader.includes('fwidth(leaves)'));assert.ok(!shader.fragmentShader.includes('uniform float time'));assert.ok(shader.vertexShader.includes('position.xz'));assert.equal(shader.uniforms.csStrength.value,.46);
