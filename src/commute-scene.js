@@ -15,7 +15,7 @@ import {createScooterTransport} from './scooter-transport.js';
  * vehicle styling, parking arrangement, signal poles and ramp grades are estimates.
  * Every vehicle faces local -Z. Metres are preserved throughout the scene.
  */
-export function createCommuteScene(THREE,scene,route,simulation,{model}={}){
+export function createCommuteScene(THREE,scene,route,simulation,{model,activityParking=[]}={}){
   const group=new THREE.Group();group.name='韵苑—东九早八通勤';scene.add(group);
   const staticGroup=new THREE.Group();staticGroup.name='沿途道路设施与林荫';scene.add(staticGroup);
   group.userData={source:'OSM source route and fixture locations; public campus photographs guide styling',estimated:['vehicle design','signal pole offset and appearance','parking arrangement','bridge approach grade','traffic demand and timing'],units:'metres'};
@@ -27,7 +27,7 @@ export function createCommuteScene(THREE,scene,route,simulation,{model}={}){
   const {scooter,walker,parked,lowScooter,lowWalker,lowParked}=actors;
   // Photographed canteen parking is an explicitly inferred layout, kept
   // separate from mapped parking POIs in route data and combined only to draw.
-  const sourceParking=[...(route.parkingPlaces||[]),...(route.photoInferredParking||[])];
+  const sourceParking=[...(route.parkingPlaces||[]),...(route.photoInferredParking||[]),...activityParking];
   const food=model?.buildings.find(r=>r.id==='way/103814566'),foodPlan=food?planCanteenBoundary(food):null,boundary=foodPlan?.boundary;
   // Keep mapped POIs intact; suppress only display instances which now occupy
   // the photo-refined building. A mapped parking centroid is not every bike.

@@ -14,7 +14,7 @@ function segmentDistance(p,a,b){const dx=b.x-a.x,dz=b.z-a.z,t=Math.max(0,Math.mi
 function routePose(route,progress){const p=route.points,at=Math.max(0,Math.min(route.length??p.at(-1).progress,progress));let i=1;while(i<p.length-1&&p[i].progress<at)i++;const a=p[i-1],b=p[i],length=Math.hypot(b.x-a.x,b.z-a.z),t=Math.max(0,Math.min(1,(at-a.progress)/Math.max(.01,b.progress-a.progress)));const seg=route.segments?.find(s=>at>=s.startProgress&&at<=s.endProgress);return{x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,yaw:Math.atan2(a.x-b.x,a.z-b.z),width:seg?.width??8,progress:at,sourceId:seg?.sourceId};}
 function sourceSpawn(model){const canteen=model.buildings?.find(r=>r.id==='way/103814566'),edge=canteen&&planCanteenBoundary(canteen)?.adjacent;if(!edge)return null;const[a,b]=edge.points,l=distance(a,b),tx=(b.x-a.x)/l,tz=(b.z-a.z)/l;return{x:a.x+tx*2.4-tz*10,z:a.z+tz*2.4+tx*10,yaw:Math.atan2(-tz,tx)};}
 
-export function planWorldTransport({model,route,groundAt=()=>({height:.14,allowed:true}),canPlaceMode}={}){
+export function planWorldTransport({model,route,groundAt=()=>({height:.14,allowed:true}),canPlaceMode,additionalItems=[]}={}){
   const items=[],rejected=[],spawn=sourceSpawn(model);
   const blockers=[...(model.buildings||[]),...(model.water||[])].map(waterFootprint).filter(Boolean);
   const barriers=[...(model.architectureInfrastructure?.barriers||[]),...(model.sportsInfrastructure?.barriers||[]),...(model.parkingInfrastructure?.barriers||[])];
@@ -52,6 +52,14 @@ export function planWorldTransport({model,route,groundAt=()=>({height:.14,allowe
   if(water){const candidates=[];for(const rings of water.polygons)for(let i=0;i<rings[0].length;i++){const a=rings[0][i],b=rings[0][(i+1)%rings[0].length],len=distance(a,b);if(len<9)continue;const tx=(b.x-a.x)/len,tz=(b.z-a.z)/len;for(let along=4;along<len-4;along+=5)for(const side of[-1,1]){const bank={x:a.x+tx*along,z:a.z+tz*along},nx=-tz*side,nz=tx*side,p={x:bank.x+nx*2.1,z:bank.z+nz*2.1,yaw:Math.atan2(-tx,-tz)},shore={x:bank.x-nx*1.7,z:bank.z-nz*1.7,yaw:Math.atan2(-nx,-nz)};if(!water.contains(p.x,p.z)||water.distance(p.x,p.z)<1.3||!clear(shore,'walk',.45))continue;const hull=[-2.7,-2.1,0,2.1,2.7].flatMap(v=>[-1,1].map(w=>({x:p.x+tx*v+nx*w*(Math.abs(v)>2.2?.5:1.2),z:p.z+tz*v+nz*w*(Math.abs(v)>2.2?.5:1.2)})));if(hull.some(q=>!water.contains(q.x,q.z)))continue;const y=lake.mesh?.position.y??.022;if(canPlaceMode&&canPlaceMode({...p,y},'boat')?.ok===false)continue;const nearRoute=Math.min(...route.points.map(q=>distance(q,shore)));if(nearRoute>80)continue;candidates.push({...p,y,boardingPose:{...shore,y:groundAt(shore.x,shore.z,0,.14).height},score:nearRoute,sourceId:lake.id});}}
     candidates.sort((a,b)=>a.score-b.score);for(const p of candidates){if(items.filter(i=>i.mode==='boat').length===2)break;if(items.some(q=>q.mode==='boat'&&distance(p,q)<90))continue;add('boat',p,{placement:'东九湖岸',boardingPose:p.boardingPose,sourceId:lake.id});}
   }
+  // Append optional activity placements only after the original props, so
+  // their IDs, ordering and placement-clearance choices remain unchanged.
+  for(const extra of additionalItems){
+    if(!['roadster','hoverboard'].includes(extra.mode)||typeof extra.id!=='string'||!extra.id||items.some(i=>i.id===extra.id)||!clear(extra,extra.mode)){
+      rejected.push({id:extra.id,mode:extra.mode,reason:'附加路边载具没有足够净空'});continue;
+    }
+    add(extra.mode,{...extra,y:groundAt(extra.x,extra.z,0,extra.y??.14).height},{id:extra.id,sourceId:extra.sourceId,placement:extra.placement||'光电楼沿路',activityRegion:'opto-road'});
+  }
   return{items,rejected,counts:Object.fromEntries(Object.keys(NAMES).map(mode=>[mode,items.filter(i=>i.mode===mode).length]))};
 }
 
@@ -70,8 +78,8 @@ function createFoldedSuit(THREE){
   return{group,dispose(){for(const g of geometries)g.dispose();for(const m of materials)m.dispose();}};
 }
 
-export function createWorldTransport({THREE,scene,model,route,groundAt,canPlaceMode,playerModels}={}){
-  const plan=planWorldTransport({model,route,groundAt,canPlaceMode}),items=plan.items;
+export function createWorldTransport({THREE,scene,model,route,groundAt,canPlaceMode,playerModels,additionalItems=[]}={}){
+  const plan=planWorldTransport({model,route,groundAt,canPlaceMode,additionalItems}),items=plan.items;
   const group=new THREE.Group();group.name='活动载具与战衣';group.userData={dynamicActivityProps:true,excludeFromCampusExport:true};scene.add(group);
   const suit=createFoldedSuit(THREE),resources=[suit],mergedGeometries=new Set();
   // Parked props do not animate: bake their local transforms once and batch by

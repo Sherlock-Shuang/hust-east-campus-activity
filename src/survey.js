@@ -713,6 +713,7 @@ async function loadDataset(data, manifest = {}) {
   try {
     commute = createCommuteExperience({
       THREE, scene, camera, controls, canvas, model, fc, frame, geoToLocal,
+      treeReservations: [...(campus.landcoverPlan?.trees||[]),...(campus.landcoverPlan?.shrubs||[])],
       focusBox: fitBox, notify: toast,
       onRouteChange: route => campus.setDetailedRoadIds(route.segments.map(segment=>segment.sourceId)),
       invalidate: () => { needsRender = true; },

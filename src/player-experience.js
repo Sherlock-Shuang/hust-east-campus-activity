@@ -43,7 +43,7 @@ export function createPlayerWorld(model,{movableParking=false}={}) {
 }
 
 export function createPlayerExperience({ THREE, scene, camera, controls, canvas, route, simulation,
-  model, onEnter, notify, invalidate, scooterTransport, transportSources, spiderPreparation }) {
+  model, onEnter, notify, invalidate, scooterTransport, transportSources, spiderPreparation, additionalTransport=[] }) {
   const $ = id => document.getElementById(id), world = createPlayerWorld(model,{movableParking:!!scooterTransport});
   const updateElement = (id, properties) => {
     const element = $(id);
@@ -54,7 +54,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   const models = createPlayerModels(THREE), spiderCamera=createTraversalCameraRig(), vehicleCamera=createVehicleCameraRig(), webAudio=createWebSwingAudio();
   const disposeReferences=installRoadsterReferences(),disposeHoverboardReferences=installHoverboardReferences();
   scene.add(models.group); models.group.visible = false;
-  const worldTransport=scooterTransport?createWorldTransport({THREE,scene,model,route,simulation,playerModels:models,groundAt:motion.groundAt,canPlaceMode:motion.canPlaceMode}):null;
+  const worldTransport=scooterTransport?createWorldTransport({THREE,scene,model,route,simulation,playerModels:models,groundAt:motion.groundAt,canPlaceMode:motion.canPlaceMode,additionalItems:additionalTransport}):null;
   const interaction=worldTransport||transportSources?createTransportInteraction({motion,sources:transportSources||[worldTransport,scooterTransport],notify,onChange:mode=>{if(mode==='scooter')models.setScooterAppearance(interaction.mounted.item.appearance);enter(mode);}}):null;
   const keys = new Set(), held = new Set(), pulses = new Map(), listeners = [];
   const mobileHeld=new Set();let mobileControls=null,mobileAxes={forward:0,sideways:0},preferencesUI=null;
