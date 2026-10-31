@@ -16,7 +16,7 @@ export function selectCampusTrack(scene={}){
   // Other works retain their own soundtrack and sound effects.
   if(scene.experience)return null;
   if(scene.mode==='spider')return 'spider';
-  if(['roadster','hoverboard','helicopter'].includes(scene.mode))return 'vehicle';
+  if(scene.mode==='roadster')return 'vehicle';
   return campusBackground(scene);
 }
 function defaultStorage(){try{return globalThis.localStorage;}catch{return null;}}

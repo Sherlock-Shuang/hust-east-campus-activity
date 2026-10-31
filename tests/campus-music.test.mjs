@@ -23,7 +23,8 @@ function setup({deferred=false,tracks={...CAMPUS_TRACKS,vehicle:{title:'Sunflowe
 test('scene priorities select all six requested songs, with indoor/game precedence',()=>{
   for(const atmosphere of ['day','sunset','night']){
     assert.equal(selectCampusTrack({atmosphere}),atmosphere==='day'?'campus':'evening');
-    for(const mode of ['roadster','hoverboard','helicopter'])assert.equal(selectCampusTrack({atmosphere,mode}),'vehicle');
+    assert.equal(selectCampusTrack({atmosphere,mode:'roadster'}),'vehicle');
+    for(const mode of ['walk','scooter','hoverboard','helicopter','boat'])assert.equal(selectCampusTrack({atmosphere,mode}),atmosphere==='day'?'campus':'evening');
     assert.equal(selectCampusTrack({atmosphere,mode:'spider'}),'spider');
     assert.equal(selectCampusTrack({atmosphere,mode:'roadster',experience:'opto-c118'}),'opto');
     assert.equal(selectCampusTrack({atmosphere,mode:'spider',experience:'tasay'}),'tasay');
@@ -40,7 +41,7 @@ test('nothing loads or plays before consent, world readiness and nickname regist
 });
 test('entering and leaving each scene fades once and restores the right background',async()=>{
   const f=setup();await f.start();
-  for(const [scene,key]of [[{experience:'opto-c118'},'opto'],[{experience:null},'campus'],[{mode:'roadster'},'vehicle'],[{mode:'hoverboard'},'vehicle'],[{mode:'spider'},'spider'],[{mode:'walk',atmosphere:'sunset'},'evening'],[{atmosphere:'night'},'evening'],[{experience:'tasay'},'tasay'],[{experience:null},'evening'],[{atmosphere:'day'},'campus']]){
+  for(const [scene,key]of [[{experience:'opto-c118'},'opto'],[{experience:null},'campus'],[{mode:'roadster'},'vehicle'],[{mode:'hoverboard'},'campus'],[{mode:'helicopter'},'campus'],[{mode:'spider'},'spider'],[{mode:'walk',atmosphere:'sunset'},'evening'],[{atmosphere:'night'},'evening'],[{experience:'tasay'},'tasay'],[{experience:null},'evening'],[{atmosphere:'day'},'campus']]){
     f.music.update(scene);await flush();f.advance(900);assert.equal(f.music.state.trackId,key);assert.equal(f.playing().length,1);assert.equal(f.playing()[0],f.forTrack(key));
     const assignments=f.audios.map(a=>a.assignments.length);f.music.update(scene);await flush();assert.deepEqual(f.audios.map(a=>a.assignments.length),assignments,'same scene must not reload');
   }
@@ -93,5 +94,5 @@ test('an unavailable file falls back once, with no infinite failed requests',asy
 });
 test('missing vehicle and suit assets retain the selected campus background',async()=>{
   const f=setup({tracks:CAMPUS_TRACKS});await f.start();f.music.update({mode:'spider'});assert.equal(f.music.state.trackId,CAMPUS_TRACKS.spider.url?'spider':'campus');
-  f.music.update({mode:'hoverboard',atmosphere:'night'});await flush();f.advance(900);assert.equal(f.music.state.trackId,CAMPUS_TRACKS.vehicle.url?'vehicle':'evening');f.music.dispose();
+  f.music.update({mode:'roadster',atmosphere:'night'});await flush();f.advance(900);assert.equal(f.music.state.trackId,CAMPUS_TRACKS.vehicle.url?'vehicle':'evening');f.music.dispose();
 });

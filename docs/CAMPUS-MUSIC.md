@@ -6,12 +6,12 @@
 | --- | --- | --- |
 | 日间校园 | Forrest Gump Suite | 已接入 |
 | 光电大楼（所有室内入口、C118） | Cornfield Chase | 已接入 |
-| 特斯拉、飞行器、直升机 | Sunflower — Post Malone & Swae Lee | 已配置场景，缺完整音频文件 |
+| 特斯拉 | Sunflower — Post Malone & Swae Lee | 已配置场景，缺完整音频文件 |
 | 蜘蛛侠战衣 | Scared of the Dark — Lil Wayne & Ty Dolla $ign feat. XXXTENTACION | 已配置场景，缺完整音频文件 |
 | 夕阳或夜晚校园 | Another Day of Sun | 已接入 |
 | 过拟合恋人 | 只要为你活一天 — 黄英华 | 已接入 |
 
-优先级：作品／楼内 > 战衣／载具 > 昼夜校园。书境图书馆、晚言及恋情分析室沿用自身声音，校园音乐暂停。离开光电楼／恋人游戏或下车／脱下战衣后恢复当前光照对应的校园配乐；同一背景音乐保留进度。日落与夜晚之间切换不重启同一首音乐。
+优先级：作品／楼内 > 战衣／特斯拉 > 昼夜校园。飞行器、直升机、电动车和游艇继续昼夜校园配乐，均不触发 Sunflower。书境图书馆、晚言及恋情分析室沿用自身声音，校园音乐暂停。离开光电楼／恋人游戏或下车／脱下战衣后恢复当前光照对应的校园配乐；同一背景音乐保留进度。日落与夜晚之间切换不重启同一首音乐。
 
 双媒体元素在真实点击／按键时解锁，实际音频可播放后才作 850 ms 音量过渡。支持 Web Audio 增益（包括移动端）及普通媒体音量回退。快速切换、迟到的播放 Promise、后台恢复及重复状态更新均不应重启或叠加旧音乐。媒体失败仅回退一次，避免反复下载。静音与音量使用本浏览器 localStorage 保存。
 
@@ -24,7 +24,7 @@
 - [Sunflower 官方发行入口](https://postmalone.lnk.to/Sunflower)；[艺人 SoundCloud](https://soundcloud.com/postmalone/sunflower-spider-man-into-the)。2026-11-01 查询时 SoundCloud 返回 `downloadable:false`、`policy:BLOCK`，不能作为当前网站可靠的完整背景音源。
 - [Scared of the Dark 官方艺人音源](https://www.youtube.com/watch?v=KCp_I6ZlfE4)。本轮找到官方播放页，未取得可直接托管的完整音频文件。
 
-这两个配置的 `url` 暂为 `null`，实际驾驶／战衣场景继续当前昼夜校园音乐。取得文件后放入 `public/audio/`，分别补 `CAMPUS_TRACKS.vehicle.url` 和 `.spider.url` 即可。不使用预览、翻唱、盗版镜像或会失效的临时串流地址冒充完整音源。
+这两个配置的 `url` 暂为 `null`，实际特斯拉／战衣场景继续当前昼夜校园音乐。取得文件后放入 `public/audio/`，分别补 `CAMPUS_TRACKS.vehicle.url` 和 `.spider.url` 即可。不使用预览、翻唱、盗版镜像或会失效的临时串流地址冒充完整音源。
 
 ## 验证
 
