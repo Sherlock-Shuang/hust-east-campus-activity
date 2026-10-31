@@ -137,8 +137,8 @@ export function mountCampusMusic({document=globalThis.document,window=globalThis
   const button=root.querySelector('.music-toggle'),label=root.querySelector('.music-label'),input=root.querySelector('input'),title=root.querySelector('.music-now'),status=root.querySelector('.music-status');
   function paint(state){
     root.hidden=state.status==='waiting';root.dataset.state=state.status;root.dataset.track=state.trackId||'';
-    button.setAttribute('aria-pressed',String(!state.muted&&state.volume>0));
     const enable=state.muted||!state.unlocked||state.blocked||state.volume===0;
+    button.setAttribute('aria-pressed',String(!enable));
     button.setAttribute('aria-label',enable?'开启配乐':'静音配乐');button.title=enable?'点击开启校园配乐':`静音 · ${state.title||'校园配乐'}`;
     label.textContent=enable?'开启配乐':'配乐';input.value=String(Math.round(state.volume*100));title.textContent=state.title||'作品独立声音';
     status.textContent=state.status==='locked'||state.status==='blocked'?'点击开启配乐':state.status==='muted'?'已静音':state.status==='paused'?'配乐已暂停':state.status==='loading'?'正在加载配乐':'随场景自动切换';
@@ -153,7 +153,7 @@ export function mountCampusMusic({document=globalThis.document,window=globalThis
   const pageshow=()=>music.update({hidden:document.hidden});
   button.addEventListener('click',toggle);input.addEventListener('input',change);
   for(const type of ['keydown','keyup','pointerdown','pointerup','click','wheel'])root.addEventListener(type,stop);
-  for(const type of ['pointerdown','keydown'])window.addEventListener(type,gesture,{capture:true});
+  for(const type of ['pointerdown','keydown','click'])window.addEventListener(type,gesture,{capture:true});
   document.addEventListener('visibilitychange',visibility);window.addEventListener('pagehide',pagehide);window.addEventListener('pageshow',pageshow);visibility();
-  return {...music,root,get state(){return music.state;},dispose(){music.dispose();button.removeEventListener('click',toggle);input.removeEventListener('input',change);for(const type of ['pointerdown','keydown'])window.removeEventListener(type,gesture,{capture:true});document.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',pagehide);window.removeEventListener('pageshow',pageshow);root.remove();}};
+  return {...music,root,get state(){return music.state;},dispose(){music.dispose();button.removeEventListener('click',toggle);input.removeEventListener('input',change);for(const type of ['pointerdown','keydown','click'])window.removeEventListener(type,gesture,{capture:true});document.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',pagehide);window.removeEventListener('pageshow',pageshow);root.remove();}};
 }
