@@ -1,4 +1,3 @@
-export const ANNOUNCEMENT_CLOSE_DELAY = 5000;
 export const ANNOUNCEMENT_AUTO_DISMISS_DELAY = 6000;
 
 // Dismissal belongs to this viewer, never to the shared host state. Content is
@@ -18,20 +17,16 @@ export function mountAnnouncementNotice(element, {
     if (timer !== undefined) cancel(timer);
     timer = undefined;
   }
-  function unlock() {
+  function expire() {
     if (disposed || !currentKey || element.hidden) return;
-    const elapsed = now() - shownAt;
-    if (elapsed >= ANNOUNCEMENT_AUTO_DISMISS_DELAY) { dismiss(); return; }
-    const remaining = ANNOUNCEMENT_CLOSE_DELAY - elapsed;
-    if (remaining > 0) { timer = schedule(unlock, remaining); return; }
-    close.hidden = false;
-    close.disabled = false;
-    timer = schedule(unlock, ANNOUNCEMENT_AUTO_DISMISS_DELAY - elapsed);
+    const remaining = ANNOUNCEMENT_AUTO_DISMISS_DELAY - (now() - shownAt);
+    if (remaining > 0) { timer = schedule(expire, remaining); return; }
+    dismiss();
   }
   function dismiss(event) {
     event?.stopPropagation();
-    const delay = event ? ANNOUNCEMENT_CLOSE_DELAY : ANNOUNCEMENT_AUTO_DISMISS_DELAY;
-    if (disposed || !currentKey || element.hidden || now() - shownAt < delay) return;
+    if (disposed || !currentKey || element.hidden) return;
+    if (!event && now() - shownAt < ANNOUNCEMENT_AUTO_DISMISS_DELAY) return;
     const hadFocus = !!element.contains?.(element.ownerDocument?.activeElement);
     dismissed.add(currentKey);
     stopTimer();
@@ -54,17 +49,22 @@ export function mountAnnouncementNotice(element, {
       close.disabled = true;
       element.hidden = !value || dismissed.has(key);
       if (element.hidden) return;
+      close.hidden = false;
+      close.disabled = false;
       element.dataset.tone = value.tone;
       element.querySelector('h2').textContent = value.title;
       element.querySelector('p').textContent = value.body;
       element.querySelector('.live-announcement-time').textContent = value.endAt
         ? `持续至 ${new Date(value.endAt).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'})}` : '';
       shownAt = now();
-      timer = schedule(unlock, ANNOUNCEMENT_CLOSE_DELAY);
+      timer = schedule(expire, ANNOUNCEMENT_AUTO_DISMISS_DELAY);
     },
     dispose() {
       disposed = true;
       stopTimer();
+      element.hidden = true;
+      close.hidden = true;
+      close.disabled = true;
       close.removeEventListener('click', dismiss);
       dismissed.clear();
     },

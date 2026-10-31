@@ -30,17 +30,22 @@ function fixture() {
   };
 }
 
-test('each viewer can close after five seconds and the notice expires automatically at six seconds', () => {
+test('the close button is immediately available and an untouched notice expires at six seconds', () => {
   const f = fixture(); f.controller.update(notice({startAt:1}));
-  assert.equal(f.element.hidden, false); assert.equal(f.close.hidden, true);
-  f.close.click(); assert.equal(f.element.hidden, false);
-  f.advance(4999); assert.equal(f.close.hidden, true);
-  f.advance(1); assert.equal(f.close.hidden, false); assert.equal(f.close.disabled, false);
-  f.advance(999); assert.equal(f.element.hidden, false);
+  assert.equal(f.element.hidden, false); assert.equal(f.close.hidden, false); assert.equal(f.close.disabled, false);
+  f.advance(5999); assert.equal(f.element.hidden, false);
   f.advance(1); assert.equal(f.element.hidden, true); assert.equal(f.dismissals, 1);
   assert.equal(f.close.hidden, true); assert.equal(f.close.disabled, true); assert.equal(f.timers.size, 0);
   assert.deepEqual(f.dismissalReasons, [{automatic:true,hadFocus:false}]);
   f.advance(30000); f.close.click(); assert.equal(f.dismissals, 1);
+});
+
+test('immediate manual close cancels automatic expiry and does not reopen on refresh', () => {
+  const f = fixture(); f.controller.update(notice()); f.close.click();
+  assert.equal(f.element.hidden, true); assert.equal(f.timers.size, 0);
+  assert.deepEqual(f.dismissalReasons, [{automatic:false,hadFocus:false}]);
+  f.controller.update({...notice()}); f.advance(6000);
+  assert.equal(f.element.hidden, true); assert.equal(f.dismissals, 1);
 });
 
 test('state refreshes do not extend six seconds or reopen an automatically expired notice', () => {
@@ -93,17 +98,17 @@ test('repeated state updates neither restart the delay nor reopen a dismissed no
   f.controller.update(null); f.controller.update(notice()); assert.equal(f.element.hidden, true);
 });
 
-test('new announcements and content edits show again with their own full delay', () => {
-  const f = fixture(); f.controller.update(notice()); f.advance(5000); f.close.click();
-  f.controller.update(notice({body:'改到食堂集合'})); assert.equal(f.element.hidden, false); assert.equal(f.close.hidden, true);
-  f.advance(4000); f.controller.update(notice({id:'notice-2'}));
-  f.advance(1000); assert.equal(f.close.hidden, true);
-  f.advance(4000); assert.equal(f.close.hidden, false);
+test('new announcements and content edits remain immediately dismissible', () => {
+  const f = fixture(); f.controller.update(notice()); f.close.click();
+  for (const next of [notice({body:'改到食堂集合'}), notice({id:'notice-2'})]) {
+    f.controller.update(next); assert.equal(f.element.hidden, false); assert.equal(f.close.hidden, false);
+    assert.equal(f.close.disabled, false); f.close.click(); assert.equal(f.element.hidden, true);
+  }
 });
 
 test('dismissing an announcement does not affect another viewer or mutate shared data', () => {
   const a = fixture(), b = fixture(), shared = Object.freeze(notice());
-  a.controller.update(shared); b.controller.update(shared); a.advance(5000); b.advance(5000);
+  a.controller.update(shared); b.controller.update(shared);
   a.close.click(); assert.equal(a.element.hidden, true); assert.equal(b.element.hidden, false);
   assert.deepEqual(shared, notice());
 });
