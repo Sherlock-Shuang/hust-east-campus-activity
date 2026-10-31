@@ -1160,7 +1160,7 @@ function render(now) {
 camera.position.set(500, 1600, 900);
 liveControl = createLiveExperience({THREE,scene,camera,canvas,container,
   tsunamiQuality:qualityBudget.level===0?'low':renderProfile.handheld?'mobile':'desktop',handheld:renderProfile.handheld,
-  getPlayer:()=>commute?.player,
+  getPlayer:()=>commute?.player,onFloodState:value=>commute?.setFloodState(value),
   getInteriors:()=>campus?.optoEntries||[],
   getWallText:()=>campus?.group.visible&&campus.layers.get('building')?.visible?campus.aiMuralPlan:[],
   onRuntimeBudgetChange({foreground,releaseDecorativeResources}){

@@ -69,3 +69,13 @@ test('hiding freezes NPC time, distance budget scales and repeated disposal remo
     layer.dispose();layer.dispose();assert.equal(scene.getObjectByName('ambient-npc-transport'),undefined);assert.equal(sentinel.parent,scene);assert.equal(layer.getDiagnostics().disposed,true);assert.equal(layer.tick(.1),false);
   }finally{layer.dispose();model.dispose();}
 });
+
+test('flood lifts low NPC fleet onto the water while high aircraft keep their flight altitude',()=>{
+ const {scene,model,route}=fixture(),layer=createNpcTransport({THREE,scene,model,route});
+ try{
+  layer.tick(0);const dry=layer.getDiagnostics().poses;
+  layer.setFloodState({id:'test',elapsed:180});layer.tick(0);const wet=layer.getDiagnostics().poses;
+  for(const p of wet){const b=dry.find(a=>a.id===p.id);if(b.y<2){assert.ok(p.y>6,p.id);const mesh=layer.group.getObjectByName(p.id);assert.equal(mesh.position.y,p.y);}else if(b.y>12)assert.equal(p.y,b.y);}
+  layer.setFloodState(null);layer.tick(0);assert.deepEqual(layer.getDiagnostics().poses.map(p=>[p.x,p.y,p.z]),dry.map(p=>[p.x,p.y,p.z]));
+ }finally{layer.dispose();model.dispose();}
+});

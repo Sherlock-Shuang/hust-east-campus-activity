@@ -1,3 +1,4 @@
+import {sampleFloodActorPose} from './campus-flood-actors.js';
 import {planCanteenBoundary,inCanteenOpenForecourt} from './yunyuan-canteen.js';
 import {footprintIntersectsRing} from './yunyuan-parking.js';
 import {streetFootprint} from './street-clearance.js';
@@ -44,24 +45,25 @@ export function createCommuteScene(THREE,scene,route,simulation,{model,activityP
   // Simulation advances at 20 Hz while cameras can render at 60–120 Hz. Keep
   // the last rig per actor and do not rebuild/upload identical instance data.
   // Weak keys release completed/borrowed actors naturally; no history grows.
-  let poseCache=new WeakMap();
-  const poseFields=['x','y','z','yaw','progress','speed','steeringAngle','footDown','lean','id','colorIndex','braking','pathScale','direction','contactMode','groundPitch'];
+  let poseCache=new WeakMap(),floodState=null;
+  const poseFields=['x','y','z','yaw','progress','speed','steeringAngle','footDown','lean','id','colorIndex','braking','pathScale','direction','contactMode','groundPitch','flooded','swimming','swimPhase','pitch','roll'];
   const colorPalette=Object.fromEntries(Object.entries(actors.colors).map(([key,values])=>[key,values.map(value=>new THREE.Color(value))]));
   const contactPitch=new THREE.Matrix4(),contactLean=new THREE.Matrix4();
-  function actorRecord(agent,kind,staticBatch){
-    let record=poseCache.get(agent),changed=!record||record.kind!==kind||record.staticBatch!==staticBatch;
-    if(!record){record={agent,kind,staticBatch,values:[],version:0,world:new THREE.Matrix4(),joints:new Map()};poseCache.set(agent,record);}
+  function actorRecord(source,kind,staticBatch){
+    const agent=sampleFloodActorPose(source,floodState,kind);
+    let record=poseCache.get(source),changed=!record||record.kind!==kind||record.staticBatch!==staticBatch;
+    if(!record){record={agent,kind,staticBatch,values:[],version:0,world:new THREE.Matrix4(),joints:new Map()};poseCache.set(source,record);}
     for(let i=0;i<poseFields.length;i++)if(!Object.is(record.values[i],agent[poseFields[i]])){record.values[i]=agent[poseFields[i]];changed=true;}
     if(changed){
-      record.kind=kind;record.staticBatch=staticBatch;record.version++;
+      record.agent=agent;record.kind=kind;record.staticBatch=staticBatch;record.version++;
       const pose=record.pose=actors.samplePose(agent,kind);record.appearance=pose.appearance;
       // Side-street actors carry their own verified ground height. Their
       // progress is a gait/branch distance, never an index into the main
       // dormitory-to-Dongjiu road's bridge profile.
-      const independent=agent.contactMode==='independent';
+      const independent=agent.flooded||agent.contactMode==='independent';
       const contact=kind==='scooter'&&!staticBatch&&!independent&&Number.isFinite(agent.progress)?sampleVehicleContact(route,agent):{y:(agent.y??.16)-(kind==='scooter'?.021:0),pitch:independent&&!staticBatch&&Number.isFinite(agent.groundPitch)?agent.groundPitch:0};
-      dummy.position.set(agent.x,contact.y,agent.z);dummy.rotation.set(0,agent.yaw||0,0);dummy.scale.setScalar(1);dummy.updateMatrix();record.world.copy(dummy.matrix);
-      if(kind==='scooter')record.world.multiply(contactPitch.makeRotationX(contact.pitch)).multiply(contactLean.makeRotationZ(pose.lean));
+      dummy.position.set(agent.x,agent.flooded?agent.y:contact.y,agent.z);dummy.rotation.set(agent.flooded?agent.pitch:0,agent.yaw||0,agent.flooded?agent.roll:0,'YXZ');dummy.scale.setScalar(1);dummy.updateMatrix();record.world.copy(dummy.matrix);
+      if(kind==='scooter'&&!agent.flooded)record.world.multiply(contactPitch.makeRotationX(contact.pitch)).multiply(contactLean.makeRotationZ(pose.lean));
     }
     return record;
   }
@@ -153,12 +155,12 @@ export function createCommuteScene(THREE,scene,route,simulation,{model,activityP
   let disposed=false,lastCamera=null,detailDistance=34,detailDistanceScale=1;const frustum=new THREE.Frustum(),projection=new THREE.Matrix4(),sphere=new THREE.Sphere(new THREE.Vector3(),2),cameraPosition=new THREE.Vector3();
   function update(camera){if(disposed)return;if(camera)lastCamera=camera;vegetation.update(lastCamera,{detailDistanceScale});
     if(lastCamera){lastCamera.updateMatrixWorld();projection.multiplyMatrices(lastCamera.projectionMatrix,lastCamera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);lastCamera.getWorldPosition(cameraPosition);}
-    function partition(items){const near=[],far=[];for(const item of items){if(!lastCamera){near.push(item);continue;}sphere.center.set(item.x,(item.y||.16)+.9,item.z);const distanceSq=sphere.center.distanceToSquared(cameraPosition);if(item.contactMode==='independent'){const limit=(Number.isFinite(item.drawDistance)?Math.max(0,item.drawDistance):180)*detailDistanceScale;if(distanceSq>limit*limit)continue;}if(!frustum.intersectsSphere(sphere))continue;(distanceSq<detailDistance*detailDistance?near:far).push(item);}return[near,far];}
+    function partition(items){const near=[],far=[];for(const item of items){if(!lastCamera){near.push(item);continue;}const floating=sampleFloodActorPose(item,floodState);sphere.center.set(floating.x,(floating.y||.16)+.9,floating.z);const distanceSq=sphere.center.distanceToSquared(cameraPosition);if(item.contactMode==='independent'){const limit=(Number.isFinite(item.drawDistance)?Math.max(0,item.drawDistance):180)*detailDistanceScale;if(distanceSq>limit*limit)continue;}if(!frustum.intersectsSphere(sphere))continue;(distanceSq<detailDistance*detailDistance?near:far).push(item);}return[near,far];}
     const agents=simulation.agents.filter(a=>a.active!==false&&a.phase!=='arrived'),[nearScooters,farScooters]=partition(agents.filter(a=>(a.kind||a.type)==='scooter')),[nearPeople,farPeople]=partition(agents.filter(a=>(a.kind||a.type)==='walk')),[nearParking,farParking]=partition(scooterTransport.parkedAgents);
     writeBatch(vehicles,nearScooters.slice(0,1200));writeBatch(distantVehicles,farScooters.slice(0,1200));writeBatch(walkers,nearPeople.slice(0,1200));writeBatch(distantWalkers,farPeople.slice(0,1200));writeBatch(parkedBatches,nearParking,true);writeBatch(distantParked,farParking,true);
     for(const entry of signalLamps){const state=simulation.signals.find(s=>s.id===entry.id)?.state||'off';for(const[name,m]of Object.entries(entry.lamps)){m.emissiveIntensity=name===state?2:.015;m.color.set(name===state?name==='red'?'#ff3b28':name==='green'?'#50ed93':'#ffc637':'#263b35');}}}
   function setDetailDistanceScale(scale=1){detailDistanceScale=Math.max(.35,Math.min(1.5,Number.isFinite(scale)?scale:1));detailDistance=34*detailDistanceScale;vegetation.update(lastCamera,{detailDistanceScale});}
   function setVisible(visible){group.visible=!!visible;}
   function dispose(){if(disposed)return;disposed=true;poseCache=new WeakMap();for(const part of[...vehicles,...walkers,...parkedBatches,...distantVehicles,...distantWalkers,...distantParked]){part.previousItems=null;part.previousVersions=null;}scooterTransport.dispose();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});vegetation.dispose();streetDetails.dispose();crossingDetails.dispose();eastNineParking.dispose();if(model?.parkingInfrastructure===eastNineParking.infrastructure)delete model.parkingInfrastructure;surfaces.dispose();scene.remove(group);scene.remove(staticGroup);for(const g of geometries)g.dispose();for(const m of materials)m.dispose();group.clear();staticGroup.clear();}
-  update();return{group,staticGroup,scooterTransport,update,setDetailDistanceScale,updateStatic:camera=>vegetation.update(camera,{detailDistanceScale}),setVisible,dispose,counts:{parked:parking.length,photoInferredParked:parking.filter(p=>p.buildingSourceId==='way/103814566').length,trees:trees.length,streetDetails:streetDetails.counts,signals:(route.trafficSignals||[]).length,signalHeads:signalLamps.length,crossings:(route.crossings||[]).filter(c=>c.tags?.['crossing:markings']==='yes'||c.tags?.crossing==='marked').length},vehicleGeometry:scooter};
+  update();return{setFloodState(value){floodState=value;},group,staticGroup,scooterTransport,update,setDetailDistanceScale,updateStatic:camera=>vegetation.update(camera,{detailDistanceScale}),setVisible,dispose,counts:{parked:parking.length,photoInferredParked:parking.filter(p=>p.buildingSourceId==='way/103814566').length,trees:trees.length,streetDetails:streetDetails.counts,signals:(route.trafficSignals||[]).length,signalHeads:signalLamps.length,crossings:(route.crossings||[]).filter(c=>c.tags?.['crossing:markings']==='yes'||c.tags?.crossing==='marked').length},vehicleGeometry:scooter};
 }
