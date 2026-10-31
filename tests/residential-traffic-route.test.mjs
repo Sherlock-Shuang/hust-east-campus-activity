@@ -8,7 +8,8 @@ import {createCommuteRoute} from '../src/commute-route.js';
 import {createCampus3D} from '../src/campus-3d.js';
 import {createPlayerWorld} from '../src/player-experience.js';
 import {createPlayerMotion} from '../src/player-motion.js';
-import {planResidentialTrafficRoute,sampleResidentialTrafficPath,RESIDENTIAL_TRAFFIC_SOURCES} from '../src/residential-traffic-route.js';
+import {planResidentialTrafficRoute,sampleResidentialTrafficPath,RESIDENTIAL_TRAFFIC_SOURCES,SOUTH_CANTEEN_TRAFFIC_SOURCES} from '../src/residential-traffic-route.js';
+import {planYunyuanSouthPrecinct} from '../src/yunyuan-south-precinct.js';
 
 const source=JSON.parse(readFileSync(new URL('../public/data/east-campus.geojson',import.meta.url),'utf8'));
 const frame=createLocalFrame({longitude:114.42123985,latitude:30.51575845,coordinateSystem:'EPSG:4326'});
@@ -17,19 +18,19 @@ const plan=f=>planResidentialTrafficRoute({...f,frame,geoToLocal});
 function inside(ring,x,z){let result=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a.z>z)!==(b.z>z)&&x<(b.x-a.x)*(z-a.z)/(b.z-a.z)+a.x)result=!result;}return result;}
 const samples=(path,step=.25)=>Array.from({length:Math.ceil(path.length/step)+1},(_,i)=>sampleResidentialTrafficPath(path,i*path.length/Math.ceil(path.length/step)));
 
-test('gate approach adds only six riders and six pedestrians on three stable source-backed paths',()=>{
+test('gate approach retains six riders and six pedestrians on the original three stable source-backed paths',()=>{
  const f=fixture(),before=JSON.stringify(source),routeBefore=JSON.stringify(f.route.points);
  try{const a=plan(f),b=plan(f);assert.equal(a.accepted,true);assert.deepEqual(a,b);assert.deepEqual(a.rejected,[]);
   assert.equal(a.gate.id,RESIDENTIAL_TRAFFIC_SOURCES.gate);assert.ok(Math.hypot(a.gate.x-529.60877,a.gate.z+79.80529)<.001);
-  assert.deepEqual(a.paths.map(p=>[p.kind,p.count]),[['scooter',6],['walk',3],['walk',3]]);
-  assert.equal(new Set(a.paths.map(p=>p.id)).size,3);for(const p of a.paths){assert.ok(Object.isFrozen(p));assert.ok(p.length>190&&p.length<210);assert.equal(p.points.length+1,p.distances.length);}
+  assert.deepEqual(a.paths.slice(0,3).map(p=>[p.id,p.kind,p.count]),[['residential-road','scooter',6],['residential-east-walk','walk',3],['residential-west-walk','walk',3]]);
+  assert.equal(new Set(a.paths.map(p=>p.id)).size,5);for(const p of a.paths.slice(0,3)){assert.ok(Object.isFrozen(p));assert.ok(p.length>190&&p.length<210);assert.equal(p.points.length+1,p.distances.length);}
   assert.equal(JSON.stringify(source),before);assert.equal(JSON.stringify(f.route.points),routeBefore);
  }finally{f.model.dispose();}
 });
 
 test('paths stay outside the existing gate junction and use distinct mapped sidewalks',()=>{
- const f=fixture();try{const p=plan(f);assert.deepEqual(p.paths.map(p=>p.sourceId),[RESIDENTIAL_TRAFFIC_SOURCES.road,RESIDENTIAL_TRAFFIC_SOURCES.eastWalk,RESIDENTIAL_TRAFFIC_SOURCES.westWalk]);
-  for(const path of p.paths)for(const pose of samples(path)){
+ const f=fixture();try{const p=plan(f);assert.deepEqual(p.paths.slice(0,3).map(p=>p.sourceId),[RESIDENTIAL_TRAFFIC_SOURCES.road,RESIDENTIAL_TRAFFIC_SOURCES.eastWalk,RESIDENTIAL_TRAFFIC_SOURCES.westWalk]);
+  for(const path of p.paths.slice(0,3))for(const pose of samples(path)){
    assert.ok(pose.z>-36&&pose.z<67,'loops stop before junction and south crossing');
    assert.ok(Math.hypot(pose.x-539.630231,pose.z+62.478178)>25,'do not cross red/green junction');
    for(let i=0;i<16;i++){const angle=i*Math.PI/8,x=pose.x+Math.cos(angle)*path.bodyRadius,z=pose.z+Math.sin(angle)*path.bodyRadius;assert.ok(path.corridors.some(c=>inside(c,x,z)),`${path.id} full body on own pavement`);}
@@ -60,16 +61,43 @@ test('arc-length sampling is continuous across loop wrap, finite and reuses its 
 test('missing source data or new blocking structures omit only unsafe paths',()=>{
  assert.deepEqual(planResidentialTrafficRoute().paths,[]);const f=fixture();try{
   const absent={...f.model,records:f.model.records.filter(r=>r.id!==RESIDENTIAL_TRAFFIC_SOURCES.gate)};assert.equal(plan({...f,model:absent}).accepted,false);
-  const withoutEast={...f.model,records:f.model.records.filter(r=>r.id!==RESIDENTIAL_TRAFFIC_SOURCES.eastWalk)};assert.equal(plan({...f,model:withoutEast}).paths.length,2);
+  const withoutEast={...f.model,records:f.model.records.filter(r=>r.id!==RESIDENTIAL_TRAFFIC_SOURCES.eastWalk)};assert.equal(plan({...f,model:withoutEast}).paths.length,4);
   const p=plan(f).paths[0],mid=sampleResidentialTrafficPath(p,p.length*.25);
   f.model.architectureInfrastructure={buildings:[{height:5,polygon:[{x:mid.x-3,z:mid.z-3},{x:mid.x+3,z:mid.z-3},{x:mid.x+3,z:mid.z+3},{x:mid.x-3,z:mid.z+3}]}]};
   const blocked=plan(f);assert.ok(!blocked.paths.some(p=>p.kind==='scooter'));assert.ok(blocked.rejected.some(r=>r.id==='residential-road'&&r.reason==='source-pavement-or-static-obstacle'));
  }finally{f.model.dispose();}
 });
 
-test('complete reconstructed campus preserves all twelve actors and physically clear ground poses',()=>{
+test('southern canteen entrances receive eight walkers on their own mapped pavement, with the stair mouths kept clear',()=>{
+ const f=fixture();try{
+  const p=plan(f),south=planYunyuanSouthPrecinct(f.model,{frame,geoToLocal}),paths=p.paths.filter(p=>p.region==='south-canteen');
+  assert.deepEqual(paths.map(p=>[p.id,p.hallId,p.kind,p.count]),[['south-canteen-one-front','xueyi','walk',4],['south-canteen-two-front','xueer','walk',4]]);
+  for(const path of paths){
+   const entrance=south.stairs.find(s=>s.id===path.entrance.id);assert.ok(entrance);assert.equal(path.y,south.floorY);assert.equal(path.sourceId,SOUTH_CANTEEN_TRAFFIC_SOURCES.walk);
+   assert.deepEqual(path.sourceIds,[SOUTH_CANTEEN_TRAFFIC_SOURCES.walk,SOUTH_CANTEEN_TRAFFIC_SOURCES.building,entrance.id]);assert.ok(Object.isFrozen(path));assert.ok(path.length>12&&path.length<19);
+   assert.ok(path.laneOffset*2>=path.bodyRadius*2,'opposing pedestrians have separate lanes');
+   for(const pose of samples(path,.1)){
+    const distance=Math.hypot(pose.x-entrance.a.x,pose.z-entrance.a.z);assert.ok(distance>5&&distance<15,`${path.id} stays visible at its stair entrance, without occupying its mouth`);
+    assert.ok(pose.z>150,'these are the southern student canteens, not the earlier gate approach');
+    for(let i=0;i<16;i++){const angle=i*Math.PI/8,x=pose.x+Math.cos(angle)*path.bodyRadius,z=pose.z+Math.sin(angle)*path.bodyRadius;assert.ok(path.corridors.some(c=>inside(c,x,z)),`${path.id} full body on mapped pavement`);}
+   }
+  }
+ }finally{f.model.dispose();}
+});
+
+test('canteen paths require real sources and reject a new obstruction without removing the original gate routes',()=>{
+ const f=fixture();try{
+  const baseline=plan(f),missing={...f.model,records:f.model.records.filter(r=>r.id!==SOUTH_CANTEEN_TRAFFIC_SOURCES.walk)};
+  assert.deepEqual(plan({...f,model:missing}).paths,baseline.paths.slice(0,3));
+  const first=baseline.paths.find(p=>p.hallId==='xueyi'),point=sampleResidentialTrafficPath(first,first.length*.25);
+  f.model.architectureInfrastructure={barriers:[{height:2,polygon:[{x:point.x-1,z:point.z-1},{x:point.x+1,z:point.z-1},{x:point.x+1,z:point.z+1},{x:point.x-1,z:point.z+1}]}]};
+  const blocked=plan(f);assert.deepEqual(blocked.paths.slice(0,3),baseline.paths.slice(0,3));assert.ok(!blocked.paths.some(p=>p.hallId==='xueyi'));assert.ok(blocked.paths.some(p=>p.hallId==='xueer'));assert.ok(blocked.rejected.some(p=>p.id===first.id&&p.reason==='source-pavement-or-static-obstacle'));
+ }finally{f.model.dispose();}
+});
+
+test('complete reconstructed campus preserves twenty actors and physically clear ground poses, including both canteen fronts',()=>{
  const f=fixture(),campus=createCampus3D(THREE,f.model,{frame,geoToLocal});
- try{const p=plan(f);assert.deepEqual(p.rejected,[]);assert.equal(p.paths.length,3);const motion=createPlayerMotion({route:f.route,world:createPlayerWorld(f.model)});
-  for(const path of p.paths)for(const pose of samples(path,2)){const ground=motion.groundAt(pose.x,pose.z,path.bodyRadius,pose.y);assert.ok(ground.allowed,`${path.id}: ${ground.reason}`);assert.ok(Math.abs(ground.height-pose.y)<.05,`${path.id} ground height`);}
+ try{const p=plan(f);assert.deepEqual(p.rejected,[]);assert.equal(p.paths.length,5);assert.equal(p.paths.reduce((sum,p)=>sum+p.count,0),20);const motion=createPlayerMotion({route:f.route,world:createPlayerWorld(f.model)});
+  for(const path of p.paths)for(const pose of samples(path,path.region==='south-canteen'?.25:2)){const ground=motion.groundAt(pose.x,pose.z,path.bodyRadius,pose.y);assert.ok(ground.allowed,`${path.id}: ${ground.reason}`);assert.ok(Math.abs(ground.height-pose.y)<.05,`${path.id} ground height`);}
  }finally{campus.dispose();f.model.dispose();}
 });

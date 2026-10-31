@@ -14,8 +14,12 @@ const frame=createLocalFrame({longitude:114.42123985,latitude:30.51575845,coordi
 function fixture(t){const scene=new THREE.Scene(),model=createGeoScene(THREE,scene,source,frame,geoToLocal),route=createCommuteRoute(source,{frame,geoToLocal}),flow=createResidentialTraffic({model,route,frame,geoToLocal});t.after(()=>{flow.dispose();model.dispose();});return{model,route,flow};}
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 
-test('twelve sparse branch actors follow continuous source paths over several circuits without adding population',t=>{
-  const {flow}=fixture(t),initial=flow.getDiagnostics();assert.equal(initial.total,12);assert.deepEqual(initial.counts,{walk:6,scooter:6});
+test('gate approach actors and eight southern canteen walkers follow continuous paths without adding population',t=>{
+  const {flow}=fixture(t),initial=flow.getDiagnostics();assert.equal(initial.total,20);assert.deepEqual(initial.counts,{walk:14,scooter:6});
+  const originalIds=new Set(['residential-road','residential-east-walk','residential-west-walk']);
+  const gate=initial.agents.filter(a=>originalIds.has(a.pathId)),south=initial.agents.filter(a=>!originalIds.has(a.pathId));
+  assert.deepEqual(gate.map(a=>a.id),Array.from({length:12},(_,i)=>-100001-i),'preserve original rider and walker identities');
+  assert.equal(south.length,8);assert.ok(south.every(a=>a.kind==='walk'&&a.z>100),'new people are south by the canteens, not another gate population');
   assert.ok(initial.agents.every(a=>a.id<0&&a.contactMode==='independent'));
   const ids=flow.agents.map(a=>a.id),last=new Map(flow.agents.map(a=>[a.id,{...a}]));
   for(let n=0;n<1500;n++){
@@ -31,7 +35,7 @@ test('twelve sparse branch actors follow continuous source paths over several ci
       assert.ok(dist(a,b)>(a.kind==='walk'?.54:1.9),'independent streams and turns do not overlap');
     }
   }
-  assert.deepEqual(flow.agents.map(a=>a.id),ids);assert.equal(flow.getDiagnostics().activeCount,12);
+  assert.deepEqual(flow.agents.map(a=>a.id),ids);assert.equal(flow.getDiagnostics().activeCount,20);
   for(const a of flow.agents)assert.ok(a.progress>initial.agents.find(b=>b.id===a.id).progress+140);
 });
 
@@ -43,6 +47,18 @@ test('nearby player stops a rider and its queue, removal resumes, high flight do
   assert.ok(minimum>1.3,'rider cannot run into the player');assert.ok(a.speed<.15,'rider yields');assert.ok(a.footDown>.9);assert.ok(a.braking);
   const before=a.progress;for(let i=0;i<40;i++)flow.tick(.1,{...obstacle,y:30,mode:'helicopter'});
   assert.ok(a.progress>before+5,'high overhead helicopter does not block ground flow');
+});
+
+test('southern canteen pedestrians yield at the door approach and resume when the player leaves',t=>{
+  const {flow}=fixture(t),a=flow.agents.find(a=>a.kind==='walk'&&a.z>100);
+  assert.ok(a,'a real southern canteen walker exists');
+  const path=flow.plan.paths.find(p=>p.id===a.pathId),obstacle={...sampleResidentialTrafficPath(path,a.pathDistance+2.3),mode:'walk'};
+  let minimum=Infinity;
+  for(let i=0;i<200;i++){flow.tick(.1,obstacle);minimum=Math.min(minimum,dist(a,obstacle));}
+  assert.ok(minimum>.7,'walker must not enter the player at the canteen entrance');
+  assert.ok(a.speed<.15,'walker waits instead of continuing its walk cycle through the player');
+  const before=a.progress;for(let i=0;i<50;i++)flow.tick(.1);
+  assert.ok(a.progress>before+1,'door approach flow resumes after player moves away');
 });
 
 test('returned parking is avoided, off-route parking is ignored, and hidden-time gaps are bounded',t=>{
@@ -62,7 +78,7 @@ test('combined pickup uses the same F adapter: borrow once, restore once, then r
   assert.equal(transport.restore(item).ok,true);assert.equal(adapter.agents.filter(b=>b===a).length,1);assert.equal(transport.restore(item).ok,false);
   assert.equal(transport.take(item).ok,true);const pose={x:a.x+3,z:a.z+3,y:.14,yaw:a.yaw};assert.equal(transport.release(item,pose).ok,true);
   assert.equal(adapter.agents.includes(a),false);assert.equal(transport.parkedAgents.filter(b=>b.id===a.id).length,1);assert.equal(transport.parkedAgents.find(b=>b.id===a.id).phase,'parked');
-  for(let i=0;i<100;i++)flow.tick(.1);assert.equal(flow.agents.length,11,'no automatic replacement of a borrowed rider');assert.equal(primary.agents.length,0);
+  for(let i=0;i<100;i++)flow.tick(.1);assert.equal(flow.agents.length,19,'no automatic replacement of a borrowed rider');assert.equal(primary.agents.length,0);
 });
 
 test('primary traffic changes and leases remain independent; disposal is idempotent',t=>{

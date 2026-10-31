@@ -1,10 +1,12 @@
 import {getRoadProfile} from './building-profiles.js';
 import {createPlayerWorld} from './player-experience.js';
+import {planYunyuanSouthPrecinct,YUNYUAN_SOUTH_BUILDING_ID} from './yunyuan-south-precinct.js';
 
 // This is the previously empty north/south approach to the residential gate.
 // The existing signal-aware commute already covers the junction and gate;
 // these local loops stop well before that junction and never invent a crossing.
 export const RESIDENTIAL_TRAFFIC_SOURCES=Object.freeze({gate:'node/1194858814',road:'way/98831423',eastWalk:'way/1483567161',westWalk:'way/1483567165'});
+export const SOUTH_CANTEEN_TRAFFIC_SOURCES=Object.freeze({building:YUNYUAN_SOUTH_BUILDING_ID,walk:'way/1483567174',oneEntrance:'way/110398904',twoEntrance:'way/110398907'});
 const finite=Number.isFinite,clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),TAU=Math.PI*2;
 const distance=(a,b)=>Math.hypot(b.x-a.x,b.z-a.z);
 const mix=(a,b,t)=>({x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t});
@@ -49,6 +51,27 @@ function finishPath(points,config,center,corridors){
   return Object.freeze({...config,points:Object.freeze(points.map(p=>Object.freeze(p))),distances:Object.freeze(distances),headings:Object.freeze(headings),length:distances.at(-1),centerline:Object.freeze(center.map(p=>Object.freeze(p))),corridors:Object.freeze(corridors.map(p=>Object.freeze(p.map(v=>Object.freeze(v))))),turnCenters:Object.freeze([north,south]),bounds:Object.freeze(bounds(points))});
 }
 
+function appendSouthCanteenPaths({model,frame,geoToLocal,byId,project,blocks,paths,rejected}){
+  const south=planYunyuanSouthPrecinct(model,{frame,geoToLocal}),record=byId.get(SOUTH_CANTEEN_TRAFFIC_SOURCES.walk),feature=record?.feature,profile=feature&&getRoadProfile(feature);
+  // Both loops belong to the mapped pavement immediately in front of the
+  // photographed stair entrances, not the road across from the canteens.
+  // Their short extents leave the stair mouths, connecting steps and southern
+  // zebra crossing clear. The upper gallery is deliberately not a ground path.
+  const configs=[
+    {id:'south-canteen-one-front',hallId:'xueyi',entranceId:SOUTH_CANTEEN_TRAFFIC_SOURCES.oneEntrance,north:224,south:231.5,speed:1.08},
+    {id:'south-canteen-two-front',hallId:'xueer',entranceId:SOUTH_CANTEEN_TRAFFIC_SOURCES.twoEntrance,north:177.3,south:182.5,speed:1.04},
+  ];
+  for(const config of configs){
+    const entrance=south.stairs.find(s=>s.id===config.entranceId);
+    if(!south.accepted||!entrance||feature?.geometry?.type!=='LineString'||profile.bridge||profile.tunnel||profile.elevation!==0){rejected.push({id:config.id,reason:'missing-or-nonground-canteen-pavement'});continue;}
+    const source=feature.geometry.coordinates.map(project),center=clipped(source,config.north,config.south),laneOffset=.5,bodyRadius=.48;
+    if(center.length<2||Math.abs(center[0].z-config.north)>.01||Math.abs(center.at(-1).z-config.south)>.01){rejected.push({id:config.id,reason:'source-does-not-cover-canteen-entrance'});continue;}
+    const points=makeLoop(center,laneOffset),corridors=ribbons(source,profile.width);
+    if(!collisionFree(points,bodyRadius,corridors,blocks)){rejected.push({id:config.id,reason:'source-pavement-or-static-obstacle'});continue;}
+    paths.push(finishPath(points,{id:config.id,hallId:config.hallId,region:'south-canteen',kind:'walk',count:4,speed:config.speed,laneOffset,bodyRadius,y:south.floorY,width:profile.width,sourceId:SOUTH_CANTEEN_TRAFFIC_SOURCES.walk,sourceIds:Object.freeze([SOUTH_CANTEEN_TRAFFIC_SOURCES.walk,south.sourceId,config.entranceId]),entrance:Object.freeze({id:config.entranceId,x:entrance.a.x,z:entrance.a.z})},center,corridors));
+  }
+}
+
 /** Source-backed, small pedestrian/cycle flow on Qiming Road towards the gate.
  * All safety checks run once; the hot sampler only reads prepared arrays. */
 export function planResidentialTrafficRoute({model,route,frame,geoToLocal}={}){
@@ -70,7 +93,8 @@ export function planResidentialTrafficRoute({model,route,frame,geoToLocal}={}){
     if(!collisionFree(points,config.bodyRadius,corridors,blocks)){rejected.push({id:config.id,reason:'source-pavement-or-static-obstacle'});continue;}
     paths.push(finishPath(points,{...config,y:profile.elevation+.14+(profile.motor?.002:0),sourceIds:Object.freeze([config.sourceId]),width:profile.width},center,corridors));
   }
-  return{...empty,gate,accepted:paths.length>0,paths,rejected,coordinateSystem:'LOCAL_ENU',units:'metres',basis:'source Qiming road and separately mapped sidewalks; estimated display width; game-local turnaround behaviour, not measured traffic'};
+  appendSouthCanteenPaths({model,frame,geoToLocal,byId,project,blocks,paths,rejected});
+  return{...empty,gate,accepted:paths.length>0,paths,rejected,coordinateSystem:'LOCAL_ENU',units:'metres',basis:'source Qiming road, separately mapped sidewalks and student-canteen stair entrances; estimated display width; game-local turnaround behaviour, not measured traffic'};
 }
 
 /** Arc-length distance may grow indefinitely; wraps continuously without a
