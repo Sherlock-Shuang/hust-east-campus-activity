@@ -3,6 +3,7 @@ import {createOptoC118Interior} from './opto-c118-interior.js';
 import {optoFoyerExit,isInsideC118} from './opto-foyer.js';
 import {createC118Navigation,indoorMovement,crossedC118Door} from './c118-navigation.js';
 import {createPlayerPointerLock} from './player-pointer-lock.js';
+import {renderControlHints} from './control-hints.js';
 import {createC118CodexScreen} from './c118-codex-screen.js';
 import {createC118VideoScreen} from './c118-video-screen.js';
 import {createC118ActivitySync} from './c118-activity-sync.js';
@@ -33,7 +34,7 @@ let codexScreen,screenNeedsRender=false;
 let activateCodexAt=()=>false;
 let screenControl=null,audience,seating,seatedSeat=null,seatView=null,beforeSeatPose=null,seatTransition=null;
 let cinema=false,cinemaView=null,swimming,swimVertical=0,floodReturn=null;
-let enterSeat=()=>{},riseFromSeat=()=>{},faceStage=()=>{};
+let enterSeat=()=>{},riseFromSeat=()=>{},faceStage=()=>{},prepareFreeLook=()=>{},updateInputHint=()=>{};
 let contextLost=false,lastFrameRendered=false,lastCpuMs=0,pendingCpuMs=0,activeRafCallbacks=0,lastReportAt=0,lastHudAt=-Infinity,lastRenderedAt=0,lastDiagnosticAt=-Infinity,inputFocused=document.hasFocus(),pageLifecycle;
 const frameMetrics=createFrameMetrics();
 const renderCadence=createRenderCadence(),resources=createC118ResourceScope();
@@ -51,7 +52,7 @@ const keys=new Set(),listeners=[],navigationListeners=[];
 const on=(target,type,fn,options)=>{target.addEventListener(type,fn,options);listeners.push(()=>target.removeEventListener(type,fn,options));};
 const onNavigation=(target,type,fn)=>{target.addEventListener(type,fn);navigationListeners.push(()=>target.removeEventListener(type,fn));};
 const usable=()=>!codexScreen?.isOpen&&!disposed&&!paused&&!returning&&!contextLost&&!pageLifecycle?.suspended&&!document.hidden;
-const lock=createPlayerPointerLock({canvas,document,canLock:usable,onChange:()=>resetInput(),onError:()=>{status.hidden=false;status.textContent='可直接移动鼠标环视，或在浏览器中按 L 锁定';}});
+const lock=createPlayerPointerLock({canvas,document,canLock:usable,onChange:locked=>{resetInput();canvas.dataset.pointerLocked=String(locked);if(locked){status.hidden=true;prepareFreeLook();}updateInputHint();},onError:()=>{status.hidden=false;status.textContent='暂未锁定鼠标，可用中键或 L 重试；仍可移动鼠标环视';}});
 function syncScreenProgramme(){
   const codex=screenControl?.mediaId==='codex';
   screenPlayer?.setScreenEnabled(!codex);codexScreen?.select(codex?screenControl:null);
@@ -92,11 +93,13 @@ on(canvas,'pointerdown',event=>{
   if(!disposed&&!paused&&!returning&&!contextLost&&!floodRunning&&activateCodexAt(event)){event.preventDefault();resetInput();return;}
   codexScreen?.close();
   if(!usable())return;canvas.focus({preventScroll:true});
+  if(event.pointerType==='mouse'&&event.button===1){event.preventDefault();lock.toggle();return;}
   if(event.pointerType==='mouse')return;
   event.preventDefault();canvas.setPointerCapture(event.pointerId);
   if(event.clientX<innerWidth*.47&&!joy){joy={id:event.pointerId,x:event.clientX,y:event.clientY};stick.style.left=`${joy.x}px`;stick.style.top=`${joy.y}px`;stick.firstElementChild.style.transform='';stick.hidden=false;}
   else if(!look)look={id:event.pointerId,x:event.clientX,y:event.clientY};
 });
+for(const type of ['mousedown','auxclick'])on(canvas,type,event=>{if(event.button===1)event.preventDefault();});
 on(document,'pointerdown',event=>{if(event.target!==canvas&&!event.target.closest?.('.hall-codex-reply'))codexScreen?.close();},{capture:true});
 on(canvas,'pointermove',event=>{
   if(!usable())return;
@@ -201,6 +204,11 @@ if(!disposed)try{
   heading=start.yaw??0;pitch=start.pitch??0;
   const seatStatus=document.querySelector('#seat-status'),seatEnter=document.querySelector('#seat-enter'),seatRise=document.querySelector('#seat-rise'),seatFace=document.querySelector('#seat-face'),seatLook=document.querySelector('#seat-look');
   let inHall=isInsideC118(interior.plan,motion.state);
+  updateInputHint=()=>{
+    const movement=swimming.state.active?'WASD 游动 · 空格 上浮 · C 下潜':seatedSeat?'E 起身 · 鼠标环视':inHall?'WASD 移动 · E 就近入座':'WASD 移动 · 鼠标环视';
+    const text=handheld?(swimming.state.active?'左侧拖动游动 · 右侧拖动环视\n按住 ↑ 上浮 · ↓ 下潜':seatedSeat?(cinema?'点击「环视报告厅」查看四周\n点击「起身」离座':'右侧拖动环视 · 点击起身离座'):'左侧拖动移动 · 右侧拖动环视\n点击「入座看大屏」就座'):`${movement}\n中键 / L ${lock.locked?'解锁':'锁定'}视角${lock.locked?' · Esc 释放':''}`;
+    renderControlHints(document.querySelector('#hall-input-hint'),text);
+  };
   function updateSeatControls(){
     document.querySelector('header h1').textContent=inHall?'C118 报告厅':'C2 门厅 · C1 走廊';
     canvas.setAttribute('aria-label',inHall?'C118 报告厅，可步行探索':'光电大楼门厅与走廊，可步行探索');
@@ -209,7 +217,7 @@ if(!disposed)try{
     document.querySelector('#hall-swim-controls').hidden=!swimming.state.active;
     document.body.dataset.cinema=String(cinema);document.body.dataset.swimming=String(swimming.state.active);
     seatStatus.textContent=seatedSeat?`${seatedSeat.label} · ${cinema?'沉浸观影':'已入座'}`:'入座，欣赏舞台与大屏';
-    document.querySelector('#hall-input-hint').textContent=swimming.state.active?'WASD 游动 · 空格上浮 · C 下潜 · 可潜到门口游出':seatedSeat?'鼠标或右侧滑动环视 · E 起身 · 看大屏':inHall?'WASD 移动 · E 就近入座 · 鼠标环视 · L 锁定':'WASD 移动 · 鼠标环视 · L 锁定';
+    updateInputHint();
     canvas.dataset.seated=String(Boolean(seatedSeat));canvas.dataset.seatId=seatedSeat?.id||'';
     audience.setHiddenSeat(seatedSeat?.id||null);
   }
@@ -231,6 +239,7 @@ if(!disposed)try{
   };
   faceStage=()=>{if(!usable()||!seatedSeat||floodRunning)return;startSeatTransition();cinema=true;heading=pitch=0;resetInput();updateSeatControls();canvas.focus({preventScroll:true});};
   function lookAround(){if(!seatedSeat||!cinema)return;startSeatTransition();cinema=false;heading=seatView.yaw;pitch=seatView.pitch;resetInput();updateSeatControls();canvas.focus({preventScroll:true});}
+  prepareFreeLook=lookAround;
   on(seatEnter,'click',()=>enterSeat(false));on(seatRise,'click',riseFromSeat);on(seatFace,'click',faceStage);on(seatLook,'click',()=>{if(usable())lookAround();});updateSeatControls();
   for(const [id,direction] of [['swim-up',1],['swim-down',-1]]){
     const button=document.querySelector(`#${id}`);
