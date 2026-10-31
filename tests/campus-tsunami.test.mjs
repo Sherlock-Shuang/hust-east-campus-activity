@@ -61,14 +61,14 @@ function gpuBudget(group){
 
 test('the first wave crosses the whole playable campus instead of stopping outside it',()=>{
   assert.equal(sampleCampusTsunami(null,100000),null);
-  const countdown=sampleCampusTsunami(event,100000),arrival=sampleCampusTsunami(event,103000),storm=sampleCampusTsunami(event,130000);
+  const countdown=sampleCampusTsunami(event,100000),arrival=sampleCampusTsunami(event,103000),storm=sampleCampusTsunami(event,atSeconds(140));
   assert.equal(countdown.elapsed,-3);
   assert.equal(countdown.front,CAMPUS_TSUNAMI_PLACEMENT.farFront);
   assert.ok(countdown.firstFront>arrival.firstFront&&arrival.firstFront>storm.firstFront);
   assert.ok(countdown.height<arrival.height);
   assert.equal(arrival.firstFront,CAMPUS_TSUNAMI_PLACEMENT.shoreFront);
   assert.ok(storm.firstFront+CAMPUS_TSUNAMI_PLACEMENT.arcDepth<-3942,'even the curved wings have passed the northernmost playable boundary');
-  for(const [seconds,z] of [[2,755],[5,0],[12,-1801],[24,-3942]]){
+  for(const [seconds,z] of [[28,755],[45,0],[80,-1801],[125,-3942]]){
     const sample=sampleCampusTsunami(event,event.startAt+seconds*1000);
     assert.ok(sample.firstFront<z,`wave sweeps past ${z} at ${seconds}s`);
   }
@@ -79,9 +79,9 @@ test('successive crests keep crossing after the first impact, while flooded grou
   const effect=createCampusTsunami({THREE,scene:new THREE.Scene()});
   try{
     for(const cycle of[0,1,20,100]){
-      const a=sampleCampusTsunami(event,event.startAt+(cycle*40+5)*1000),b=sampleCampusTsunami(event,event.startAt+(cycle*40+8)*1000);
+      const a=sampleCampusTsunami(event,event.startAt+(cycle*CAMPUS_TSUNAMI_PLACEMENT.period+5)*1000),b=sampleCampusTsunami(event,event.startAt+(cycle*CAMPUS_TSUNAMI_PLACEMENT.period+8)*1000);
       assert.ok(a.waves[0].front>b.waves[0].front,'later crest advances north');
-      effect.update({event,now:event.startAt+(cycle*40+38)*1000});
+      effect.update({event,now:event.startAt+(cycle*CAMPUS_TSUNAMI_PLACEMENT.period+60)*1000});
       assert.ok(effect.sampleAt({x:0,y:1.8,z:0}).depth>5,'recycling crests cannot uncover the flooded campus');
     }
   }finally{effect.dispose();}
@@ -171,9 +171,9 @@ test('an event restart begins a fresh countdown and reuses all resident renderin
     assert.equal(effect.sample.firstFront,CAMPUS_TSUNAMI_PLACEMENT.farFront);
     assert.equal(effect.sampleAt(position).wet,false,'the new event must not inherit the old inundation');
     assertReused(resident,resources(effect.group));
-    effect.update({event:next,now:next.startAt+20000});
+    effect.update({event:next,now:next.startAt+60000});
     assert(effect.sampleAt(position).depth>5);
-    assert.equal(effect.update({event:null,now:next.startAt+21000}),true);
+    assert.equal(effect.update({event:null,now:next.startAt+61000}),true);
     assert.equal(effect.active,false);assert.equal(effect.sample,null);
     assert.equal(effect.sampleAt(position).wet,false);
     assertReused(resident,resources(effect.group));

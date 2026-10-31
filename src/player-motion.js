@@ -3,6 +3,7 @@
  * Local forward is -Z. Positive turn is left (increasing yaw).
  * y is the feet / wheel / helicopter skid contact plane, not the actor centre.
  */
+import {createCampusWaterMotion} from './campus-water-motion.js';
 import {createWebSwingMotion} from './web-swing-motion.js';
 import {getBuildingSpatialIndex} from './building-spatial-index.js';
 const STEP=1/120,BASE_Y=.14,EPS=1e-7,STEP_UP=.22;
@@ -399,7 +400,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     // the same mapped route instead of placing the player inside an NPC queue.
     if(!position)for(let delta=.5;delta<=10;delta+=.5){position=[...candidates(s-delta),...candidates(s+delta)].find(clear);if(position)break;}
     if(!position){Object.assign(state,before,{blockedReason:'该路段没有足够净空，未改变位置'});return state;}
-    Object.assign(state,{x:position.x,y:contactAt(position.x,position.z,0,position.y).height,z:position.z,yaw:position.yaw,speed:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,blockedReason:reason,progress:position.progress??s,verticalSpeed:0,elapsed:0,braking:false});verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();return state;
+    Object.assign(state,{x:position.x,y:contactAt(position.x,position.z,0,position.y).height,z:position.z,yaw:position.yaw,speed:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,blockedReason:reason,progress:position.progress??s,verticalSpeed:0,elapsed:0,braking:false});verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();campusWater.reset();return state;
   }
   // Mounting uses the actual entity pose and never moves to a nearby fallback.
   // Invalid or occupied footprints leave both player and vehicle untouched.
@@ -419,7 +420,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     const point=check.pose,ground=contactAt(point.x,point.z,0,point.y);
     Object.assign(state,{mode,x:point.x,y:point.y,z:point.z,yaw:point.yaw,speed:0,steeringAngle:0,lean:0,pitch:0,distance:0,grounded:true,rotorPower:0,flightEnabled:false,jetPower:0,blockedReason:'',progress:ground.progress,verticalSpeed:0,elapsed:0,braking:false});
     verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;
-    contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();
+    contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();campusWater.reset();
     return{ok:true};
   }
   // Activity returns restore an actual pose, not a map placement. Validate
@@ -431,7 +432,8 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     const maximum=mode==='roadster'?ROADSTER.ceiling:mode==='hoverboard'?HOVERBOARD.ceiling:mode==='helicopter'?120:Infinity;
     if(saved.y>BASE_Y+maximum+.01)return{ok:false,reason:'返回位置超出飞行高度范围'};
     const grounded=saved.grounded!==false;
-    if(!grounded&&!['spider','roadster','hoverboard','helicopter'].includes(mode))return{ok:false,reason:'该移动方式需要地面落脚点'};
+    const floodReturn=mode==='walk'&&campusWater.active&&campusWater.sample(saved).wet&&saved.y<=campusWater.sample(saved).waterY+.4;
+    if(!grounded&&!floodReturn&&!['spider','roadster','hoverboard','helicopter'].includes(mode))return{ok:false,reason:'该移动方式需要地面落脚点'};
     const pose={x:saved.x,y:saved.y,z:saved.z,yaw:saved.yaw,mode,grounded,
       vx:saved.vx??0,vz:saved.vz??0,speed:saved.speed??0,verticalSpeed:saved.verticalSpeed??0,
       pitch:saved.pitch??0,lean:saved.lean??0,rotorPower:saved.rotorPower??(grounded?0:mode==='hoverboard'?.72:mode==='helicopter'?1:0),
@@ -452,7 +454,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       const support=mode==='spider'?spider.supportAt(pose):{height:groundContactHeight(pose.x,pose.z,pose.yaw,mode,pose.y,pose.lean),allowed:ground.allowed};
       if(pose.y<ground.height-.05||grounded&&(!support.allowed||Math.abs(pose.y-support.height)>.05))return{ok:false,reason:'返回位置的落脚面已改变'};
       if(grounded&&support.roof==null&&bodies.some(p=>!contactAt(p.x,p.z,p.radius,pose.y).allowed))return{ok:false,reason:'返回位置在水域边缘'};
-      if(!grounded&&!ground.allowed&&pose.y<ground.height+(mode==='spider'?.1:2.48))return{ok:false,reason:'返回位置过于接近水面'};
+      if(!grounded&&!floodReturn&&!ground.allowed&&pose.y<ground.height+(mode==='spider'?.1:2.48))return{ok:false,reason:'返回位置过于接近水面'};
     }
     if(!trafficClear(pose,mode,options))return{ok:false,reason:'返回位置有人车，请稍后再试'};
     return{ok:true,pose};
@@ -461,7 +463,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     const check=canRestorePose(saved,mode,options);if(!check.ok)return check;
     Object.assign(state,check.pose,{distance:0,elapsed:0,braking:false,blockedReason:'',steeringAngle:0,jetPower:0,forwardJetPower:0});
     accumulator=0;previousBodyPose=null;jumpPending=false;zipPending=false;pointPending=false;
-    resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();
+    resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();campusWater.reset();
     // Resets clear transient input and web state. Saved motion is assigned last
     // so the next fixed step starts from the returned velocity, not an old trip.
     Object.assign(state,check.pose);verticalSpeed=check.pose.verticalSpeed;
@@ -478,7 +480,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     const reason=obstacleAt(state.x,state.z,state.yaw,mode,state.y);
     if(reason)return{ok:false,reason:mode==='helicopter'?'附近空间不足，请先移动到开阔处':reason};
     if((mode==='roadster'||mode==='hoverboard')&&!trafficClear(state,mode))return{ok:false,reason:mode==='roadster'?'汽车周围有人车，请先移动到开阔处':'旋翼周围有人车，请先移动到开阔处'};
-    state.mode=mode;state.speed=0;state.steeringAngle=0;state.lean=0;state.pitch=0;state.rotorPower=0;state.flightEnabled=false;state.jetPower=0;state.blockedReason='';state.braking=false;verticalSpeed=0;state.verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();return{ok:true};
+    state.mode=mode;state.speed=0;state.steeringAngle=0;state.lean=0;state.pitch=0;state.rotorPower=0;state.flightEnabled=false;state.jetPower=0;state.blockedReason='';state.braking=false;verticalSpeed=0;state.verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;contactPose();resetRoadsterControls();resetBoardControls();resetGroundControls();spider.reset();campusWater.reset();return{ok:true};
   }
   function setFlightEnabled(enabled){if(state.mode!=='roadster')return{ok:false,reason:'冷气喷射仅用于 Roadster'};
     const next=!!enabled;if(next===state.flightEnabled)return{ok:true};
@@ -488,6 +490,7 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   }
   function fixedUpdate(input){const forward=clamp(Number(input.forward)||0,-1,1),turn=clamp(Number(input.turn)||0,-1,1),vertical=clamp(Number(input.vertical)||0,-1,1),brake=!!input.brake;
     state.elapsed+=STEP;state.blockedReason='';state.braking=brake;previousBodyPose={pitch:state.pitch,lean:state.lean};
+    if(campusWater.step(STEP,input)){verticalSpeed=0;groundAcceleration=0;return;}
     if(state.mode==='spider'){spider.step(STEP,input);return;}
     if(state.mode==='boat'){
       const oldSpeed=state.speed;
@@ -622,5 +625,9 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
   const spider=createWebSwingMotion({state,world:{buildings,water,bounds,...(barriers.length?{barrierAt,barrierSweep,barrierVertical}:{})},groundAt,traffic,guideAt:sample});
   function clearActionInputs(){jumpPending=false;zipPending=false;pointPending=false;spider.clearActionInputs();}
   function suspend(){state.speed=0;verticalSpeed=0;state.verticalSpeed=0;accumulator=0;jumpPending=false;zipPending=false;pointPending=false;resetRoadsterControls();resetBoardControls();resetGroundControls();if((state.mode==='roadster'||state.mode==='hoverboard')&&!state.grounded){state.altitudeTarget=state.mode==='roadster'?null:state.y;state.pitch=0;state.lean=0;state.flightPhase=state.mode==='roadster'?'coasting':'hover';if(state.mode==='roadster')state.jetPower=0;}spider.suspend();}
-  reset();return{state,reset,placeWalker,placeMode,canPlaceMode,canRestorePose,restorePose,setMode,setFlightEnabled,step,suspend,clearActionInputs,groundAt,waterAt};
+  const campusWater=createCampusWaterMotion({state,groundAt,canOccupy(p,radius){
+    if(outside({...p,radius})||barrierAt(p,radius,0,1.85))return false;
+    return !buildingIndex.queryBounds(p.x-radius,p.z-radius,p.x+radius,p.z+radius).some(b=>p.y<(b.height??18)+.05&&p.y+1.85>(b.minHeight??0)&&overlapsPolygon(p,radius,b));
+  }});
+  reset();return{state,campusWater,reset,placeWalker,placeMode,canPlaceMode,canRestorePose,restorePose,setMode,setFlightEnabled,step,suspend,clearActionInputs,groundAt,waterAt};
 }

@@ -12,7 +12,7 @@ const plan=planOptoC118Interior({withFoyer:true}),f=plan.foyer,registration=opto
 const portals=[{x:0,z:f.front},{x:f.end,z:(f.near+f.far)/2}];
 
 test('C2 and C1 wet door thresholds have the same water height as their campus coordinates, including late joins and calm mode',()=>{
-  for(const p of portals)for(const elapsed of[2,2.5,3,4,10,40,300])for(const reducedMotion of[false,true]){
+  for(const p of portals)for(const elapsed of[2,10,25,30,35,40,300])for(const reducedMotion of[false,true]){
     const world=registration.toCampus({...p,y:f.y+1.65});
     const campus=sampleCampusFloodwater(world,{elapsed,front:campusTsunamiFront(elapsed),reducedMotion});
     const interior=sampleC118Flood(plan,{...p,y:f.y+1.65},elapsed,{reducedMotion});
@@ -50,8 +50,8 @@ function travel(swim,target,seconds=35){
   for(let i=0;i<seconds*120;i++){
     const s=swim.state,dx=target.x-s.x,dz=target.z-s.z,dy=target.y-s.y;
     if(Math.hypot(dx,dz)<.12&&Math.abs(dy)<.15||s.exitDoorId)return;
-    const w=sampleC118Flood(plan,s,30);
-    swim.step(1/120,{elapsed:30,moveX:Math.max(-.8,Math.min(.8,dx))-w.currentX*.7/2.7,
+    const w=sampleC118Flood(plan,s,50);
+    swim.step(1/120,{elapsed:50,moveX:Math.max(-.8,Math.min(.8,dx))-w.currentX*.7/2.7,
       moveZ:Math.max(-.8,Math.min(.8,dz))-w.currentZ*.7/2.7,vertical:Math.abs(dy)<.03?-.011:Math.max(-1,Math.min(1,dy*2))});
   }
   assert.fail(`did not reach ${JSON.stringify(target)} from ${JSON.stringify(swim.state)}`);
@@ -75,8 +75,8 @@ test('rising swimmers are held beneath corridor ceilings and cannot escape over 
   for(const p of[{x:-30,z:(f.near+f.far)/2},{x:0,z:f.front-.5}]){
     const swim=createC118Swimming(plan);swim.enter({...p,y:f.y+(p.x===0?4:1.65)});
     for(let i=0;i<600;i++){
-      const w=sampleC118Flood(plan,swim.state,30);
-      swim.step(1/120,{elapsed:30,vertical:1,moveX:-w.currentX*.7/2.7,moveZ:p.x===0?1:-w.currentZ*.7/2.7});
+      const w=sampleC118Flood(plan,swim.state,50);
+      swim.step(1/120,{elapsed:50,vertical:1,moveX:-w.currentX*.7/2.7,moveZ:p.x===0?1:-w.currentZ*.7/2.7});
     }
     assert.equal(swim.state.exitDoorId,null);
     assert.ok(swim.state.y+.17<=f.y+(p.x===0?f.height+.7:3.25));

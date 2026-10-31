@@ -17,7 +17,7 @@ export function sampleCampusTsunami(event,now){
     const clock=elapsed+3-slot*CAMPUS_TSUNAMI_PLACEMENT.interval,cycle=Math.floor(Math.max(0,clock)/CAMPUS_TSUNAMI_PLACEMENT.period),age=((Math.max(0,clock)%CAMPUS_TSUNAMI_PLACEMENT.period)-3);
     const front=waveFront(age),height=260+((cycle===0&&slot===0?670:380)-260)*smooth((age+3)/3);
     const opacity=clock<0?0:smooth((age+3)/1.2)*(1-smooth((-front-6000)/2200));
-    waves.push({slot,age,front,height,opacity,reveal:.3+.7*smooth((age+3)/3),visible:opacity>.001});
+    waves.push({slot,cycle,age,front,height,opacity,reveal:.3+.7*smooth((age+3)/3),visible:opacity>.001});
   }
   const primary=[...waves].filter(w=>w.visible).sort((a,b)=>Math.abs(a.front+1200)-Math.abs(b.front+1200))[0]||waves[0];
   return {elapsed,firstFront,waves,front:primary.front,height:primary.height,reveal:primary.reveal,

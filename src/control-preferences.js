@@ -1,4 +1,6 @@
 export const CONTROL_PREFERENCES_KEY='dongjiu.controls.v1';
+// Applied on first visit/reset; persisted choices continue to take precedence.
+export const COMFORT_CONTROL_DEFAULTS=Object.freeze({comfortableCamera:true,sensitivity:.75});
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const number=(value,fallback,min,max)=>Number.isFinite(value)?clamp(value,min,max):fallback;
 
@@ -6,6 +8,7 @@ export function normalizeControlPreferences(value={},defaults={}){
   if(!value||typeof value!=='object')value={};
   return {
     sensitivity:number(value.sensitivity,defaults.sensitivity??1,.45,1.8),
+    fovOffset:number(value.fovOffset,defaults.fovOffset??0,-10,12),
     invertY:typeof value.invertY==='boolean'?value.invertY:!!defaults.invertY,
     joystickScale:number(value.joystickScale,defaults.joystickScale??1,.8,1.35),
     comfortableCamera:typeof value.comfortableCamera==='boolean'?value.comfortableCamera:!!defaults.comfortableCamera,

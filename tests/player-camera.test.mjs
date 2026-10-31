@@ -227,8 +227,36 @@ test('comfortable mode ignores point and trick framing forces while preserving c
   }
 });
 
+test('comfortable traversal keeps its aim fixed across velocity reversals and perch transitions',()=>{
+  const state={mode:'spider',x:0,y:18,z:0,yaw:.4,vx:0,vz:0,speed:0,grounded:false};
+  const baseline=calculatePlayerCamera(state,{comfortable:true});
+  for(const phase of ['approach','perch','launch'])for(const sign of [-1,1]){
+    const active=Object.freeze({...state,pointPhase:phase,pointTarget:{x:10,y:30,z:-5},vx:sign*20,vz:-30,speed:36,verticalSpeed:sign*12,zipActive:true,zipProgress:.5,trickBlend:1});
+    const pose=calculatePlayerCamera(active,{comfortable:true});
+    assert.deepEqual(pose.position,baseline.position);assert.deepEqual(pose.target,baseline.target);near(pose.fov,baseline.fov);
+  }
+  const rig=createTraversalCameraRig();rig.reset(state);rig.update(state,0,{comfortable:true,snap:true});
+  for(let i=0;i<90;i++){
+    const pose=rig.update({...state,vx:i%2?30:-30,vz:-20,pointPhase:i<45?'perch':'launch'},1/60,{comfortable:true});
+    near(pose.heading,state.yaw);near(pose.roll,0);near(pose.target.x,state.x);near(pose.target.z,state.z);near(pose.target.y,state.y+1.05);
+  }
+});
+
 const carState={mode:'roadster',x:0,y:.14,z:0,yaw:0,speed:18,grounded:true,lean:0,pitch:0};
 const separation=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+
+test('comfortable vehicle cameras keep their aim, boom and field of view stable across speed changes',()=>{
+  for(const mode of ['walk','scooter','boat','roadster','hoverboard','helicopter']){
+    const state={...carState,mode,speed:0,y:10},rig=createVehicleCameraRig();rig.reset(state);
+    const baseline=rig.update(state,0,{comfortable:true,snap:true});
+    for(let i=0;i<180;i++){
+      const pose=rig.update({...state,speed:i<90?36:-12,lean:1,pitch:.8},1/60,{comfortable:true});
+      assert.ok(separation(pose.position,baseline.position)<1e-8,mode);
+      assert.ok(separation(pose.target,baseline.target)<1e-8,mode);
+      near(pose.fov,baseline.fov);near(pose.roll,0);
+    }
+  }
+});
 
 test('vehicle chase carries translation exactly instead of stretching its boom at speed',()=>{
   const rig=createVehicleCameraRig();rig.reset(carState);
@@ -519,6 +547,37 @@ test('walking up a real tread eases eye height without drifting the ground posit
   let settled;for(let i=0;i<60;i++)settled=rig.update(next,1/60,{...options,snap:false});
   near(settled.position.y,next.y+1.58,1e-6);
   const relocated=rig.update({...next,y:1.12},0,options);near(relocated.position.y,2.70,1e-8);
+});
+
+test('comfortable walking eases step height in both views without horizontal lag or pitch rocking',()=>{
+  for(const view of ['first','third'])for(const step of [-.18,.18]){
+    const state={mode:'walk',x:0,y:.5,z:0,yaw:0,speed:1.6,grounded:true},rig=createVehicleCameraRig();rig.reset(state);
+    const options={view,comfortable:true,lookLocked:true,pitch:.2,groundAt:()=>.14};
+    const before=rig.update(state,0,{...options,snap:true});
+    const next=Object.freeze({...state,x:.03,y:state.y+step,z:-.04});
+    const pose=rig.update(next,1/60,options),rise=pose.position.y-before.position.y;
+    assert.ok(rise*step>0&&Math.abs(rise)<.04,'an 18 cm tread changes camera height by less than 4 cm in its first frame');
+    near(pose.position.x-before.position.x,.03);near(pose.position.z-before.position.z,-.04);
+    near(pose.target.y-pose.position.y,before.target.y-before.position.y);
+    let settled;for(let i=0;i<90;i++)settled=rig.update(next,1/60,options);
+    near(settled.position.y-before.position.y,step,1e-7);
+    const relocated=rig.update({...next,y:2},0,{...options,snap:true});
+    near(relocated.position.y-before.position.y,1.5);
+  }
+});
+
+test('comfortable stair follow retains collision clipping and skyward manual aim',()=>{
+  const state={mode:'walk',x:0,y:.14,z:0,yaw:0,speed:1.6,grounded:true};
+  const world={buildings:[{rings:[rectangle(-4,2,4,2.04)],height:18}]};
+  const options={view:'third',comfortable:true,lookLocked:true,pitch:-1.5,world,groundAt:()=>.14};
+  const rig=createVehicleCameraRig();rig.reset(state);rig.update(state,0,{...options,snap:true});
+  for(let i=1;i<=120;i++){
+    const next={...state,y:.14+Math.min(3,Math.floor(i/20))*.18},pose=rig.update(next,1/60,options);
+    assert.ok(pose.position.z<2,'smoothed eye cannot cross the thin rear wall');
+    assert.ok(pose.position.y>.5,'eye remains above the playing surface');
+    const length=separation(pose.target,pose.position);
+    assert.ok((pose.target.y-pose.position.y)/length>.995,'manual overhead look remains available');
+  }
 });
 
 test('walking recenter uses the requested facing once instead of chasing camera-relative lateral movement',()=>{

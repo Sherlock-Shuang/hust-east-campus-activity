@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as THREE from 'three';
+import {sampleCampusTsunami} from '../src/campus-tsunami.js';
 import {createPlayerExperience} from '../src/player-experience.js';
 
 // Only the DOM surface is faked. All registered input handlers, player motion,
@@ -51,7 +52,7 @@ const REMOVED_HUD_IDS = new Set([
   'web-phase','web-length','web-chain','web-actions','web-release-hint','web-zip-status',
   'web-maneuvers','web-point-status','web-trick-status','web-launch-meter','web-launch-fill','web-launch-hint',
 ]);
-function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePointer=false,roadSurfaces=[],spiderPreparation,storage,joystickRect={left:24,top:190,width:120,height:120}}={}){
+function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePointer=false,roadSurfaces=[],spiderPreparation,storage,classicControls=true,joystickRect={left:24,top:190,width:120,height:120}}={}){
   const previous={document:globalThis.document,window:globalThis.window};
   const doc=new Element(),win=new Element(),ids=new Map(),html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const fromHTML=(tag,attributes)=>{
@@ -81,7 +82,9 @@ function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePo
   doc.querySelector=selector=>selector==='dialog[open]'?doc.body.children.find(el=>el.open)||null:selector==='[data-player-input=brake]'?inputs.find(el=>el.dataset.playerInput==='brake'):null;
   const coarseMedia=Object.assign(new Element(),{matches:coarsePointer}),landscapeMedia=Object.assign(new Element(),{matches:true}),reducedMedia=Object.assign(new Element(),{matches:false});
   win.matchMedia=query=>query.includes('coarse')?coarseMedia:query.includes('orientation')?landscapeMedia:reducedMedia;
-  win.localStorage=storage;win.innerWidth=844;win.innerHeight=390;win.screen={orientation:new Element()};win.visualViewport=new Element();
+  // Existing controls regressions exercise an explicitly saved classic profile.
+  // Fresh-visit comfort tests opt out below and run with empty storage.
+  win.localStorage=storage??(classicControls?{getItem:()=>JSON.stringify({comfortableCamera:false,sensitivity:1})}:undefined);win.innerWidth=844;win.innerHeight=390;win.screen={orientation:new Element()};win.visualViewport=new Element();
   globalThis.document=doc;globalThis.window=win;
   const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(44,16/9,.3,2000),canvas=new Element('canvas');canvas.clientWidth=1280;canvas.clientHeight=720;canvas.rect={left:0,top:0,width:844,height:390};
   const controls=Object.assign(new THREE.EventDispatcher(),{target:new THREE.Vector3(),enabled:true,enableDamping:true,update(){}});
@@ -1125,4 +1128,80 @@ test('middle mouse toggles pointer lock without swinging, zooming or changing mo
   assert.equal(f.experience.captureActivityPose().distance,before.distance);
   f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4});assert.equal(f.doc.pointerLockElement,null);
   f.experience.setSuspended(true);f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4});assert.equal(f.doc.pointerLockElement,null);
+});
+
+
+function outdoorWaterFixture(t,{coarsePointer=false,age=65}={}){
+  const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer});
+  f.experience.enterAt({x:0,z:0,yaw:Math.PI/2});
+  const event={id:'outdoor-ui',startAt:10000,pausedAt:null,pausedMs:0};
+  const at=elapsed=>f.experience.setFloodState({id:event.id,...sampleCampusTsunami(event,event.startAt+elapsed*1000)});
+  const run=seconds=>{for(let i=0;i<Math.round(seconds*60);i++){at(age);f.tick(1/60);age+=1/60;}};
+  at(age);const root=f.el('viewport').children.find(c=>c.className==='campus-water-controls');
+  return {...f,root,action:name=>root.children.find(c=>c.dataset.waterAction===name),run};
+}
+test('the rendered surf action catches a wave and moves forward for five seconds irrespective of the initial view',t=>{
+  const f=outdoorWaterFixture(t,{age:45.8});f.experience.state.y=1.2;f.run(1/60);
+  assert.equal(f.root.hidden,false);assert.equal(f.action('surf').hidden,false);
+  f.action('surf').emit('click');const start=f.experience.state.z;
+  f.run(4.8);assert.equal(f.experience.state.waterMode,'surf');assert.ok(f.experience.state.z<start-239);
+  assert.ok(Math.abs(f.experience.state.x)<1,'initial sideways camera does not turn the wave direction');
+  f.run(.3);assert.equal(f.experience.state.waterMode,'board');assert.equal(f.action('surf').hidden,true);
+  assert.equal(f.action('board').textContent,'下板');
+  f.action('board').emit('click');assert.equal(f.experience.state.waterMode,'swim');
+});
+test('desktop and touch water inputs dive, surface and clear held controls on suspension',t=>{
+  const f=outdoorWaterFixture(t,{coarsePointer:true});f.run(3);
+  assert.equal(f.experience.state.waterMode,'swim');const start=f.experience.state.y;
+  f.key('KeyC');f.run(.8);f.key('KeyC','keyup');assert.ok(f.experience.state.y<start-2.5);
+  const submerged=f.experience.state.y;f.key('Space');f.run(.5);f.key('Space','keyup');assert.ok(f.experience.state.y>submerged+1.5);
+  f.action('down').emit('pointerdown',{pointerType:'touch'});f.run(.5);f.action('down').emit('pointercancel');
+  const low=f.experience.state.y;f.action('up').emit('pointerdown',{pointerType:'touch'});f.run(.5);assert.ok(f.experience.state.y>low+1.5);
+  f.experience.setSuspended(true);assert.equal(f.root.hidden,true);
+  const pose={...f.experience.state};f.run(.5);assert.equal(f.experience.state.y,pose.y);
+  f.experience.setSuspended(false);f.run(.2);assert.equal(f.root.hidden,false);
+  f.experience.setFloodState(null);assert.equal(f.root.hidden,true);assert.equal(f.experience.state.waterMode,'dry');
+  assert.equal(f.scene.getObjectByName('campus-surfboards').visible,false);
+});
+
+for(const mode of ['walk','scooter','roadster','helicopter','hoverboard','spider'])test(`${mode}: fresh comfort profile ignores hover but supports deliberate mouse drag`,t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,classicControls:false});f.experience.enter(mode);f.tick(1);
+  assert.equal(f.el('player-hud').dataset.comfortableCamera,'true');assert.equal(f.el('player-look-reticle').hidden,false);
+  const start=horizontalView(f);
+  f.canvas.emit('pointerenter',{clientX:100,clientY:150});
+  f.canvas.emit('pointermove',{clientX:400,clientY:150,buttons:0});f.tick(.4);
+  assert.ok(horizontalView(f).dot(start)>.9999,'moving toward controls does not turn the world');
+  f.canvas.emit('pointerdown',{clientX:400,clientY:150,button:2,buttons:2});
+  f.canvas.emit('pointermove',{clientX:600,clientY:150,buttons:2});f.tick(.6);
+  const after=horizontalView(f);assert.ok(after.dot(start)<.96,'right-drag intentionally rotates camera');
+  assert.equal(f.experience.state.anchor,null,'right-drag never fires a web');
+  f.canvas.emit('pointerup',{clientX:600,clientY:150,button:2});
+  f.canvas.emit('pointermove',{clientX:900,clientY:150,buttons:0});f.tick(.2);
+  assert.ok(horizontalView(f).dot(after)>.999,'release stops input instead of resuming hover');
+});
+
+test('comfort defaults and reference point remain usable on touch and can restore saved classic controls',t=>{
+  const entries=new Map(),storage={getItem:key=>entries.get(key),setItem:(key,value)=>entries.set(key,value)};
+  const f=fixture(t,{buildings:false,coarsePointer:true,storage,classicControls:false});f.experience.enter('walk');f.tick(.2);
+  assert.equal(f.el('player-look-reticle').hidden,false);
+  const button=f.el('player-hud').querySelector('[aria-label="调整操作偏好"]');button.emit('click');f.tick(.2);
+  assert.equal(f.el('player-look-reticle').hidden,true,'reference point hides while adjusting controls');
+  const dialog=f.doc.body.children.find(e=>e.tagName==='DIALOG');
+  const comfort=dialog.querySelector('[aria-label="舒适镜头（减轻晃动）"]');
+  assert.equal(comfort.checked,true);assert.equal(dialog.querySelector('[aria-label="视角灵敏度"]').value,'0.75');
+  comfort.checked=false;comfort.emit('change');
+  assert.equal(JSON.parse(entries.get('dongjiu.controls.v1')).comfortableCamera,false,'explicit opt-out persists');
+  f.experience.exit();assert.equal(f.el('player-look-reticle').hidden,true);
+});
+
+test('field of view slider affects the actual camera and restores the default without changing movement',t=>{
+  const f=fixture(t,{buildings:false,classicControls:false});f.experience.enter('walk');f.tick(.2);
+  const base=f.camera.fov,before=structuredClone(f.experience.state);
+  f.el('player-hud').querySelector('[aria-label="调整操作偏好"]').emit('click');
+  const dialog=f.doc.body.children.find(e=>e.tagName==='DIALOG'),field=dialog.querySelector('[aria-label="视野调整"]');
+  field.value='8';field.emit('input');dialog.close();dialog.emit('close');f.tick(.2);
+  assert.equal(f.camera.fov,base+8);
+  for(const key of ['x','y','z','yaw','speed','grounded'])assert.equal(f.experience.state[key],before[key]);
+  f.el('player-hud').querySelector('[aria-label="调整操作偏好"]').emit('click');field.value='0';field.emit('input');dialog.close();dialog.emit('close');f.tick(.2);
+  assert.equal(f.camera.fov,base);
 });

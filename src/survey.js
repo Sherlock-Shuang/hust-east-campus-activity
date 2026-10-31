@@ -22,6 +22,7 @@ import { createCampusSports } from './campus-sports.js';
 import { cacheStaticTransforms } from './render-performance.js';
 import { createSurfaceMaterials, createMorningEnvironment, applyWorldUV } from "./surface-materials.js";
 import "./survey.css";
+import "./campus-water-controls.css";
 import "./transport-ui.css";
 import { createLiveExperience } from './live-experience.js';
 import { createMobileRenderProfile } from './mobile-render-profile.js';
