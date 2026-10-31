@@ -611,7 +611,7 @@ $('toggle-pause').addEventListener('click', () => {
   const target = !snapshot?.state.paused, applyMessageEdit = capturePauseMessageEdit();
   mutate(state => { applyMessageEdit(state); state.paused = target; }, target ? '暂停指令已发布，在线玩家将进入暂停状态。' : '恢复指令已发布，玩家可以继续探索。').then(ok => { if (ok) syncPauseMessage(true); });
 });
-$('show-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = true; }, '二维码已在韵苑十六栋上方显示。'));
+$('show-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = true; }, '个人微信二维码已在天空显示。'));
 $('hide-sky-qr').addEventListener('click', () => mutate(state => { state.skyQrVisible = false; }, '天空二维码已收起。'));
 $('c118-codex-text').addEventListener('input',()=>{codexDraftDirty=true;});
 $('c118-codex-form').addEventListener('submit',event=>{event.preventDefault();const text=$('c118-codex-text').value.trim();mutate(state=>{const current=normalizeC118Screen(state.c118Screen);state.c118Screen={...current,mediaId:'codex',revision:current.revision+1,codexText:text};},'Codex 内容已发布到报告厅大屏。').then(ok=>{if(ok){codexDraftDirty=false;screenSelectionDirty=false;renderC118Screen();}});});

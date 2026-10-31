@@ -1128,7 +1128,7 @@ function render(now) {
     const overviewLift=Math.max(0,camera.position.y-120);
     atmosphere.update(camera,{overviewLift});
     campus?.update?.(camera, { viewportHeight,detailDistanceScale:qualityBudget.detailDistanceScale });
-    fieldGroupQr?.update(camera,{visible:layerSettings.symbolic&&layerSettings.water&&!liveControl?.portalOpen});
+    fieldGroupQr?.update(camera,{visible:layerSettings.symbolic&&layerSettings.building&&!liveControl?.portalOpen});
     if(now-lastLabelAt>=100){updateLabels();lastLabelAt=now;}
     if(!frozen)waterDetails?.renderReflection(renderer,scene,camera,now);
     lastPasses.reflectionCalls=renderer.info.render.calls;lastPasses.reflectionTriangles=renderer.info.render.triangles;

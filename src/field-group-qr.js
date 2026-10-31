@@ -1,22 +1,20 @@
-import {LEARNING_BOARD} from './activity-catalog.js';
 export const FIELD_GROUP_QR_IMAGE='/images/activity/hust-ai-builders-group.jpg';
-export const FIELD_SOURCE_ID='way/1023821174';
+export const FIELD_SOURCE_ID='way/110398530';
 // Reuse the original group card and its quiet zone, without redrawing the code.
-// Lay it on the central grass in front of the board, leaving a 2 m walkway.
+// A smaller vertical card on the canteen-facing roof edge of Yunyuan 16.
+// Keep this group card independent of the host-controlled personal sky code.
 export function planFieldGroupQr(model){
   if(!model?.records?.some(r=>r.id===FIELD_SOURCE_ID&&r.shapes?.length))return null;
-  const width=22,height=width*(.59*2289)/(.84*1284),yaw=LEARNING_BOARD.yaw;
-  const offset=height/2+2;
-  return {x:LEARNING_BOARD.x+Math.sin(yaw)*offset,z:LEARNING_BOARD.z+Math.cos(yaw)*offset,
-    y:LEARNING_BOARD.y+.024,width,height,yaw,sourceId:FIELD_SOURCE_ID};
+  const width=32,height=width*(.59*2289)/(.84*1284),yaw=-Math.PI/2;
+  return {x:650,y:64,z:-105.95518,width,height,yaw,sourceId:FIELD_SOURCE_ID};
 }
 export function createFieldGroupQr({THREE,scene,model,invalidate=()=>{},loadDistance=520}){
-  const placement=planFieldGroupQr(model),group=new THREE.Group();group.name='east-field-group-qr';group.visible=false;
+  const placement=planFieldGroupQr(model),group=new THREE.Group();group.name='yunyuan16-group-qr';group.visible=false;
   if(!placement)return {group,placement,update(){},dispose(){}};
   group.position.set(placement.x,placement.y,placement.z);group.rotation.y=placement.yaw;group.userData={component:'field-group-qr',sourceId:FIELD_SOURCE_ID};scene.add(group);
   const material=new THREE.MeshBasicMaterial({color:0xffffff,depthTest:true,depthWrite:true,fog:false,toneMapped:false});
   const geometry=new THREE.PlaneGeometry(placement.width,placement.height),panel=new THREE.Mesh(geometry,material);
-  panel.name='hust-ai-builders-group-qr';panel.rotation.x=-Math.PI/2;panel.renderOrder=206;group.add(panel);
+  panel.name='hust-ai-builders-group-qr';panel.renderOrder=206;group.add(panel);
   let texture=null,loading=false,disposed=false,failed=false,wanted=false;
   return {
     group,placement,

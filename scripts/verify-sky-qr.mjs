@@ -19,7 +19,7 @@ const {chromium}=await import(moduleName);
 const macChrome='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const executablePath=process.env.CHROME_EXECUTABLE||(await exists(macChrome)?macChrome:undefined);
 const checks=[],errors=[],blockedRequests=[],qrRequests=[];
-const skyPose={mode:'walk',view:'first',pitch:-.51,manualPitch:true,state:{x:510,y:.14,z:-40,yaw:-1.217,vx:0,vz:0,speed:0,verticalSpeed:0,grounded:true,flightEnabled:false}};
+const skyPose={mode:'walk',view:'first',pitch:-1.5,manualPitch:true,state:{x:SKY_QR_PLACEMENT.x+25,y:.066,z:SKY_QR_PLACEMENT.z+25,yaw:0,vx:0,vz:0,speed:0,verticalSpeed:0,grounded:true,flightEnabled:false}};
 let app,browser,activePage,origin,dataDir,passed=false,failure;
 await mkdir(out,{recursive:true});
 
@@ -92,7 +92,7 @@ const worldSnapshot=page=>page.evaluate(()=>globalThis.__readSkyQrWorld());
 const cameraSnapshot=page=>page.evaluate(()=>globalThis.__readSkyQrCamera());
 async function verifyWorldPlacement(page){
   const fixed=await worldSnapshot(page);
-  check('QR has its fixed dorm-rooftop position and normal depth testing',JSON.stringify(fixed.position)===JSON.stringify([SKY_QR_PLACEMENT.x,SKY_QR_PLACEMENT.y,SKY_QR_PLACEMENT.z])&&fixed.meshes.every(mesh=>mesh.depthTest&&mesh.scale[0]===SKY_QR_PLACEMENT.size&&mesh.scale[1]===SKY_QR_PLACEMENT.size),fixed);
+  check('QR has its original fixed sky position and normal depth testing',JSON.stringify(fixed.position)===JSON.stringify([SKY_QR_PLACEMENT.x,SKY_QR_PLACEMENT.y,SKY_QR_PLACEMENT.z])&&fixed.meshes.every(mesh=>mesh.depthTest&&mesh.scale[0]===SKY_QR_PLACEMENT.size&&mesh.scale[1]===SKY_QR_PLACEMENT.size),fixed);
   await page.locator('#map-canvas').focus();await page.keyboard.press('KeyC');
   await page.waitForFunction(()=>globalThis.__readSkyQrCamera().forwardY<.1);await snapshot(page,'desktop-level');
   await page.mouse.move(600,500);await page.waitForTimeout(100);const beforeTurn=await cameraSnapshot(page);
