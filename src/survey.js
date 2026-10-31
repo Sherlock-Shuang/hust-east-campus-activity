@@ -15,6 +15,8 @@ import { applyRiverTerrain } from "./river-terrain.js";
 import { createCampus3D, createCampus3DProgressive } from "./campus-3d.js";
 import {createCampusAtmosphere,mountAtmosphereUI} from "./campus-atmosphere.js";
 import "./campus-atmosphere.css";
+import {mountCampusMusic} from './campus-music.js';
+import './campus-music.css';
 import {getCampusPlayerSpawn} from './player-experience.js';
 import {mergeCampusExtension} from './campus-data-merge.js';
 import {getCampusStartupData} from './campus-startup-data.js';
@@ -45,6 +47,7 @@ const layerSettings = { symbolic: true, building: true, road: true, water: true 
 const $ = (id) => document.getElementById(id),
   canvas = $("map-canvas"),
   container = $("viewport");
+const campusMusic=mountCampusMusic({document,window});
 // Prepare the authored skin off the UI thread while map data and static campus
 // geometry load. No extra multi-megabyte model download or first-pickup build.
 const startupStarted=performance.now(),startupTimings={};
@@ -213,6 +216,8 @@ function syncAtmosphereLighting(mode){
 const atmosphere=createCampusAtmosphere({THREE,scene,renderer,hemisphere,sun,sunOffset,daylight,storage:getQualityStorage(),onChange:syncAtmosphereLighting,invalidate:()=>{needsRender=true;}});
 syncAtmosphereLighting(atmosphere.mode);
 mountAtmosphereUI({document,atmosphere,onChange:()=>canvas.focus({preventScroll:true})});
+campusMusic.update({atmosphere:atmosphere.mode});
+atmosphere.subscribe(mode=>campusMusic.update({atmosphere:mode}));
 function applyPerformanceBudget(){
   qualityBudget=performanceQuality.budget;
   if(qualityBudget===appliedBudget)return;
@@ -663,7 +668,7 @@ function normalizeImport(data) {
 }
 async function loadDataset(data, manifest = {}) {
   if(datasetLoading)throw new Error('地图正在加载，请完成后再导入。');
-  datasetLoading=true;$("load-screen").hidden=false;suspendCampus();
+  datasetLoading=true;campusMusic.update({ready:false});$("load-screen").hidden=false;suspendCampus();
   let datasetBuildAbort=null;
   try{
   fc = normalizeImport(data);
@@ -748,6 +753,7 @@ async function loadDataset(data, manifest = {}) {
       treeReservations: [...(campus.landcoverPlan?.trees||[]),...(campus.landcoverPlan?.shrubs||[]),...(campus.canteenStreetLife?.plan.trees||[])],
       extraActivityParking: campus.canteenStreetLife?.plan.parking||[],
       focusBox: fitBox, notify: toast,
+      onPlayerModeChange:mode=>campusMusic.update({mode}),
       onRouteChange: route => campus.setDetailedRoadIds(route.segments.map(segment=>segment.sourceId)),
       invalidate: () => { needsRender = true; },
       cancelCameraAnimation: () => { animation = null; },
@@ -784,6 +790,7 @@ async function loadDataset(data, manifest = {}) {
   canvas.dataset.startupTimings=JSON.stringify(startupTimings);
   window.dispatchEvent(new Event('campus:ready'));
   $("load-screen").hidden = true;
+  campusMusic.update({ready:true});
   liveControl?.sync();
   if (model.warnings.length)
     console.warn("Data layer warnings:", model.warnings);
@@ -1182,6 +1189,7 @@ function render(now) {
 }
 camera.position.set(500, 1600, 900);
 liveControl = createLiveExperience({THREE,scene,camera,canvas,container,
+  onMusicStateChange:state=>campusMusic.update(state),
   tsunamiQuality:qualityBudget.level===0?'low':renderProfile.handheld?'mobile':'desktop',handheld:renderProfile.handheld,
   getPlayer:()=>commute?.player,onFloodState:value=>commute?.setFloodState(value),
   getInteriors:()=>campus?.optoEntries||[],

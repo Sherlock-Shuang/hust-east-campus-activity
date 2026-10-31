@@ -12,7 +12,7 @@ import {createWorkRouter} from '../integration/work-router.mjs';
 import {ACTIVITY_WORKS,activityPortals} from '../src/activity-catalog.js';
 
 const projectRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.geojson':'application/geo+json; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.woff2':'font/woff2','.ico':'image/x-icon','.mp4':'video/mp4'};
+const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.geojson':'application/geo+json; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.woff2':'font/woff2','.ico':'image/x-icon','.mp4':'video/mp4','.m4a':'audio/mp4'};
 const COOKIE='campus_admin';
 const AUDIENCE_COOKIE='campus_audience';
 const hash=value=>createHash('sha256').update(value).digest();

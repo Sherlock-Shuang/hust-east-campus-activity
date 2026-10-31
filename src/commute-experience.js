@@ -11,7 +11,7 @@ import { createPlayerExperience, getCampusPlayerSpawn } from './player-experienc
 
 /** Connect the sourced route, traffic model and camera to the visible controls. */
 export function createCommuteExperience({ THREE, scene, camera, controls, canvas, model, fc, frame,
-  geoToLocal, focusBox, notify, invalidate, cancelCameraAnimation, enable3D, treeReservations=[], extraActivityParking=[], onRouteChange=()=>{} }) {
+  geoToLocal, focusBox, notify, invalidate, cancelCameraAnimation, enable3D, treeReservations=[], extraActivityParking=[], onRouteChange=()=>{},onPlayerModeChange=()=>{} }) {
   const $ = id => document.getElementById(id);
   // Optional inspection controls may be absent in the compact transport UI.
   const updateElement = (id, properties) => {
@@ -224,7 +224,7 @@ export function createCommuteExperience({ THREE, scene, camera, controls, canvas
     const exterior=document.querySelector('[data-exterior^="韵苑"]');
     if(exterior)exterior.dataset.exterior=fc.features.find(f=>f.id===route.start.buildingId)?.properties?.name||name;
   }
-  function createPlayer(){const next=createPlayerExperience({THREE,scene,camera,controls,canvas,model,route,simulation:trafficSimulation,scooterTransport:visual.scooterTransport,additionalTransport:optoTransportPlan.items.filter(i=>i.mode!=='scooter'),onEnter:()=>{stopFollow();prepareView();},notify,invalidate});next.setSuspended(suspended);return next;}
+  function createPlayer(){const next=createPlayerExperience({THREE,scene,camera,controls,canvas,model,route,simulation:trafficSimulation,scooterTransport:visual.scooterTransport,additionalTransport:optoTransportPlan.items.filter(i=>i.mode!=='scooter'),onEnter:()=>{stopFollow();prepareView();},onModeChange:onPlayerModeChange,notify,invalidate});next.setSuspended(suspended);return next;}
   function changeRoute(){
     // Build the next source route before disposing a playable existing scene.
     let next;try{next=createCommuteRoute(fc,{frame,geoToLocal,dormId:$('route-dorm')?.value ?? route.options.dormId,startAccess:$('route-access')?.value ?? route.options.startAccess,destination:$('route-destination')?.value ?? route.options.destination});}catch(error){notify(error.message);updateRouteLabels();return;}

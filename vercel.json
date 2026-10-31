@@ -21,6 +21,14 @@
       "continue": true
     },
     {
+      "src": "^/audio/[^/]+\\.m4a$",
+      "headers": {
+        "Content-Type": "audio/mp4",
+        "Cache-Control": "public, max-age=3600"
+      },
+      "continue": true
+    },
+    {
       "src": "^/$",
       "headers": {
         "Content-Type": "text/html; charset=utf-8",

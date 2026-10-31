@@ -19,6 +19,7 @@ export function createRoutes(manifest){
   // This fragment intentionally puts the static games availability JSON ahead
   // of the single API function, and puts that API ahead of the ta-say SPA.
   const routes=[{src:'^/(.*)$',headers:{'X-Content-Type-Options':'nosniff'},continue:true}];
+  routes.push({src:'^/audio/[^/]+\\.m4a$',headers:{'Content-Type':'audio/mp4','Cache-Control':'public, max-age=3600'},continue:true});
   for(const [url,entry] of Object.entries(manifest.routes)){
     const source='^'+regexEscape(encodeURI(url))+'$';
     const hashedAsset=url.startsWith('/assets/')||url.startsWith('/works/tasay/assets/')||isVersionedWorkAsset(url,entry.sha256);

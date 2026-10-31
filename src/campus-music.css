@@ -1,0 +1,22 @@
+#campus-music[hidden]{display:none!important}
+#campus-music{position:fixed;left:max(18px,env(safe-area-inset-left));top:max(18px,env(safe-area-inset-top));z-index:48;display:flex;align-items:center;gap:1px;border:1px solid #ffffff55;border-radius:18px;background:#173e34cf;color:#f3f8ed;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font:12px/1.4 system-ui,sans-serif;box-shadow:0 2px 12px #10282018}
+#campus-music button,#campus-music summary{box-sizing:border-box;min-height:36px;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;touch-action:manipulation}
+#campus-music .music-toggle{display:flex;align-items:center;gap:7px;padding:7px 10px 7px 13px;border-radius:18px 0 0 18px}
+#campus-music .music-toggle>span:first-child{font-size:18px;line-height:1}
+#campus-music .music-toggle[aria-pressed=false]{opacity:.72}
+#campus-music summary{display:grid;place-items:center;width:28px;padding-right:6px;list-style:none;border-radius:0 18px 18px 0}
+#campus-music summary::-webkit-details-marker{display:none}
+#campus-music summary::after{content:none}
+#campus-music button:hover,#campus-music summary:hover{background:#ffffff18}
+#campus-music :focus-visible{outline:2px solid #e4f4c7;outline-offset:3px}
+#campus-music .music-panel{position:absolute;left:0;top:calc(100% + 8px);width:220px;box-sizing:border-box;padding:15px 16px;border:1px solid #ffffff45;border-radius:12px;background:#14372ff5;box-shadow:0 8px 24px #10282026}
+#campus-music .music-now{display:block;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+#campus-music label{display:flex;align-items:center;gap:10px;margin:14px 0;color:#dce9de;font-size:11px}
+#campus-music input{min-width:0;width:140px;min-height:30px;accent-color:#dcecbc;cursor:pointer;touch-action:pan-x}
+#campus-music small{display:block;color:#b5cbc0;font-size:10px}
+@media(pointer:coarse){#campus-music button,#campus-music summary{min-height:44px}#campus-music summary{width:32px}#campus-music input{min-height:44px}}
+@media(max-height:500px) and (orientation:landscape){#campus-music{top:max(10px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left))}#campus-music .music-panel{padding:10px 14px}#campus-music label{margin:5px 0}}
+.touch-controls #campus-music{top:calc(max(12px,env(safe-area-inset-top)) + 54px)}
+.touch-controls #campus-music button,.touch-controls #campus-music summary{min-height:44px}
+.touch-controls #campus-music summary{width:32px}
+.touch-controls #campus-music input{min-height:44px}

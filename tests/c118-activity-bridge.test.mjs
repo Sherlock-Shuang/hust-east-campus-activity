@@ -31,6 +31,18 @@ function fixture({work='opto-c118',search='?campusAttempt=visit-1',parentOrigin,
     message(data,overrides={}){const event={source:parent,origin:ownOrigin,data:{attemptId:'visit-1',...data},...overrides};for(const fn of [...(handlers.get('message')||[])])fn(event);}};
 }
 
+test('only the authenticated room frame reports video audio focus, without repeat notifications',()=>{
+  const room=fixture(),other=fixture({work:'tasay'});
+  assert.equal(room.bridge.audioFocus(false),false);
+  assert.equal(other.bridge.audioFocus(true),false);
+  assert.equal(room.bridge.audioFocus('true'),false);
+  assert.equal(room.bridge.audioFocus(true),true);
+  const post=room.posts.at(-1);assert.deepEqual(post,{data:{type:'campus:audio-focus',attemptId:'visit-1',workId:'opto-c118',active:true},targetOrigin:origin});
+  const count=room.posts.length;assert.equal(room.bridge.audioFocus(true),false);assert.equal(room.posts.length,count);
+  assert.equal(room.bridge.audioFocus(false),true);
+  room.message({type:'campus:dispose'});assert.equal(room.bridge.audioFocus(true),false);
+});
+
 test('every real campus doorway carries the host flood and playlist through the embedded room bridge',async()=>{
   const source=JSON.parse(await readFile(new URL('../public/data/opto-southeast.geojson',import.meta.url),'utf8'));
   const feature=source.features.find(f=>f.id===OPTO_BUILDING_ID);

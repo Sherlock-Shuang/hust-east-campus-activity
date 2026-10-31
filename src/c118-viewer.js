@@ -168,6 +168,7 @@ if(!disposed)try{
   const underwaterFog=new THREE.FogExp2('#287484',.025);
   const timeLabel=seconds=>{const whole=Math.max(0,Math.floor(seconds));return `${Math.floor(whole/60)}:${String(whole%60).padStart(2,'0')}`;};
   screenPlayer=resources.own(createC118VideoScreen(THREE,{screen:interior.videoScreen,onState:s=>{
+    window.campusActivity?.audioFocus?.(s.playing&&!s.muted&&s.active&&s.visible);
     if(screenControl?.mediaId==='codex')return;
     document.querySelector('#screen-title').textContent=s.title||'Vibe Coding 成果展示';
     document.querySelector('#screen-time').textContent=`${timeLabel(s.time)} / ${timeLabel(s.duration)}`;

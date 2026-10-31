@@ -45,7 +45,7 @@ export function createPlayerWorld(model,{movableParking=false}={}) {
 }
 
 export function createPlayerExperience({ THREE, scene, camera, controls, canvas, route, simulation,
-  model, onEnter, notify, invalidate, scooterTransport, transportSources, spiderPreparation, additionalTransport=[] }) {
+  model, onEnter, notify, invalidate, scooterTransport, transportSources, spiderPreparation, additionalTransport=[],onModeChange=()=>{} }) {
   const $ = id => document.getElementById(id), world = createPlayerWorld(model,{movableParking:!!scooterTransport});
   const updateElement = (id, properties) => {
     const element = $(id);
@@ -251,7 +251,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     canvas.focus({preventScroll:true});$('player-hud').hidden=false;
     $('viewport').classList.add('playing');document.body.classList.toggle('campus-playing',!!interaction);$('viewport').classList.toggle('spider-playing',mode==='spider');$('viewport').classList.toggle('drive-playing',mode==='roadster'||mode==='hoverboard');setImmersive(immersive);models.group.visible=view==='third'||motion.state.mode==='spider';
     camera.near=view==='first'?.06:.12;camera.updateProjectionMatrix();
-    models.update({...motion.state,view},0);cameraFrame(0,true);updateUI();invalidate();
+    models.update({...motion.state,view},0);cameraFrame(0,true);updateUI();invalidate();onModeChange(motion.state.mode);
   }
   function enterAt(pose){
     if(suspended)return {ok:false,reason:'活动已暂停'};
@@ -268,7 +268,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     controls.enabled=true;camera.near=savedNear;camera.fov=savedFov;camera.updateProjectionMatrix();
     // Clear OrbitControls' residual damping from before entering the player.
     controls.enableDamping=false;controls.update();controls.enableDamping=true;
-    $('player-hud').hidden=true;document.body.classList.remove('campus-playing');$('viewport').classList.remove('playing','spider-playing','drive-playing');updateUI();invalidate();
+    $('player-hud').hidden=true;document.body.classList.remove('campus-playing');$('viewport').classList.remove('playing','spider-playing','drive-playing');updateUI();invalidate();onModeChange('walk');
   }
   on(window,'keydown',e=>{
     if(!active||e.metaKey||e.ctrlKey||e.altKey||editing(e.target)||inputBlocked()||!codes.has(e.code))return;

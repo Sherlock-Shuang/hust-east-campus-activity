@@ -18,7 +18,7 @@ import './civilization-pause.css';
 import './live-experience.css';
 import './campus-tsunami.css';
 
-export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,onFloodState=()=>{},getInteriors=()=>[],getWallText=()=>[],setSuspended,invalidate,notify,tsunamiQuality='desktop',handheld=false,onRuntimeBudgetChange=()=>{}}) {
+export function createLiveExperience({THREE,scene,camera,canvas,container,getPlayer,onFloodState=()=>{},getInteriors=()=>[],getWallText=()=>[],setSuspended,invalidate,notify,tsunamiQuality='desktop',handheld=false,onRuntimeBudgetChange=()=>{},onMusicStateChange=()=>{}}) {
   const disposeMobileViewport=mountMobileViewport();
   const root=document.createElement('div');root.id='live-experience';
   root.innerHTML=`
@@ -94,6 +94,8 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   const setInert=frozen=>interactionRoots.forEach(el=>{el.inert=frozen;});
   function updateFrozen(){
     const frozen=!!client?.state.paused||civilization.active||!!opened||!!skyQr?.isOpen||!audienceUI?.registered;
+    onMusicStateChange({registered:!!audienceUI?.registered,experience:opened?(opened.workId||opened.kind||opened.id):null,
+      paused:!!client?.state.paused||civilization.active,foregroundAudio:!!opened?.foregroundAudio});
     if(frozen!==lastFrozen){
       lastFrozen=frozen;
       if(frozen){restoreFocus=document.activeElement;document.exitPointerLock?.();}
@@ -205,6 +207,9 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   function message(event){
     if(!frame||event.source!==frame.contentWindow||event.origin!==frameOrigin)return;
     if(event.data?.attemptId!==opened?.attemptId)return;
+    if(event.data?.type==='campus:audio-focus'&&opened.workId==='opto-c118'&&typeof event.data.active==='boolean'){
+      opened.foregroundAudio=event.data.active;updateFrozen();
+    }
     if(event.data?.type==='campus:ready'){
       if(opened.failed)return;
       const work=ACTIVITY_WORKS.find(w=>w.id===opened.workId);

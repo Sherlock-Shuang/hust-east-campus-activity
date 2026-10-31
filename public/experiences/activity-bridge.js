@@ -9,7 +9,7 @@
   } catch { return; }
   if((attemptId&&!/^[a-zA-Z0-9_-]{1,128}$/.test(attemptId))||(workId&&!/^[a-zA-Z0-9_-]{1,128}$/.test(workId)))return;
   let current={paused:false,disposed:false,announcement:null,c118Flood:null,c118Screen:null,serverTime:Date.now()};
-  const listeners=new Set(),sent=new Set();
+  const listeners=new Set(),sent=new Set();let audioFocused=false;
   function send(type,extra={}){
     if(current.disposed||window.parent===window)return false;
     window.parent.postMessage({type,attemptId,...(workId?{workId}:{}),...extra},parentOrigin);return true;
@@ -32,6 +32,7 @@
     },
     fail(message){if(current.disposed)return false;document.documentElement.dataset.campusWorkStatus='failed';return send('campus:error',{message:String(message).slice(0,240)});},
     exit(returnEntryId){if(current.paused||current.disposed)return false;return send('campus:exit',workId==='opto-c118'&&['opto-c1','opto-c2'].includes(returnEntryId)?{returnEntryId}:{});},
+    audioFocus(active){if(workId!=='opto-c118'||typeof active!=='boolean'||active===audioFocused)return false;audioFocused=active;return send('campus:audio-focus',{active});},
   };
   function message(event){
     if(current.disposed||window.parent===window||event.source!==window.parent||event.origin!==parentOrigin||event.data?.attemptId!==attemptId)return;
