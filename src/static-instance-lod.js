@@ -20,7 +20,7 @@ export function createStaticInstanceSelection(mesh,{matrices,colors,ids,stableSl
     const ranges=attribute.updateRanges;
     if(stable){
       // Preserve disjoint changes at opposite frustum edges. Bound GL calls:
-      // after 16 ranges, coalesce to one span until the renderer consumes it.
+      // after 16 ranges, coalesce to one span to keep the pending list bounded.
       if(ranges.length<16){
         for(let i=ranges.length-1;i>=0;i--){const r=ranges[i];if(start<=r.start+r.count&&end>=r.start){start=Math.min(start,r.start);end=Math.max(end,r.start+r.count);ranges.splice(i,1);}}
         attribute.addUpdateRange(start,end-start);return;

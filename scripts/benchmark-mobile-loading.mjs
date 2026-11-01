@@ -12,7 +12,7 @@ const {build}=await import(pathToFileURL(path.join(root,'node_modules/vite/dist/
 const {createLiveServer}=await import(pathToFileURL(path.join(root,'server/index.mjs')));
 const {chromium}=await import(pathToFileURL(path.join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs')));
 const work=await mkdtemp(path.join(tmpdir(),'campus-cold-mobile-'));await mkdir(out,{recursive:true});
-const report={passed:false,root,cpu,mbps,trials,conditions:'Chrome desktop touch viewport 844x390 DPR2, CPU throttle, cold browser cache, 80ms/10Mbps synthetic network. Local production HTTP server sends uncompressed JS, unlike CDN compression. No physical-device/GPU/thermal or production startup-time guarantee.',runs:[],errors:[]};
+const report={passed:false,root,cpu,mbps,trials,conditions:`Chrome desktop touch viewport 844x390 DPR2, CPU ${cpu}x throttle, cold browser cache, 80ms/${mbps}Mbps synthetic network. Local production HTTP server sends uncompressed JS, unlike CDN compression. No physical-device/GPU/thermal or production startup-time guarantee.`,runs:[],errors:[]};
 let browser,app;
 try{
  await build({root,configFile:path.join(root,'vite.config.js'),logLevel:'warn',build:{outDir:path.join(work,'dist'),emptyOutDir:true,sourcemap:profile,rollupOptions:{input:{campus:path.join(root,'index.html'),admin:path.join(root,'admin.html'),c118:path.join(root,'c118.html')}}},plugins:[{name:'isolated-startup-observer',transform(code,id){if(id===path.join(root,'src/survey.js'))return code+'\nglobalThis.__loadingQA={read:()=>({x:commute?.player.state.x,z:commute?.player.state.z,frame:frameMetrics.snapshot()})};';}}]});
