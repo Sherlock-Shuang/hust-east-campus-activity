@@ -8,19 +8,29 @@ function chooseByCount(
     two: ReadonlyArray<readonly [string, string]>;
   },
   desiredReplyLineCount: 1 | 2,
+  history: SessionState["chatHistory"] = [],
 ): string[] {
-  if (desiredReplyLineCount === 1) {
-    if (pool.one.length === 0) {
-      return [fallbackReplyCopy.defaults.one];
-    }
-
-    const index = Math.floor(Math.random() * pool.one.length);
-    return [pool.one[index] ?? fallbackReplyCopy.defaults.one];
+  const candidates: ReadonlyArray<readonly string[]> = desiredReplyLineCount === 1
+    ? pool.one.map((line) => [line])
+    : pool.two;
+  if (candidates.length === 0) {
+    return desiredReplyLineCount === 1
+      ? [fallbackReplyCopy.defaults.one]
+      : [...fallbackReplyCopy.defaults.two];
   }
 
-  const index = Math.floor(Math.random() * pool.two.length);
-  const pair = pool.two[index] ?? fallbackReplyCopy.defaults.two;
-  return [...pair];
+  // Derive usage from saved dialogue so refreshes and rollbacks need no extra state.
+  // A pair stays intact; quoting a line as the player does not consume it.
+  const lastSpoken = new Map<string, number>();
+  history.forEach((message, index) => {
+    if (message.role === "ta" && message.kind !== "monitor_image" && message.kind !== "pending") {
+      lastSpoken.set(message.displayedText.trim(), index);
+    }
+  });
+  const lastUsed = candidates.map((lines) => Math.max(...lines.map((line) => lastSpoken.get(line.trim()) ?? -1)));
+  const oldestUse = Math.min(...lastUsed);
+  const available = candidates.filter((_, index) => lastUsed[index] === oldestUse);
+  return [...available[Math.floor(Math.random() * available.length)]];
 }
 
 function isFinalEntityStage(stage: SessionState["stage"]): boolean {
@@ -90,12 +100,14 @@ export function getFallbackReply(
     }
   }
 
-  if (session.pollutionCount > 5 && isFinalEntityStage(session.stage)) {
-    return chooseByCount(fallbackReplyCopy.finalEntityReplies, desiredReplyLineCount);
+  if (session.pollutionCount >= 5 && isFinalEntityStage(session.stage)) {
+    return chooseByCount(fallbackReplyCopy.finalEntityReplies, desiredReplyLineCount, session.chatHistory);
   }
 
-  if (session.pollutionCount > 5) {
-    return chooseByCount(fallbackReplyCopy.postThresholdChaos, desiredReplyLineCount);
+  // The forced rewrite sequence ends at exactly five. Its fifth scripted reply
+  // still takes precedence above; all later normal turns use the authored chaos.
+  if (session.pollutionCount >= 5) {
+    return chooseByCount(fallbackReplyCopy.postThresholdChaos, desiredReplyLineCount, session.chatHistory);
   }
 
   if (triggerReason === "keyword") {

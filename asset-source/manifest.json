@@ -1391,16 +1391,16 @@
     "/works/tasay/": {
       "chunks": [
         {
-          "url": "/_activity_assets/931e0d92d743ac3bf2a8cc61c3054279973f56f4afbf273fda38844383ac97dc.bin",
+          "url": "/_activity_assets/28501009fb103f7dded4b2992d6c7dcd00feb7ef0414d8e24b447bfa20cc2187.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 327,
-          "sha256": "2a2352615843ae12cd6cb7b62f6a533e8da2ad15e4552a3cecf63d6633f9a13d"
+          "storedBytes": 331,
+          "sha256": "689d63c9f8ee4207f14b890344abede4521a2b32e83a8dd6371795a4c50b2c2f"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "2a2352615843ae12cd6cb7b62f6a533e8da2ad15e4552a3cecf63d6633f9a13d"
+      "sha256": "689d63c9f8ee4207f14b890344abede4521a2b32e83a8dd6371795a4c50b2c2f"
     },
     "/works/tasay/assets/66c8ec9cf7b1f1e882d92c7f0c2e8d73-B7Cr3f9M.png": {
       "chunks": [
@@ -1461,16 +1461,16 @@
     "/works/tasay/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/931e0d92d743ac3bf2a8cc61c3054279973f56f4afbf273fda38844383ac97dc.bin",
+          "url": "/_activity_assets/28501009fb103f7dded4b2992d6c7dcd00feb7ef0414d8e24b447bfa20cc2187.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 327,
-          "sha256": "2a2352615843ae12cd6cb7b62f6a533e8da2ad15e4552a3cecf63d6633f9a13d"
+          "storedBytes": 331,
+          "sha256": "689d63c9f8ee4207f14b890344abede4521a2b32e83a8dd6371795a4c50b2c2f"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "2a2352615843ae12cd6cb7b62f6a533e8da2ad15e4552a3cecf63d6633f9a13d"
+      "sha256": "689d63c9f8ee4207f14b890344abede4521a2b32e83a8dd6371795a4c50b2c2f"
     },
     "/works/wanyan/": {
       "chunks": [
@@ -2327,6 +2327,20 @@
       "mime": "image/jpeg",
       "bytes": 364765,
       "sha256": "87c3a03dd029abb00acce84322759190a85807a735935115e7aadb35354db045"
+    },
+    "/works/tasay/assets/index-DZ2OsQsv.js": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/9daaad989b29d9437caa07cb663f38b0b6e49aa039ba6816c8d07bce4d2761fa.bin",
+          "encoding": "gzip",
+          "bytes": 254085,
+          "storedBytes": 82349,
+          "sha256": "2317d11f116e1236aef514a989b7c7cd05c70db7cb42313773b329e08e5ce1da"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 254085,
+      "sha256": "2317d11f116e1236aef514a989b7c7cd05c70db7cb42313773b329e08e5ce1da"
     }
   },
   "spa": [
