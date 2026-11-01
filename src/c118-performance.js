@@ -1,6 +1,6 @@
 import {createPerformanceQuality} from './performance-quality.js';
 
-const audienceRates=[15,20,25];
+const audienceRates=[15,20,25],handheldAudienceRates=[8,12,18];
 
 export function c118RenderRate({handheld=false,level=1,cinema=false,floodRunning=false}={}){
   return handheld||level===0||(cinema&&!floodRunning)?30:60;
@@ -15,7 +15,7 @@ export function createC118Performance(options={}){
   function current(){
     const source=quality.budget;
     if(!budget||budget.revision!==source.revision)budget=Object.freeze({
-      ...source,audienceHz:audienceRates[source.level],waterLevel:source.level,
+      ...source,audienceHz:(options.handheld?handheldAudienceRates:audienceRates)[source.level],waterLevel:source.level,
     });
     return budget;
   }

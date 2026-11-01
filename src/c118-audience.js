@@ -6,7 +6,7 @@ import {createC118Walkers,sampleC118AudiencePose} from './c118-audience-motion.j
  * Seated instances remain static; shared articulated parts animate only the
  * aisle walkers and, during flooding, the people lifted out of their chairs.
  */
-export function createC118Audience(THREE,{plan}){
+export function createC118Audience(THREE,{plan,lowDetail=false}){
   const group=new THREE.Group();group.name='c118-seated-audience';
   const geometries=new Set(),materials=new Set(),batches=[],seatIndex=new Map();
   let disposed=false,hiddenSeat=null,lastTick=null,lastArgs=null,animationHz=25;
@@ -15,13 +15,14 @@ export function createC118Audience(THREE,{plan}){
     hair:['#242521','#352c26','#191e20','#493a30'],shoes:['#333936','#676b68','#bdbdb1']};
   function material(){const m=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.94});materials.add(m);return m;}
   function loft(rings,segments=10){
+    if(lowDetail)segments=Math.min(segments,6);
     const p=[],indices=[];
     for(const [y,rx,rz,z] of rings)for(let i=0;i<segments;i++){const a=i/segments*Math.PI*2;p.push(Math.cos(a)*rx,y,z+Math.sin(a)*rz);}
     for(let j=0;j<rings.length-1;j++)for(let i=0;i<segments;i++){const n=(i+1)%segments,a=j*segments+i,b=j*segments+n,c=(j+1)*segments+i,d=(j+1)*segments+n;indices.push(a,c,b,b,c,d);}
     for(const [ring,flip] of [[0,true],[rings.length-1,false]]){const center=p.length/3;p.push(0,rings[ring][0],rings[ring][3]);for(let i=0;i<segments;i++){const a=ring*segments+i,b=ring*segments+(i+1)%segments;indices.push(center,flip?a:b,flip?b:a);}}
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setIndex(indices);g.computeVertexNormals();return g;
   }
-  const ellipsoid=(x,y,z,at,segments=8,rings=5)=>new THREE.SphereGeometry(1,segments,rings).scale(x,y,z).translate(...at);
+  const ellipsoid=(x,y,z,at,segments=8,rings=5)=>new THREE.SphereGeometry(1,lowDetail?Math.min(segments,5):segments,lowDetail?Math.min(rings,3):rings).scale(x,y,z).translate(...at);
   function limb(a,b,r0,r1){
     const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),v=bv.clone().sub(av),length=v.length();
     const g=loft([[-length/2,r0*.65,r0*.65,0],[-length/2+.025,r0,r0,0],[length/2-.025,r1,r1,0],[length/2,r1*.65,r1*.65,0]],6);
@@ -57,7 +58,7 @@ export function createC118Audience(THREE,{plan}){
     // Share every skull cross-section and angular edge with the head. An
     // unrelated ellipsoid intersects the cheek/skull loft and exposes skin
     // stripes through the back of the hair, especially from a seated camera.
-    const p=[],indices=[],segments=10,levels=[1.18,1.235,1.29,1.34,1.385,1.397,1.405];
+    const p=[],indices=[],segments=lowDetail?6:10,levels=[1.18,1.235,1.29,1.34,1.385,1.397,1.405];
     function skullAt(y){
       for(let j=1;j<headProfile.length;j++)if(y<=headProfile[j][0]){
         const a=headProfile[j-1],b=headProfile[j],t=(y-a[0])/(b[0]-a[0]);

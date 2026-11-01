@@ -1060,7 +1060,7 @@ test('floating left touches move the walker from fresh origins without rotating 
   }
 });
 
-test('touch look has 1.5 times mouse sensitivity while ordinary mouse gain stays unchanged',t=>{
+test('touch look responds to a short swipe while ordinary mouse gain stays unchanged',t=>{
   const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('walk');f.tick(1);
   const original=f.experience.captureActivityPose();
   f.canvas.emit('pointerenter',{clientX:600,clientY:160});f.canvas.emit('pointermove',{clientX:640,clientY:180});
@@ -1070,8 +1070,8 @@ test('touch look has 1.5 times mouse sensitivity while ordinary mouse gain stays
   assert.equal(sceneTouchDown(f,20,{clientX:600,clientY:160}).propagationStopped,true);
   touch(f.canvas,'pointermove',20,{clientX:640,clientY:180});
   const finger=f.experience.captureActivityPose();
-  assert.ok(Math.abs((finger.yawOffset-original.yawOffset)/(mouse.yawOffset-original.yawOffset)-1.5)<1e-9);
-  assert.ok(Math.abs((finger.pitch-original.pitch)/(mouse.pitch-original.pitch)-1.5)<1e-9);
+  assert.ok(Math.abs(finger.yawOffset-original.yawOffset+40*Math.PI/(390*.6))<1e-9);
+  assert.ok(Math.abs(finger.pitch-original.pitch-20*Math.PI/(390*.6)*.65)<1e-9);
   touch(f.canvas,'pointerup',20);
 });
 
@@ -1230,15 +1230,15 @@ test('the shipped first-level mobile G action reaches a roof and its jump button
 });
 
 
-test('real camera touch turns are normalized by the CSS viewport and inverted preference survives reload',t=>{
+test('real camera touch turns use the short CSS edge and inverted preference survives reload',t=>{
   const entries=new Map([['dongjiu.controls.v1',JSON.stringify({sensitivity:1.25,invertY:true,joystickScale:1.1})]]);
   const storage={getItem:key=>entries.get(key),setItem:(key,value)=>entries.set(key,value)};
   const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true,storage});f.experience.enter('walk');f.tick(.2);
   const original=f.experience.captureActivityPose(),results=[];
-  for(const [width,height]of [[844,390],[667,375],[1024,768]]){
+  for(const [width,height]of [[844,390],[667,375],[1024,768],[390,844]]){
     f.canvas.rect={left:0,top:0,width,height};f.experience.restoreActivityPose(original);
     touch(f.canvas,'pointerdown',20,{clientX:width*.7,clientY:height*.4});
-    touch(f.canvas,'pointermove',20,{clientX:width*.8,clientY:height*.45});
+    touch(f.canvas,'pointermove',20,{clientX:width*.7+Math.min(width,height)*.1,clientY:height*.4+Math.min(width,height)*.05});
     const pose=f.experience.captureActivityPose();results.push([pose.yawOffset-original.yawOffset,pose.pitch-original.pitch]);
     touch(f.canvas,'pointerup',20);
   }

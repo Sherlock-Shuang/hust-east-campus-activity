@@ -32,13 +32,13 @@ export function createControlPreferences({storage,defaults={},onChange=()=>{}}={
   };
 }
 
-/** CSS viewport fractions, not device pixels: a tenth-screen finger movement
- * gives the same angle on each phone. The 844×390 baseline retains the previous
- * 1.5× touch feel; mouse / pointer-lock retain their original pixel gain. */
+/** Finger travel uses the short CSS edge in either orientation. Equal physical
+ * swipes turn equally on both axes; a wide landscape viewport no longer makes
+ * yaw sluggish. This is displacement, never scaled by a frame delta. */
 export function controlLookDelta(dx,dy,{touch=false,width=844,height=390,preferences={}}={}){
   const p=normalizeControlPreferences(preferences);
   if(!Number.isFinite(dx)||!Number.isFinite(dy))return {x:0,y:0};
-  const horizontal=touch?1.5*844/(Number.isFinite(width)&&width>0?width:844):1;
-  const vertical=touch?1.5*390/(Number.isFinite(height)&&height>0?height:390):1;
-  return {x:dx*.0032*p.sensitivity*horizontal,y:dy*.0025*p.sensitivity*vertical*(p.invertY?-1:1)};
+  const w=Number.isFinite(width)&&width>0?width:844,h=Number.isFinite(height)&&height>0?height:390;
+  const touchGain=Math.PI/(Math.max(240,Math.min(w,h))*.6);
+  return {x:dx*(touch?touchGain:.0032)*p.sensitivity,y:dy*(touch?touchGain*.65:.0025)*p.sensitivity*(p.invertY?-1:1)};
 }

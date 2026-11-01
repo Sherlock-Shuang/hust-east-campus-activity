@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createC118Performance} from '../src/c118-performance.js';
-import {planOptoC118Interior} from '../src/opto-c118-interior.js';
+import {planOptoC118Interior,createOptoC118Interior} from '../src/opto-c118-interior.js';
 import {createC118FloodEffect} from '../src/c118-flood-effect.js';
 import {createC118Audience} from '../src/c118-audience.js';
 
@@ -16,12 +16,12 @@ test('hall budgets cap high-DPI pixels and reduce only visual work under sustain
   assert.ok(2532*1170*quality.budget.pixelRatio**2<805000);
   const before=quality.budget.pixelRatio;
   for(let i=0;i<80;i++)quality.update({elapsedMs:100,cpuMs:70,active:true,rendered:true});
-  assert.ok(quality.budget.pixelRatio<before);assert.equal(quality.budget.audienceHz,15);
+  assert.ok(quality.budget.pixelRatio<before);assert.equal(quality.budget.audienceHz,8);
   const pressured=quality.budget;
   for(let i=0;i<500;i++)quality.update({elapsedMs:500,cpuMs:0,active:false,rendered:false});
   assert.equal(quality.budget,pressured,'background and paused samples do not invent performance pressure');
-  quality.setMode('balanced');assert.equal(quality.budget.audienceHz,20);
-  quality.setMode('clear');assert.equal(quality.budget.audienceHz,25);
+  quality.setMode('balanced');assert.equal(quality.budget.audienceHz,12);
+  quality.setMode('clear');assert.equal(quality.budget.audienceHz,18);
 });
 
 test('each water quality keeps identical event sampling and door topology while reducing submitted work',()=>{
@@ -75,4 +75,30 @@ test('NPC quality lowers pose updates and dry uploads contain only the actual ai
   }
   let instanceDisposals=0;audience.group.traverse(o=>{if(o.isInstancedMesh)o.addEventListener('dispose',()=>instanceDisposals++);});
   const instanceCount=audience.group.children.length;audience.dispose();audience.dispose();assert.equal(instanceDisposals,instanceCount);full.dispose();
+});
+
+test('phone rendering stays at thirty Hz even after automatic recovery or manual clear selection',()=>{
+  const quality=createC118Performance({handheld:true,deviceRatio:3,width:844,height:390});
+  for(let i=0;i<900;i++)quality.update({elapsedMs:1000/30,cpuMs:3,targetFrameMs:1000/30});
+  assert.equal(quality.budget.maxFps,30);
+  quality.setMode('clear');assert.equal(quality.budget.maxFps,30);
+  assert.equal(createC118Performance({mode:'clear'}).budget.maxFps,60);
+});
+
+test('mobile meshes reduce geometry while retaining seats, all people and identical flood poses',()=>{
+  const room=createOptoC118Interior(THREE),liteRoom=createOptoC118Interior(THREE,{lowDetail:true});
+  const desktop=createC118Audience(THREE,{plan}),mobile=createC118Audience(THREE,{plan,lowDetail:true});
+  const triangles=root=>{let total=0;root.traverse(o=>{if(o.isMesh)total+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3*(o.isInstancedMesh?o.count:1);});return total;};
+  assert.deepEqual(liteRoom.plan,room.plan,'navigation and seating geometry are not simplified');
+  assert.equal(mobile.group.userData.totalCount,desktop.group.userData.totalCount);
+  const before=triangles(room.group)+triangles(desktop.group),after=triangles(liteRoom.group)+triangles(mobile.group);
+  assert.ok(after<before*.75,`${after} must stay below 75% of ${before}`);
+  for(const elapsed of[2,15,33.1]){
+    desktop.update({time:1000+elapsed,elapsed});mobile.update({time:1000+elapsed,elapsed});
+    for(let i=0;i<moving(desktop).length;i++){
+      const a=moving(desktop)[i],b=moving(mobile)[i];assert.equal(a.count,b.count);
+      assert.deepEqual(a.instanceMatrix.array.subarray(0,a.count*16),b.instanceMatrix.array.subarray(0,b.count*16));
+    }
+  }
+  room.dispose();liteRoom.dispose();desktop.dispose();mobile.dispose();
 });
