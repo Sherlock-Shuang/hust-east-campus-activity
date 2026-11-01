@@ -1,0 +1,2 @@
+# Preserve the supplied self-contained presentation, including embedded media.
+public/presentations/taste-is-all-you-need.html -text -diff

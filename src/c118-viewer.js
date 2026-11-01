@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {createOptoC118Interior} from './opto-c118-interior.js';
 import {optoFoyerExit,isInsideC118} from './opto-foyer.js';
 import {createC118Navigation,indoorMovement,crossedC118Door} from './c118-navigation.js';
+import {C118_PIANO_SHARE_URL,shouldOpenC118PianoShare} from './c118-piano-share.js';
 import {createPlayerPointerLock} from './player-pointer-lock.js';
 import {renderControlHints} from './control-hints.js';
 import {createC118CodexScreen} from './c118-codex-screen.js';
@@ -73,6 +74,10 @@ function exit(returnEntryId){
 onNavigation(document.querySelector('#hall-return'),'click',event=>{event.preventDefault();exit();});
 onNavigation(document.querySelector('#swim-exit'),'click',exit);
 onNavigation(window,'pagehide',event=>{if(!event.persisted)dispose();});
+on(window,'keydown',event=>{
+  if(!shouldOpenC118PianoShare(event,{plan:interior?.plan,position:motion?.state,active:usable(),seated:Boolean(seatedSeat),swimming:swimming?.state.active,floodRunning}))return;
+  event.preventDefault();returning=true;dispose();location.assign(C118_PIANO_SHARE_URL);
+});
 on(window,'keydown',event=>{if(!usable()||event.target.closest?.('a,button,input,textarea'))return;if(event.code==='KeyE'&&!event.repeat){event.preventDefault();if(swimming?.state.active)return;if(seatedSeat)riseFromSeat();else enterSeat(true);return;}if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space','KeyC','ControlLeft','ControlRight'].includes(event.code)){event.preventDefault();if(!seatedSeat)keys.add(event.code);}if(event.code==='KeyL'&&!event.repeat){event.preventDefault();lock.toggle();}});
 on(window,'keyup',event=>keys.delete(event.code));
 on(window,'storage',event=>{if(event.key===CONTROL_PREFERENCES_KEY||event.key===null){controlsPreference=createControlPreferences({storage:getQualityStorage()}).value;applyStickScale();resetInput();}});

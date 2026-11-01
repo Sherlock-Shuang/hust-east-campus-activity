@@ -28,12 +28,12 @@ body.entry-cover-open #campus-music{visibility:hidden}
   rotate:-6deg;translate:0 .14em;animation:entry-ink-arrive 1600ms 800ms both;
 }
 #campus-entry-cover .entry-cover-actions{bottom:max(11%,calc(28px + env(safe-area-inset-bottom)));width:min(340px,calc(100% - 48px));min-height:78px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start}
-#campus-entry-cover .entry-cover-tagline{position:absolute;right:max(32px,env(safe-area-inset-right));bottom:max(25px,env(safe-area-inset-bottom));margin:0;pointer-events:none;font:400 clamp(23px,2.2vw,34px)/1.5 CampusBrushUI,"Kaiti SC",cursive;letter-spacing:.04em;color:#fff6e9;text-shadow:0 2px 14px #201526c9;animation:entry-start-arrive 1400ms 700ms both}
+#campus-entry-cover .entry-cover-tagline{position:absolute;right:max(32px,env(safe-area-inset-right));bottom:max(25px,env(safe-area-inset-bottom));margin:0;pointer-events:none;font:400 clamp(25px,2.35vw,36px)/1.5 CampusBrushUI,"Kaiti SC",cursive;letter-spacing:.07em;rotate:-3deg;transform-origin:right center;color:#fff6e9;text-shadow:0 2px 14px #201526c9;animation:entry-start-arrive 1400ms 700ms both}
 #campus-entry-cover .entry-cover-tagline-latin{font-family:CampusBrush,cursive;margin-right:.08em}
 #entry-cover-start{
   position:relative;min-width:228px;min-height:60px;padding:10px 32px 12px 36px;
   border:0;border-radius:0;outline-offset:8px;background:linear-gradient(90deg,transparent,#241a2c40 28%,#241a2c40 72%,transparent);
-  font-family:CampusBrushUI,"Kaiti SC",cursive;font-size:29px;font-weight:400;letter-spacing:.14em;
+  font-family:CampusBrushUI,"Kaiti SC",cursive;font-size:32px;font-weight:400;letter-spacing:.16em;rotate:-2deg;
   text-shadow:0 2px 12px #211222aa;transition:color 250ms,background 250ms,letter-spacing 300ms;
   animation:entry-start-arrive 900ms cubic-bezier(.2,.6,.3,1) both;
 }
@@ -56,14 +56,14 @@ body.entry-cover-open #campus-music{visibility:hidden}
 @keyframes entry-loading-breathe{from{opacity:.5}to{opacity:1}}
 @media(max-width:600px){
   #campus-entry-cover .entry-cover-art,#campus-entry-cover .entry-cover-film{object-position:54% center}
-  #campus-entry-cover .entry-cover-tagline{right:max(20px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));font-size:22px}
+  #campus-entry-cover .entry-cover-tagline{right:max(20px,env(safe-area-inset-right));bottom:max(24px,env(safe-area-inset-bottom));font-size:24px}
   #campus-entry-cover .entry-cover-content{inset:19% 16px auto}
   #campus-entry-cover .entry-cover-heading{font-size:clamp(72px,25vw,138px);gap:9px}
   #campus-entry-cover .entry-cover-online{font-size:clamp(24px,7.5vw,36px)}
   #campus-entry-cover .entry-cover-actions{bottom:max(12%,calc(40px + env(safe-area-inset-bottom)))}
 }
 @media(max-height:500px) and (orientation:landscape){
-  #campus-entry-cover .entry-cover-tagline{right:max(22px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom));font-size:21px}
+  #campus-entry-cover .entry-cover-tagline{right:max(22px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom));font-size:23px}
   #campus-entry-cover .entry-cover-content{top:8%}
   #campus-entry-cover .entry-cover-heading{font-size:106px}
   #campus-entry-cover .entry-cover-online{font-size:32px}

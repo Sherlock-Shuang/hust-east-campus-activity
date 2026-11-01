@@ -69,6 +69,16 @@ export function planOptoC118Interior(options = {}) {
     const z=stageFront+.8-i*.36,y=c.floorY+(i+1)*c.stageHeight/stairCount,polygon=rect(sign<0?-halfW+.9:stageHalfW,z-.36,sign<0?-stageHalfW:halfW-.9,z);
     stairs.push({id:`c118-stage-stair-${sign}-${i}`,polygon,surfaceY:y});floor(stairs.at(-1).id,polygon,y,'stage-stair');
   }
+  // A visible front approach lets presenters walk straight onto the stage.
+  // The top landing begins before the capsule touches the curved fascia, so
+  // the existing stage front stays solid without blocking the final riser.
+  const stageCrest=stageFront+.62,frontTread=.72/(stairCount-1);
+  for(let i=0;i<stairCount;i++){
+    const top=i===stairCount-1,z=stageCrest+.3+(stairCount-1-i)*frontTread;
+    const polygon=rect(-1.2,top?stageCrest-.25:z-frontTread,1.2,z),y=c.floorY+(i+1)*c.stageHeight/stairCount;
+    const stair={id:`c118-stage-front-stair-${i}`,polygon,surfaceY:y};
+    stairs.push(stair);floor(stair.id,polygon,y,'stage-stair');
+  }
   for(let row=0;row<c.rows;row++){
     const rear=row>=c.frontRows,z=firstRow+row*c.rowPitch+(rear?c.crossAisleWidth:0),previousY=row?seatRows.at(-1).y:c.floorY;
     const rise=row?(rear?c.rearRowRise:c.rowRise):0,y=previousY+rise,startZ=z-c.rowPitch*.5,endZ=z+c.rowPitch*.5;
@@ -127,7 +137,7 @@ export function planOptoC118Interior(options = {}) {
     stage:{polygon:stagePolygon,front:stageFront,back:stageBack,halfWidth:stageHalfW,height:c.floorY+c.stageHeight},
     doors,seats,seatRows,blocks,aisles,stairs,audienceSteps,terraces,crossAisle,rearLanding,guards,wallSegments,lectern,piano,colliders,walkSurfaces,spawn,exit,exits,
     viewpoints:{entry:{...spawn},westEntry:{...spawn},eastEntry:{x:halfW-1.05,y:c.floorY,z:legacyDoor.z,yaw:.5,pitch:.06},rearEntry,middle:{x:(centreHalf+sideInner)/2,y:crossAisle.y,z:crossAisle.z,yaw:0,pitch:-.19},
-      front:{x:0,y:c.floorY,z:stageFront+1.55,yaw:0,pitch:.14},frontDoor:{x:-halfW+1.05,y:c.floorY,z:legacyDoor.z,yaw:-1.1,pitch:.06},
+      front:{x:0,y:c.floorY,z:stageFront+1.9,yaw:0,pitch:.14},frontDoor:{x:-halfW+1.05,y:c.floorY,z:legacyDoor.z,yaw:-1.1,pitch:.06},
       rear:{x:(centreHalf+sideInner)/2,y:rearY,z:lastRow+1,yaw:0,pitch:-.25}},seatCount:seats.length,layoutEstimated:true};
   return options.withFoyer?connectOptoFoyer(plan):plan;
 }
