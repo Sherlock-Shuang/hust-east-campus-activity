@@ -2,13 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync, existsSync} from 'node:fs';
 import {createRequire} from 'node:module';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import path from 'node:path';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const source=process.env.TASAY_SOURCE || path.join(here,'.staging');
 const require=createRequire(path.join(source,'package.json'));
-const ts=require('typescript');
+const {transformSync}=createRequire(import.meta.url)('esbuild');
+// Model credentials and developer .env files are deliberately unavailable.
+// Preserve each source module's real URL for authored relative image imports.
+const testEnv={MODE:'test',DEV:false,PROD:false,SSR:false,BASE_URL:'/works/tasay/'};
 function modules() {
   const cache=new Map();
   return function load(name) {
@@ -16,7 +19,8 @@ function modules() {
     const file=[path.join(here,'ui-overrides/src'),path.join(source,'src')]
       .map(root=>path.join(root,name+'.ts')).find(existsSync);
     assert.ok(file,`Module exists: ${name}`);
-    const script=ts.transpileModule(readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
+    const script=transformSync(readFileSync(file,'utf8'),{loader:'ts',format:'cjs',target:'es2022',sourcefile:file,
+      define:{'import.meta.url':JSON.stringify(pathToFileURL(file).href),'import.meta.env':JSON.stringify(testEnv)}}).code;
     const module={exports:{}};cache.set(name,module);
     new Function('require','module','exports',script)(specifier=>{
       if(/\.(jpg|svg)$/.test(specifier))return {default:specifier};
@@ -38,6 +42,8 @@ function belongsTo(reply,pool) {
 }
 
 test('real send flow keeps the fifth scripted answer then uses chaos at exactly five rewrites',async t=>{
+  const network=t.mock.method(globalThis,'fetch',()=>{throw new Error('Unexpected network/model call in authored-reply test');});
+  const sockets=typeof globalThis.WebSocket==='function'?t.mock.method(globalThis,'WebSocket',()=>{throw new Error('Unexpected network socket in authored-reply test');}):null;
   const f=fixture();t.mock.method(Math,'random',()=>0);
   const {useAppStore}=f.load('app/store/useAppStore');
   useAppStore.getState().patchSession({...f.session,stage:'first_pollution',sendCount:6,pollutionCount:4,forcedPollutionRemaining:1,
@@ -52,6 +58,8 @@ test('real send flow keeps the fifth scripted answer then uses chaos at exactly 
   assert.equal(next.stage,'normal_chat');assert.equal(next.pollutionCount,5);
   assert.ok(belongsTo(next.chatHistory.slice(offset).filter(m=>m.role==='ta').map(m=>m.displayedText),f.copy.postThresholdChaos));
   assert.doesNotMatch(next.chatHistory.slice(offset).map(m=>m.displayedText).join(''),/你继续说|我有在认真看/);
+  assert.equal(network.mock.callCount(),0,'real reply flow must remain local, even if an API failure is caught');
+  if(sockets)assert.equal(sockets.mock.callCount(),0);
 });
 
 for(const lineCount of [1,2])test(`authored ${lineCount}-line replies are used without repeats, including after restoring saved history`,t=>{

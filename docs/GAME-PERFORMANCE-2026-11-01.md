@@ -66,7 +66,7 @@ npm run build:vercel
 
 ## 最终回归与作品生命周期
 
-最终Node24整套回归（校园、部署资产及图书馆集成）全部通过，结果见 `artifacts/performance-20261101/tests-final.log`；`npm run build:vercel` 成功，103个作品文件完成白名单物化，相关静态路由与manifest一致。原有大chunk和经典script提示仍保留，不把构建警告隐藏为零。
+最终Node24整套回归（校园、部署资产及图书馆集成）全部通过，1186项主回归通过，见 `artifacts/performance-20261101/tests-release.log`（其中追加恋人测试最初缺少构建依赖，6项测试在指定活动staging并修复测试加载器后单独全部通过）；`npm run build:vercel` 成功，104个作品文件完成白名单物化，相关静态路由与manifest一致。原有大chunk和经典script提示仍保留，不把构建警告隐藏为零。
 
 三个作品各实际进入、返回10次：图书馆单独完成10次循环；晚言与恋人在另一临时活动服务共完成20次。晚言需等真实NativeControls首帧，再通过真实画布点击和回车进入战斗；图书馆保留原Esc释放鼠标锁定后返回的操作。测试夹具因此更新，没有绕过原输入或伪造完成。
 
