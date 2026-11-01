@@ -5,3 +5,7 @@ CREATE TABLE IF NOT EXISTS activity_admin_sessions (token_hash TEXT PRIMARY KEY 
 CREATE TABLE IF NOT EXISTS activity_login_attempts (ip_hash TEXT PRIMARY KEY NOT NULL, count INTEGER NOT NULL, until INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS activity_connections (id TEXT PRIMARY KEY NOT NULL, expires_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS activity_connections_expiry_idx ON activity_connections (expires_at);
+
+CREATE TABLE IF NOT EXISTS activity_gomoku_players (audience_id TEXT PRIMARY KEY, nickname TEXT NOT NULL, joined_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, game_id TEXT);
+CREATE INDEX IF NOT EXISTS activity_gomoku_waiting ON activity_gomoku_players(game_id, joined_at);
+CREATE TABLE IF NOT EXISTS activity_gomoku_games (id TEXT PRIMARY KEY, black_id TEXT NOT NULL, white_id TEXT NOT NULL, black_name TEXT NOT NULL, white_name TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0, payload TEXT NOT NULL, updated_at INTEGER NOT NULL);

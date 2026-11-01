@@ -50,6 +50,7 @@ function fixture(t,{initialState={},initialPlayer=player(),savedPose,registered=
     createLiveClient:options=>{clientOptions=options;return client;},
     mountAnnouncementNotice:()=>({update(){},dispose(){}}),projectWallTextRects:()=>[],avoidWallText:()=>0,isEventActive:()=>activePortals,
     mountAudienceUI:(_root,options)=>{audienceOptions=options;return audience;},ACTIVITY_WORKS:[],mountMobileViewport:()=>()=>{},
+    createGomokuExperience:()=>({isOpen:false,nearby:false,refresh(){},tick(){},dispose(){}}),
     createSkyQrExperience:()=>({isOpen:false,refresh:value=>skyUpdates.push(value),dispose(){}}),
     nearbyInterior:()=>interior?entry:null,crossedInteriorDoor:()=>crossedInterior?entry:null,interiorReturnSnapshot:pose=>pose,interiorExitEntry:()=>entry,
     createActivityBridgeMessage:()=>({}),createCampusTsunami:()=>({active:false,resident:false,update:value=>{waves.push(value);return false;},setQuality:()=>false,releaseResources(){},dispose(){}}),

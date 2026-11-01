@@ -6,6 +6,7 @@ import {projectWallTextRects,avoidWallText} from './activity-label-layout.js';
 import {isEventActive} from './live-state.js';
 import {mountAudienceUI} from './audience-ui.js';
 import {ACTIVITY_WORKS} from './activity-catalog.js';
+import {createGomokuExperience} from './gomoku-ui.js';
 import {mountMobileViewport} from './mobile-viewport.js';
 import {createSkyQrExperience} from './sky-qr.js';
 import {nearbyInterior,crossedInteriorDoor,interiorReturnSnapshot,interiorExitEntry} from './building-interiors.js';
@@ -33,7 +34,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   container.append(root);
   const $=selector=>root.querySelector(selector),pause=$('.live-pause'),announcement=$('.live-announcement'),portalView=$('.live-portal-view'),prompt=$('.live-portal-prompt'),labels=$('.live-marker-labels');
   const worldGroup=new THREE.Group();worldGroup.name='activity-beacons';scene.add(worldGroup);
-  let client,audienceUI,skyQr,items=[],visualSignature='',uiSignature='',nearest=null,opened=null,frame=null,frameOrigin=null,lastPaint=0,lastUpdate=0,lastFrozen=false,connectedOnce=false,disposed=false;
+  let client,audienceUI,skyQr,gomoku,items=[],visualSignature='',uiSignature='',nearest=null,opened=null,frame=null,frameOrigin=null,lastPaint=0,lastUpdate=0,lastFrozen=false,connectedOnce=false,disposed=false;
   let loadingTimer,returnPose=null,restorePending=true,previousInteriorPosition=null,pendingInteriorReturn=null;
   const visited=new Set(),visiting=new Set(),visitRetry=new Map();
   let restoreFocus=null,wasPaused=false,coverWasOpen=entryCoverOpen();
@@ -98,7 +99,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     return player;
   }
   function updateFrozen(){
-    const frozen=entryCoverOpen()||!!client?.state.paused||civilization.active||!!opened||!!skyQr?.isOpen||!audienceUI?.registered;
+    const frozen=entryCoverOpen()||!!client?.state.paused||civilization.active||!!opened||!!gomoku?.isOpen||!!skyQr?.isOpen||!audienceUI?.registered;
     onMusicStateChange({registered:!!audienceUI?.registered,experience:opened?(opened.workId||opened.kind||opened.id):null,
       tsunamiId:client?.state.c118Flood?.id||null,
       // Keep the score under the civilization end card; host pauses still
@@ -116,7 +117,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     updateRuntimeBudget();
   }
   function bridge(){
-    if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage(createActivityBridgeMessage({opened,state:client.state,serverTime:client.now(),locallyPaused:entryCoverOpen()||!!skyQr?.isOpen||civilization.active}),frameOrigin);
+    if(frame?.contentWindow&&frameOrigin)frame.contentWindow.postMessage(createActivityBridgeMessage({opened,state:client.state,serverTime:client.now(),locallyPaused:entryCoverOpen()||!!gomoku?.isOpen||!!skyQr?.isOpen||civilization.active}),frameOrigin);
   }
   function loading(message,status='loading'){
     const el=$('.live-portal-loading');el.hidden=!message;el.dataset.status=status;el.textContent=message;
@@ -138,7 +139,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   }
   async function openPortal(portal){
     if(portal.kind==='building-interior')return openInterior(portal);
-    if(entryCoverOpen()||client.state.paused||civilization.active||opened)return;
+    if(entryCoverOpen()||client.state.paused||civilization.active||opened||gomoku?.isOpen)return;
     if(!audienceUI.registered)return notify('请先填写昵称参与活动');
     if(!client.connected)return notify('活动连接恢复后再进入');
     const current=client.state.portals.find(p=>p.id===portal.id);
@@ -181,7 +182,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     updateFrozen();$('.live-portal-bar button').focus();invalidate();
   }
   function openInterior(requested,crossedFrom=null){
-    if(entryCoverOpen()||client.state.paused||civilization.active||opened||skyQr?.isOpen||!audienceUI.registered)return;
+    if(entryCoverOpen()||client.state.paused||civilization.active||opened||gomoku?.isOpen||skyQr?.isOpen||!audienceUI.registered)return;
     const player=getPlayer(),current=player?.active&&(crossedFrom?crossedInteriorDoor(getInteriors(),crossedFrom,player.state):nearbyInterior(getInteriors(),player.state));
     if(!current||current.id!==requested.id)return notify('请步行靠近光电楼开启的玻璃门');
     const attemptId=createClientId(),url=new URL(current.url,location.href);
@@ -210,6 +211,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       return;
     }
     if(event.defaultPrevented||event.repeat||event.ctrlKey||event.metaKey||event.altKey)return;
+    if(event.code==='Enter'&&gomoku?.nearby&&!client.state.paused&&!opened&&event.target===canvas){event.preventDefault();gomoku.tryOpen();return;}
     if(event.code==='Enter'&&nearest&&!client.state.paused&&!opened&&event.target===canvas){event.preventDefault();openPortal(nearest);}
   }
   window.addEventListener('keydown',keyboard);
@@ -285,16 +287,16 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     const signature=JSON.stringify([markers,portals]);
     if(signature!==visualSignature){visualSignature=signature;rebuild(markers,portals);}
     if(opened&&!frame&&opened.kind!=='building-interior'){const current=portals.find(p=>p.id===opened.id);if(!current||current.url!==opened.url)closePortal('活动入口已关闭，请留意主持人通知');}
-    skyQr?.refresh({visible:state.skyQrVisible===true,portalOpen:!!opened,blocked:coverOpen||!audienceUI?.registered});
+    skyQr?.refresh({visible:state.skyQrVisible===true,portalOpen:!!opened,blocked:coverOpen||!!gomoku?.isOpen||!audienceUI?.registered});
     if(updateTsunami())invalidate();
-    portalView.inert=coverOpen||state.paused||!!skyQr?.isOpen;
+    portalView.inert=coverOpen||state.paused||!!gomoku?.isOpen||!!skyQr?.isOpen;
     const nextUI=JSON.stringify([state.paused,state.pauseMessage,activeAnnouncement,state.phase,state.skyQrVisible,state.c118Flood,state.c118Screen]);
     if(nextUI!==uiSignature||force){
       uiSignature=nextUI;pause.hidden=!state.paused;pause.querySelector('p').textContent=state.pauseMessage||'请稍候，活动即将继续';
       announcementNotice.update(activeAnnouncement);
       root.classList.toggle('is-paused',state.paused);updateFrozen();bridge();invalidate();
       audienceUI?.phase(state.phase);
-      portalView.inert=coverOpen||state.paused||!!skyQr?.isOpen;
+      portalView.inert=coverOpen||state.paused||!!gomoku?.isOpen||!!skyQr?.isOpen;
       if(!coverOpen&&state.paused&&!wasPaused){document.exitPointerLock?.();pause.focus({preventScroll:true});}
       else if(!coverOpen&&!state.paused&&wasPaused&&civilization.active)civilizationContinue.focus({preventScroll:true});
       wasPaused=state.paused;
@@ -303,14 +305,14 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     if(restorePending&&audienceUI?.registered&&!lastFrozen&&player){
       restorePending=false;try{const stored=JSON.parse(sessionStorage.getItem('campus-return-pose'));if(stored?.audienceId===audienceUI.client.identity.id)syncSkyQrPlayer(player)?.restoreActivityPose?.(stored.pose);}catch{}
     }
-    if(!coverOpen&&player?.active&&audienceUI?.registered&&client.connected&&!state.paused&&!civilization.active&&!opened){
+    if(!coverOpen&&player?.active&&audienceUI?.registered&&client.connected&&!state.paused&&!civilization.active&&!opened&&!gomoku?.isOpen){
       let distance=Infinity;
       for(const portal of portals){const d=Math.hypot(player.state.x-portal.x,player.state.z-portal.z);if(d<=portal.radius&&player.state.y<12){
         if(d<distance){distance=d;nearest=portal;}
         if(!visited.has(portal.id)&&!visiting.has(portal.id)&&Date.now()>(visitRetry.get(portal.id)||0)){visiting.add(portal.id);record('visit',{pointId:portal.id,position:position()},{required:true}).then(()=>{visited.add(portal.id);visitRetry.delete(portal.id);}).catch(()=>{visitRetry.set(portal.id,Date.now()+15000);}).finally(()=>visiting.delete(portal.id));}
       }}
     }
-    const interiorEnabled=!coverOpen&&!document.hidden&&player?.active&&audienceUI?.registered&&!state.paused&&!civilization.active&&!opened&&!skyQr?.isOpen;
+    const interiorEnabled=!coverOpen&&!document.hidden&&player?.active&&audienceUI?.registered&&!state.paused&&!civilization.active&&!opened&&!gomoku?.isOpen&&!skyQr?.isOpen;
     if(interiorEnabled){
       const interiors=getInteriors(),currentPosition={...player.state};
       const previousPosition=previousInteriorPosition,crossed=crossedInteriorDoor(interiors,previousPosition,currentPosition);
@@ -318,7 +320,8 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       if(crossed){openInterior(crossed,previousPosition);nearest=null;previousInteriorPosition=null;}
       else if(!nearest)nearest=nearbyInterior(interiors,player.state);
     }else previousInteriorPosition=null;
-    prompt.hidden=!nearest;if(nearest){prompt.querySelector('strong').textContent=nearest.label;prompt.querySelector('span').textContent=nearest.kind==='building-interior'?'室内参观':'体验入口';prompt.querySelector('small').textContent=nearest.kind==='building-interior'?'走进门内 / Enter / 点击进入':'Enter 进入';}
+    gomoku?.refresh({paused:coverOpen||!!state.paused||civilization.active,registered:!!audienceUI?.registered,blocked:coverOpen||!!opened||!!skyQr?.isOpen});
+    prompt.hidden=!nearest||!!gomoku?.isOpen;if(nearest){prompt.querySelector('strong').textContent=nearest.label;prompt.querySelector('span').textContent=nearest.kind==='building-interior'?'室内参观':'体验入口';prompt.querySelector('small').textContent=nearest.kind==='building-interior'?'走进门内 / Enter / 点击进入':'Enter 进入';}
     if(coverWasOpen&&!coverOpen){
       // Choose an existing accessible gate only after the cover has left.
       // Returning visitors must not have a hidden nickname/host layer steal
@@ -338,6 +341,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   }});
   audienceUI=mountAudienceUI(root,{onChange(){queueMicrotask(()=>{updateFrozen();refresh(true);});}});
   skyQr=createSkyQrExperience({THREE,scene,root,invalidate,onOpenChange(){updateFrozen();refresh(true);}});
+  gomoku=createGomokuExperience({THREE,scene,camera,canvas,root,getPlayer,getAudience:()=>audienceUI.client,onOpenChange(){updateFrozen();refresh(true);},invalidate,notify});
   updateFrozen();
   const pagehide=()=>{if(opened?.openingStarted)attemptEvent('returned',{}, {keepalive:true});};window.addEventListener('pagehide',pagehide);
   const timer=setInterval(()=>refresh(),200);
@@ -351,6 +355,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     }},
     tick(now){
       if(entryCoverOpen())return false;
+      gomoku.tick();
       // The shared catastrophe animates even when the host has no map markers.
       // A hidden/embedded campus submits no wave work while C118 renders itself.
       let tsunamiChanged=false;
@@ -379,6 +384,6 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       if(client.state.paused||civilization.active||reduced?.matches)return tsunamiChanged;
       if(now-lastPaint>=100){lastPaint=now;return true;}return tsunamiChanged;
     },
-    dispose(){disposed=true;announcementNotice.dispose();disposeMobileViewport();clearInterval(timer);client.dispose();closePortal();skyQr.dispose();tsunamiNotice.dispose();campusTsunami.dispose();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},
+    dispose(){disposed=true;announcementNotice.dispose();disposeMobileViewport();clearInterval(timer);client.dispose();closePortal();skyQr.dispose();gomoku.dispose();tsunamiNotice.dispose();campusTsunami.dispose();audienceUI.dispose();setInert(false);setSuspended(false);window.removeEventListener('keydown',keyboard);window.removeEventListener('message',message);window.removeEventListener('pagehide',pagehide);document.removeEventListener('visibilitychange',visibility);clearBeacons();worldGroup.removeFromParent();root.remove();},
   };
 }

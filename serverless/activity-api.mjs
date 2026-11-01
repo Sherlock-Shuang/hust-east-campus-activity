@@ -7,6 +7,7 @@ import {ACTIVITY_WORKS,activityPortals} from '../src/activity-catalog.js';
 import {createPublicStateCache} from './public-state-cache.mjs';
 import {createSharedActivityStream} from './shared-activity-stream.mjs';
 import {createAudienceRecord,touchAudience,applyAudienceEvent,summarizeAudience,audienceDetail,aggregateAudiences,normalizeNickname,validId,PRESENCE_TTL} from '../server/audience-store.mjs';
+import {createGomokuStore} from '../server/gomoku-store.mjs';
 
 const ADMIN_COOKIE='campus_admin',AUDIENCE_COOKIE='campus_audience';
 const encoder=new TextEncoder();
@@ -233,6 +234,18 @@ export async function handleActivityAPI(request,env){
       // for CAS/admission and all GET state/admin/authentication remain fresh.
       publicStateCaches.get(env.DB)?.publish({revision:next.revision,payload:JSON.stringify(next)});
       return json({state:next,serverTime:Date.now(),...await counts(env)});
+    }
+    if(path==='/api/audience/gomoku'){
+      const store=createGomokuStore({db:env.DB});
+      if(request.method==='GET'){
+        const record=await authenticatedAudience(request,env);if(!record)throw error(401,'请先输入昵称加入活动');
+        return json(await store.snapshot(record));
+      }
+      if(request.method==='POST'){
+        const record=await requireAudience(request,env),input=await body(request),live=JSON.parse((await stateRow(env)).payload);
+        return json(await store.action(record,input,{paused:live.paused}));
+      }
+      throw error(405,'不支持的请求方式');
     }
     if(request.method==='GET'&&path==='/api/audience/me'){
       const record=await authenticatedAudience(request,env);return json(record?{audience:summarizeAudience(record),csrfToken:await audienceCsrf(cookie(request,AUDIENCE_COOKIE))}:{audience:null});

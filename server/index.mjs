@@ -10,6 +10,7 @@ import {reconcileC118Screen} from '../src/c118-screen-state.js';
 import {createAudienceStore,createAudienceData,validateAudienceData,summarizeAudience} from './audience-store.mjs';
 import {createWorkRouter} from '../integration/work-router.mjs';
 import {ACTIVITY_WORKS,activityPortals} from '../src/activity-catalog.js';
+import {createGomokuStore} from './gomoku-store.mjs';
 
 const projectRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.geojson':'application/geo+json; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.woff2':'font/woff2','.ico':'image/x-icon','.mp4':'video/mp4','.m4a':'audio/mp4'};
@@ -55,6 +56,12 @@ export async function createLiveServer(options={}) {
   }});
   const sessions=new Map(),loginAttempts=new Map(),clients=new Set();
   let closed=false,queue=Promise.resolve(),vite;
+  let gomokuDatabase,gomokuPending;
+  const gomoku=()=>gomokuPending??=(async()=>{
+    const {openGomokuDatabase}=await import('./gomoku-local.mjs');
+    gomokuDatabase=openGomokuDatabase(path.join(dataDir,'gomoku.sqlite'));
+    return createGomokuStore({db:gomokuDatabase,now});
+  })();
   const sessionHours=8,configuredOrigin=options.publicOrigin||process.env.PUBLIC_ORIGIN||null;
   const workRouter=options.workRouter||await createWorkRouter({assetsRoot:options.assetsRoot||path.join(rootDir,'work-assets'),env:options.workEnv||process.env,publicOrigin:configuredOrigin});
   if(configuredOrigin&&new URL(configuredOrigin).origin!==configuredOrigin)throw new Error('PUBLIC_ORIGIN 必须是完整来源，例如 https://campus.example.com，不带路径或结尾斜杠');
@@ -103,6 +110,17 @@ export async function createLiveServer(options={}) {
     finally{await unlink(temp).catch(()=>{});}
   }
   async function handleApi(req,res,url){
+    if(url.pathname==='/api/audience/gomoku'){
+      if(req.method==='GET'){
+        const record=audienceFor(req);if(!record)throw httpError(401,'请先输入昵称加入活动');
+        json(res,200,await (await gomoku()).snapshot(record));return;
+      }
+      if(req.method==='POST'){
+        const record=requireAudience(req),input=await readJson(req);
+        json(res,200,await (await gomoku()).action(record,input,{paused:state.paused}));return;
+      }
+      throw httpError(405,'不支持的请求方式');
+    }
     if(req.method==='GET'&&url.pathname==='/api/audience/me'){
       const record=audienceFor(req);json(res,200,record?{audience:summarizeAudience(record,{now:now()}),csrfToken:audienceCsrf(req)}:{audience:null});return;
     }
@@ -233,7 +251,7 @@ export async function createLiveServer(options={}) {
   return {
     server,getState:()=>structuredClone(state),getAudienceData:()=>audiences.snapshot(),dataDir,
     async listen(port=5178,host='127.0.0.1'){await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>{server.off('error',reject);resolve();});});return server.address();},
-    async close(){closed=true;clearInterval(heartbeat);for(const client of clients)client.end();clients.clear();await queue;await audiences.flush();await vite?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));sessions.clear();},
+    async close(){closed=true;clearInterval(heartbeat);for(const client of clients)client.end();clients.clear();await queue;await audiences.flush();await vite?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));gomokuDatabase?.close();sessions.clear();},
   };
 }
 

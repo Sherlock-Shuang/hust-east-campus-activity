@@ -1,5 +1,7 @@
+import {GOMOKU_POINT} from './gomoku-rules.js';
 // Explicit shared tour links only. The normal URL still starts at 韵苑食堂.
 export function campusLandmarkArrival(campus,place){
+  if(place==='gomoku'&&campus)return {x:GOMOKU_POINT.x,y:.14,z:GOMOKU_POINT.z+6,yaw:0,pitch:-.16};
   if(place==='life-science'&&campus?.lifeScienceViewpoints?.exterior)return {...campus.lifeScienceViewpoints.exterior};
   if(place==='life-science-entrance'&&campus?.lifeScienceViewpoints?.entrance)return {...campus.lifeScienceViewpoints.entrance};
   if(['cbd','cbd-zhou','cbd-oxygen','cbd-yoshinoya','canteen-shops'].includes(place)&&campus?.commercialStreetViewpoints?.[place])return {...campus.commercialStreetViewpoints[place]};
