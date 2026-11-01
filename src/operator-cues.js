@@ -1,11 +1,14 @@
 import { SCRIPT } from './operator-cue-data.js';
 
-const STORAGE_KEY = 'hust-activity-script-edits-v1';
+// A revised script can reorder numbered cues. Keep previous rehearsal edits
+// under their original key instead of applying them to unrelated new lines.
+const STORAGE_KEY = `hust-activity-script-edits-v${SCRIPT.version}`;
 const ROLES = { host: '我说的话', codex: 'Codex 回复', announcement: '校园公告', direction: '舞台提示' };
 const MAX_TEXT = 16000;
 const knownIds = new Set(SCRIPT.entries.map(entry => entry.id));
 
 export function validateEdits(value) {
+  if (value?.version !== undefined && value.version !== SCRIPT.version) throw new Error('这是其他版本的剧本修改，请使用当前版本导出的文件。');
   if (!value || value.version !== SCRIPT.version || typeof value.edits !== 'object' || !value.edits || Array.isArray(value.edits)) throw new Error('台词文件格式不正确');
   const edits = Object.create(null);
   for (const [id, text] of Object.entries(value.edits)) {
@@ -70,7 +73,7 @@ export function mountCueSidebar({ host, toggle, onUse, actionRole, actionLabel }
   host.setAttribute('aria-label', '活动台词');
   const heading = make('div', 'cue-heading'), headingCopy = make('div');
   const title = make('h2', '', '活动台词'); title.id = 'cue-title';
-  headingCopy.append(make('p', 'cue-eyebrow', 'AI竟可以这么玩！'), title);
+  headingCopy.append(make('p', 'cue-eyebrow', `${SCRIPT.title}${SCRIPT.updatedAt ? ` · ${SCRIPT.updatedAt} 更新` : ''}`), title);
   heading.append(headingCopy, button('收起', () => setOpen(false), 'cue-close'));
   const filters = make('div', 'cue-filters');
   const search = make('input'); search.type = 'search'; search.placeholder = '搜索台词'; search.setAttribute('aria-label', '搜索台词');
