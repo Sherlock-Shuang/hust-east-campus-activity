@@ -6,17 +6,19 @@
     <meta name="theme-color" content="#e9eeeb" />
     <link rel="preload" as="image" href="/images/entry-cover/east-campus-sunset-v1.webp" fetchpriority="high" />
     <link rel="preload" as="font" href="/fonts/entry-brush-v2.woff2" type="font/woff2" crossorigin />
+    <link rel="preload" as="font" href="/fonts/entry-brush-readable-v1.woff2" type="font/woff2" crossorigin />
     <style>
       @font-face{font-family:CampusBrush;src:url("/fonts/entry-brush-v2.woff2") format("woff2");font-weight:400;font-display:block}
+      @font-face{font-family:CampusBrushUI;src:url("/fonts/entry-brush-readable-v1.woff2") format("woff2");font-weight:400;font-display:block}
       #campus-entry-cover{position:fixed;inset:0;z-index:1000;overflow:hidden;background:#2c2638;color:#fff4df}
       #campus-entry-cover[hidden],#entry-cover-start[hidden],#entry-cover-status[hidden]{display:none!important}
       body.entry-cover-open>header,body.entry-cover-open>#viewport{visibility:hidden;pointer-events:none}
       .entry-cover-art{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
       .entry-cover-film{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;pointer-events:none}
-      .entry-cover-content{position:absolute;inset:24% 0 auto;text-align:center;font-family:system-ui,sans-serif}
-      .entry-cover-heading{font-family:CampusBrush,cursive;font-size:clamp(72px,10.5vw,176px);font-weight:400;letter-spacing:.13em;margin:0}
+      .entry-cover-content{position:absolute;inset:17% 0 auto;text-align:center;font-family:system-ui,sans-serif}
+      .entry-cover-heading{font-family:CampusBrush,cursive;font-size:clamp(72px,12.5vw,210px);font-weight:400;letter-spacing:.13em;margin:0}
       .entry-cover-online{font-size:.4em;letter-spacing:.02em;font-weight:300}
-      .entry-cover-tagline{position:absolute;right:32px;bottom:25px;margin:0;font:400 26px/1.5 CampusBrush,cursive;color:#fff6e9}
+      .entry-cover-tagline{position:absolute;right:32px;bottom:25px;margin:0;font:400 26px/1.5 CampusBrushUI,cursive;color:#fff6e9}
       .entry-cover-actions{position:absolute;bottom:max(12%,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);text-align:center}
       #entry-cover-start{font:500 17px/1.5 system-ui,sans-serif;letter-spacing:.3em;color:inherit;white-space:nowrap;padding:16px 44px;border:1px solid #fff3d980;background:#24202c55;cursor:pointer}
       #entry-cover-status{display:block;min-height:20px;margin-top:16px;font:12px/1.6 system-ui,sans-serif;letter-spacing:.12em;color:#f8e9d5cc}
@@ -41,7 +43,7 @@
         <button id="entry-cover-start" type="button" hidden disabled><span>开始体验</span></button>
         <span id="entry-cover-status" role="status" aria-live="polite">正在准备校园</span>
       </div>
-      <p class="entry-cover-tagline">AI竟然可以这样玩</p>
+      <p class="entry-cover-tagline"><span class="entry-cover-tagline-latin">AI</span>竟然可以这样玩</p>
     </section>
     <header inert data-entry-cover-inert>
       <div class="identity">
