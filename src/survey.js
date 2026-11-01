@@ -729,7 +729,7 @@ async function loadDataset(data, manifest = {}) {
   });
   await yieldBrowserTask();
   scene.add(campus.group);
-  fieldGroupQr=createFieldGroupQr({THREE,scene,model,invalidate:()=>{needsRender=true;}});
+  fieldGroupQr=createFieldGroupQr({THREE,scene,model,frame,geoToLocal,host:container,canvas,getPlayer:()=>commute?.player,anisotropy:renderer.capabilities.getMaxAnisotropy(),invalidate:()=>{needsRender=true;}});
   eastNineBuildersPoster=createEastNineBuildersPoster({THREE,scene,model,frame,geoToLocal,host:container,canvas,getPlayer:()=>commute?.player,anisotropy:renderer.capabilities.getMaxAnisotropy(),invalidate:()=>{needsRender=true;}});
   riverTerrain=applyRiverTerrain(THREE,{model,datum,surfaces});
   scene.add(riverTerrain.group);
@@ -1140,7 +1140,7 @@ function render(now) {
     const overviewLift=Math.max(0,camera.position.y-120);
     atmosphere.update(camera,{overviewLift});
     campus?.update?.(camera, { viewportHeight,detailDistanceScale:qualityBudget.detailDistanceScale });
-    fieldGroupQr?.update(camera,{visible:layerSettings.symbolic&&layerSettings.building&&!liveControl?.portalOpen});
+    fieldGroupQr?.update(camera,{visible:layerSettings.symbolic&&layerSettings.building&&!liveControl?.portalOpen,interactive:!liveFrozen});
     eastNineBuildersPoster?.update(camera,{visible:layerSettings.symbolic&&layerSettings.building&&!liveControl?.portalOpen,interactive:!liveFrozen});
     if(now-lastLabelAt>=100){updateLabels();lastLabelAt=now;}
     if(!frozen)waterDetails?.renderReflection(renderer,scene,camera,now);

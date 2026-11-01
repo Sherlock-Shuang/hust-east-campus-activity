@@ -10,18 +10,20 @@ import assert from 'node:assert/strict';
 
 const arg=(key,fallback)=>{const index=process.argv.indexOf(key);return index<0?fallback:process.argv[index+1];};
 const root=path.resolve(arg('--root','.')),out=path.resolve(arg('--output','artifacts/eastnine-builders-card/browser'));
-const mobile=arg('--profile','desktop')==='mobile';
+const mobile=arg('--profile','desktop')==='mobile',isGroup=arg('--card','xiaohongshu')==='group';
+const cardSpec=isGroup?{image:'/images/activity/hust-ai-builders-group.jpg',hash:'58711c2ec5d189070bec4a2f031628498158dea23c97c85ca25ab80172974365',bytes:548373,width:1284,height:2289,repeat:[.84,.59],offset:[.08,.25],panel:'hust-ai-builders-group-qr',selector:'.east-nine-group-original'}:{image:'/images/activity/hust-ai-builders-xiaohongshu.jpg',hash:'f8f3922bef8c7d6f6705b9c6a5561c61f2ebea67d5366dcb6782be2c8ba12779',bytes:85529,width:987,height:1347,repeat:[1,1],offset:[0,0],panel:'east-nine-builders-original-image',selector:'.east-nine-builders-original:not(.east-nine-group-original)'};
 const requireFromRoot=createRequire(path.join(root,'package.json'));
 const {build}=await import(pathToFileURL(requireFromRoot.resolve('vite')));
 const {createLiveServer}=await import(pathToFileURL(path.join(root,'server/index.mjs')));
 const {createDefaultLiveState}=await import(pathToFileURL(path.join(root,'src/live-state.js')));
 const {chromium}=await import(pathToFileURL(path.join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs')));
-const imagePath='/images/activity/hust-ai-builders-xiaohongshu.jpg';
-const expectedHash='f8f3922bef8c7d6f6705b9c6a5561c61f2ebea67d5366dcb6782be2c8ba12779';
+const imagePath=cardSpec.image,expectedHash=cardSpec.hash;
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const work=await mkdtemp(path.join(tmpdir(),'east-nine-builders-poster-')),dist=path.join(work,'dist'),dataDir=path.join(work,'data');
 
 const injection=`
+const posterQaSpec=${JSON.stringify(cardSpec)};
+const posterQaExperience=()=>${isGroup?'fieldGroupQr':'eastNineBuildersPoster'};
 const posterQaVisible=o=>{for(let p=o;p;p=p.parent)if(!p.visible)return false;return true;};
 const posterQaRect=element=>{const r=element?.getBoundingClientRect();return r?{x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom}:null;};
 const posterQaPose=p=>({x:p.x,y:p.y,z:p.z,yaw:p.yaw});
@@ -31,9 +33,9 @@ function posterQaObject(name){
  return{count:matches.length,uuid:object.uuid,visible:posterQaVisible(object),matrix:object.matrixWorld.toArray(),sourceId:object.userData.sourceId};
 }
 globalThis.__eastNinePosterQA={
- ready:()=>!!eastNineBuildersPoster?.placement&&!!commute?.player&&canvas.dataset.campusDetails==='ready'&&!liveControl?.frozen,
+ ready:()=>!!posterQaExperience()?.placement&&!!commute?.player&&canvas.dataset.campusDetails==='ready'&&!liveControl?.frozen,
  view(kind='approach'){
-  const pose=kind==='far'?{...getCampusPlayerSpawn(model),y:.14,pitch:0}:eastNineBuildersPoster.placement[kind];
+  const pose=kind==='far'?{...getCampusPlayerSpawn(model),y:.14,pitch:0}:posterQaExperience().placement[kind];
   if(!pose)throw Error('Missing real walking viewpoint: '+kind);
   commute.setSuspended(false);animation=null;const result=commute.player.enterAt(pose);
   if(!result?.ok)throw Error('Walking viewpoint is inaccessible: '+kind+': '+result?.reason);
@@ -41,21 +43,21 @@ globalThis.__eastNinePosterQA={
  },
  turnAway(){const pose={...posterQaPose(commute.player.state),yaw:commute.player.state.yaw+Math.PI,pitch:0};const result=commute.player.enterAt(pose);if(!result?.ok)throw Error(result?.reason);needsRender=true;return pose;},
  read(){
-  const experience=eastNineBuildersPoster,item=experience.placement,group=experience.group,panel=group.getObjectByName('east-nine-builders-original-image'),texture=panel?.material?.map;
+  const experience=posterQaExperience(),item=experience.placement,group=experience.group,panel=group.getObjectByName(posterQaSpec.panel),texture=panel?.material?.map;
   group.updateWorldMatrix(true,true);camera.updateMatrixWorld(true);
   const link=experience.link,rect=posterQaRect(link),saved=commute.player.captureActivityPose(),point=(u,v)=>new THREE.Vector3(item.x+item.nz*item.width*u,item.y+item.height*v,item.z-item.nx*item.width*u);
   const screen=[[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]].map(([u,v])=>point(u,v).project(camera).toArray());
-  const qrScreen=[[680,1040],[900,1040],[900,1260],[680,1260]].map(([x,y])=>point(x/987-.5,.5-y/1347).project(camera).toArray());
+  const r=item.qrRegion,qrScreen=[[r.left,r.top],[r.right,r.top],[r.right,r.bottom],[r.left,r.bottom]].map(([u,v])=>point(u-.5,.5-v).project(camera).toArray());
   const mobileRoot=document.getElementById('mobile-controls');
   const controls=[...document.querySelectorAll('#mobile-joystick, #mobile-controls button, .transport-selector button')].filter(element=>{const r=element.getBoundingClientRect(),s=getComputedStyle(element);return !element.hidden&&r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';}).map(element=>({id:element.id||element.dataset.mobileAction||element.dataset.mobileHold||element.textContent.trim(),rect:posterQaRect(element)}));
   const center=rect&&document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);
-  return{placement:item,state:experience.state,nearby:experience.nearby,group:posterQaObject(group.name),panel:{uuid:panel?.uuid,side:panel?.material?.side,texture:!!texture,width:texture?.image?.naturalWidth??texture?.image?.width,height:texture?.image?.naturalHeight??texture?.image?.height,repeat:texture?.repeat.toArray(),offset:texture?.offset.toArray(),src:texture?.image?.currentSrc||texture?.image?.src},screen,qrScreen,
-   front:(camera.position.x-item.x)*item.nx+(camera.position.z-item.z)*item.nz,link:{exists:!!link,hidden:link?.hidden,href:link?.href,target:link?.target,rel:link?.rel,text:link?.textContent,rect,topmost:!!link&&(center===link||link.contains(center)),count:document.querySelectorAll('.east-nine-builders-original').length},
+  return{placement:item,state:experience.state,nearby:experience.nearby,group:posterQaObject(group.name),panel:{uuid:panel?.uuid,side:panel?.material?.side,lit:!!panel?.material?.isMeshStandardMaterial,toneMapped:panel?.material?.toneMapped,fog:panel?.material?.fog,emissive:panel?.material?.emissive?.getHex(),receiveShadow:panel?.receiveShadow,texture:!!texture,width:texture?.image?.naturalWidth??texture?.image?.width,height:texture?.image?.naturalHeight??texture?.image?.height,repeat:texture?.repeat.toArray(),offset:texture?.offset.toArray(),src:texture?.image?.currentSrc||texture?.image?.src},screen,qrScreen,
+   front:(camera.position.x-item.x)*item.nx+(camera.position.z-item.z)*item.nz,link:{exists:!!link,hidden:link?.hidden,href:link?.href,target:link?.target,rel:link?.rel,text:link?.textContent,rect,topmost:!!link&&(center===link||link.contains(center)),count:document.querySelectorAll(posterQaSpec.selector).length},
    player:{...posterQaPose(commute.player.state),active:commute.player.active,mode:commute.player.state.mode,view:saved?.view},camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray(),fov:camera.fov},portalOpen:!!liveControl?.portalOpen,host:{paused:liveControl?.state?.paused,skyQrVisible:liveControl?.state?.skyQrVisible,phase:liveControl?.state?.phase},
-   legacy:{field:posterQaObject('yunyuan16-group-qr'),sky:posterQaObject('activity-sky-qr')},mobile:{visible:!!mobileRoot&&!mobileRoot.hidden,view:mobileRoot?.dataset.view,coarse:matchMedia('(any-pointer: coarse)').matches,controls},viewport:{width:innerWidth,height:innerHeight},mode:atmosphere.mode};
+   legacy:{oldRoof:posterQaObject('yunyuan16-group-qr'),field:posterQaObject('east-nine-group-poster'),sky:posterQaObject('activity-sky-qr')},mobile:{visible:!!mobileRoot&&!mobileRoot.hidden,view:mobileRoot?.dataset.view,coarse:matchMedia('(any-pointer: coarse)').matches,controls},viewport:{width:innerWidth,height:innerHeight},mode:atmosphere.mode};
  },
  probes(){
-  const item=eastNineBuildersPoster.placement,n=new THREE.Vector3(item.nx,0,item.nz),eye=camera.position.clone(),support=[],blocked=[];
+  const item=posterQaExperience().placement,n=new THREE.Vector3(item.nx,0,item.nz),eye=camera.position.clone(),support=[],blocked=[];
   campus.group.updateMatrixWorld(true);
   for(const u of[-.5,-.25,0,.25,.5])for(const v of[-.5,-.25,0,.25,.5]){
    const target=new THREE.Vector3(item.x+item.nz*u*item.width,item.y+v*item.height,item.z-item.nx*u*item.width);
@@ -68,7 +70,7 @@ globalThis.__eastNinePosterQA={
  }
 };`;
 
-const report={passed:false,root,mobileViewport:mobile,startedAt:new Date().toISOString(),errors:[],consoleErrors:[],shaderErrors:[],resourceErrors:[],screenshots:[],scope:'Isolated production build and temporary audience. Real first-person walking viewpoints, a building-height north-wall wrap with reversible window-detail masking, original unmodified portrait texture and native image-tab link, popup return, static wall transform, existing QR objects, distance gates, day/night screenshots, and optional touch/viewport emulation. Mobile results are browser emulation, not a physical-phone GPU test or an assertion that an external Xiaohongshu app opens.'};
+const report={passed:false,root,card:isGroup?'group':'xiaohongshu',mobileViewport:mobile,startedAt:new Date().toISOString(),errors:[],consoleErrors:[],shaderErrors:[],resourceErrors:[],screenshots:[],scope:'Isolated production build and temporary audience. Real first-person walking viewpoints, a building-height north-wall wrap with reversible window-detail masking, original unmodified portrait texture and native image-tab link, popup return, static wall transform, existing QR objects, distance gates, day/night screenshots, and optional touch/viewport emulation. Mobile results are browser emulation, not a physical-phone GPU test or an assertion that an external Xiaohongshu app opens.'};
 let app,browser,context,page;
 await mkdir(out,{recursive:true});
 const read=()=>page.evaluate(()=>__eastNinePosterQA.read());
@@ -88,7 +90,8 @@ function assertStatic(before,after){
 }
 function assertCard(state,{full=false}={}){
   assert.equal(state.state,'ready');assert.equal(state.group.visible,true);assert.equal(state.group.count,1);assert.equal(state.panel.side,0,'The wall uses a front-facing plane');
-  assert.equal(state.panel.width,987);assert.equal(state.panel.height,1347);assert.deepEqual(state.panel.repeat,[1,1]);assert.deepEqual(state.panel.offset,[0,0]);
+  assert.ok(state.panel.lit&&state.panel.toneMapped&&state.panel.fog&&state.panel.receiveShadow,'The print must follow the campus lighting and shadows');assert.equal(state.panel.emissive,0,'The wall print is not a glowing screen');
+  assert.equal(state.panel.width,cardSpec.width);assert.equal(state.panel.height,cardSpec.height);assert.deepEqual(state.panel.repeat,cardSpec.repeat);assert.deepEqual(state.panel.offset,cardSpec.offset);assert.equal(state.legacy.oldRoof.count,0,'The previous floating rooftop QR has been moved to the wall');
   assert.ok(state.front>0&&state.placement.nz<-.98);assert.equal(state.player.mode,'walk');assert.equal(state.player.view,'first');
   assert.ok(state.camera.position[1]-state.player.y>1.3&&state.camera.position[1]-state.player.y<1.9,'The camera remains at a real first-person eye height');
   assert.ok((full?state.screen:state.qrScreen).every(([x,y,z])=>Math.abs(x)<1&&Math.abs(y)<1&&z>-1&&z<1),full?'The full building-height poster fits in the road viewpoint':'The complete QR region fits in the near viewing position');
@@ -109,7 +112,7 @@ async function view(kind){
 }
 
 try{
- const original=await readFile(path.join(root,'public',imagePath));assert.equal(original.length,85529);assert.equal(hash(original),expectedHash);report.original={bytes:original.length,sha256:hash(original),width:987,height:1347};
+ const original=await readFile(path.join(root,'public',imagePath));assert.equal(original.length,cardSpec.bytes);assert.equal(hash(original),expectedHash);report.original={bytes:original.length,sha256:hash(original),width:cardSpec.width,height:cardSpec.height};
  await build({root,configFile:path.join(root,'vite.config.js'),logLevel:'warn',build:{outDir:dist,emptyOutDir:true,rollupOptions:{input:{campus:path.join(root,'index.html'),admin:path.join(root,'admin.html'),c118:path.join(root,'c118.html')}}},plugins:[{name:'isolated-east-nine-poster-probe',transform(code,id){if(id===path.join(root,'src/survey.js'))return code+'\n'+injection;}}]});
  const initialState=createDefaultLiveState();app=await createLiveServer({rootDir:root,distDir:dist,dataDir,password:'isolated-east-nine-poster-only',workEnv:{},initialState});const hostState=app.getState(),address=await app.listen(0),origin='http://127.0.0.1:'+address.port;
  browser=await chromium.launch({headless:true,executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
@@ -131,13 +134,17 @@ try{
  const popup=await popupPromise;await popup.waitForLoadState('domcontentloaded',{timeout:30000});
  await popup.waitForFunction(()=>document.images.length===1&&document.images[0].complete&&document.images[0].naturalWidth>0,null,{timeout:30000});
  const opened=await popup.evaluate(()=>({url:location.href,openerNull:window.opener===null,width:document.images[0].naturalWidth,height:document.images[0].naturalHeight}));
- assert.equal(new URL(opened.url).pathname,imagePath);assert.equal(opened.openerNull,true);assert.equal(opened.width,987);assert.equal(opened.height,1347);
+ assert.equal(new URL(opened.url).pathname,imagePath);assert.equal(opened.openerNull,true);assert.equal(opened.width,cardSpec.width);assert.equal(opened.height,cardSpec.height);
  const imageResponse=await context.request.get(opened.url);assert.equal(imageResponse.status(),200);const imageBytes=await imageResponse.body();assert.equal(hash(imageBytes),expectedHash,'The opened image must be byte-identical to the original card');
  report.openedOriginal={...opened,bytes:imageBytes.length,sha256:hash(imageBytes)};await popup.screenshot({path:path.join(out,'original-image-tab.png')});report.screenshots.push('original-image-tab.png');
  await popup.close();await page.bringToFront();await page.waitForTimeout(500);report.afterPopup=await read();assertPose(beforeOpen,report.afterPopup);assertStatic(beforeOpen,report.afterPopup);assertCard(report.afterPopup);
 
+ await page.locator('#campus-time-of-day').selectOption('sunset');await page.waitForFunction(()=>__eastNinePosterQA.read().mode==='sunset');
+ report.sunsetOverview=await view('approach');await shot('north-road-approach-sunset.png');
+ await view('inspection');
  await page.locator('#campus-time-of-day').selectOption('night');await page.waitForFunction(()=>__eastNinePosterQA.read().mode==='night',null,{timeout:5000});await page.waitForTimeout(350);
  report.night=await read();assertPose(report.afterPopup,report.night);assertStatic(report.afterPopup,report.night);assertCard(report.night);await shot('north-wall-card-close-night.png');
+ report.nightOverview=await view('approach');await shot('north-road-approach-night.png');
  await page.locator('#campus-time-of-day').selectOption('day');await page.waitForTimeout(250);
  await page.evaluate(()=>__eastNinePosterQA.turnAway());await page.waitForTimeout(300);report.turnedAway=await read();assert.equal(report.turnedAway.nearby,false);assert.equal(report.turnedAway.link.hidden,true);assertStatic(report.inspection.state,report.turnedAway);
  await page.evaluate(()=>__eastNinePosterQA.view('far'));await page.waitForTimeout(400);report.far=await read();
