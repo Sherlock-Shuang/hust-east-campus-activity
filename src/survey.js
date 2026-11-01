@@ -48,6 +48,7 @@ const $ = (id) => document.getElementById(id),
   canvas = $("map-canvas"),
   container = $("viewport");
 const campusMusic=mountCampusMusic({document,window});
+campusMusic.update({paused:document.body.classList.contains('entry-cover-open')});
 // Prepare the authored skin off the UI thread while map data and static campus
 // geometry load. No extra multi-megabyte model download or first-pickup build.
 const startupStarted=performance.now(),startupTimings={};
@@ -168,13 +169,16 @@ let fc,
   needsRender = true,
   viewMode = "oblique";
 let liveControl, liveFrozen = false, graphicsSuspended=false,datasetLoading=false,campusBuildAbort;
+let entryCoverOpen=document.body.classList.contains('entry-cover-open');
 const recoveryPanel=document.createElement('div');recoveryPanel.className='graphics-recovery';recoveryPanel.hidden=true;recoveryPanel.setAttribute('role','status');
 const recoveryText=document.createElement('p'),recoveryButton=document.createElement('button');recoveryButton.textContent='重新载入校园';recoveryButton.type='button';recoveryPanel.append(recoveryText,recoveryButton);container.append(recoveryPanel);
 const RECOVERY_POSE_KEY='campus-graphics-recovery-pose-v1';
 let recoveryPose=null;
-function suspendCampus(){const frozen=liveFrozen||graphicsSuspended||datasetLoading;commute?.setSuspended(frozen);controls.enabled=!frozen&&!commute?.player.active;needsRender=true;}
+function suspendCampus(){const frozen=entryCoverOpen||liveFrozen||graphicsSuspended||datasetLoading;commute?.setSuspended(frozen);controls.enabled=!frozen&&!commute?.player.active;needsRender=true;}
+window.addEventListener('campus:entry-entered',()=>{entryCoverOpen=false;liveControl?.sync();suspendCampus();needsRender=true;});
+window.addEventListener('pageshow',event=>{if(event.persisted){entryCoverOpen=document.body.classList.contains('entry-cover-open');liveControl?.sync();suspendCampus();}});
 function observeFirstInput(event){
-  if(startupTimings.firstVisibleInputObservedMs||liveFrozen||datasetLoading||!commute?.player.active)return;
+  if(startupTimings.firstVisibleInputObservedMs||entryCoverOpen||liveFrozen||datasetLoading||!commute?.player.active)return;
   if(event.type==='keydown'&&!['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))return;
   if(event.target?.closest?.('input,textarea,button,select'))return;
   inputObservation={at:performance.now(),position:camera.position.clone(),quaternion:camera.quaternion.clone()};
@@ -185,13 +189,19 @@ recoveryButton.addEventListener('click',()=>{
   location.reload();
 });
 const graphicsRecovery=createGraphicsRecovery({canvas,
-  onLost(){recoveryPose=commute?.player?.captureActivityPose?.();graphicsSuspended=true;suspendCampus();frameMetrics.reset();},
+  onLost(){
+    recoveryPose=commute?.player?.captureActivityPose?.();graphicsSuspended=true;suspendCampus();frameMetrics.reset();
+    if(entryCoverOpen)window.dispatchEvent(new CustomEvent('campus:startup-error',{detail:'三维画面正在恢复，可以稍候；若仍未恢复，请以流畅画质重新载入。'}));
+  },
   onRestored(){
     scene.environment=daylight.rebuildEnvironment();
     appliedBudget=null;applyPerformanceBudget();renderer.resetState();resize();lastShadowAt=-Infinity;frameClock.reset();lastFrameRendered=false;
     graphicsSuspended=false;suspendCampus();frameMetrics.reset();gpuTimer.restore();renderer.info.autoReset=false;renderCadence.reset();lastRenderedAt=NaN;
   },
-  onStatus(status){canvas.dataset.graphicsState=status;canvas.dataset.graphicsLosses=String(graphicsRecovery.lossCount);recoveryPanel.hidden=status==='ready';recoveryButton.hidden=status!=='reload-available';recoveryText.textContent=status==='reload-available'?'画面恢复暂未完成，可重新载入并保留活动身份与当前位置。':'正在恢复校园画面…';},
+  onStatus(status){
+    canvas.dataset.graphicsState=status;canvas.dataset.graphicsLosses=String(graphicsRecovery.lossCount);recoveryPanel.hidden=status==='ready';recoveryButton.hidden=status!=='reload-available';recoveryText.textContent=status==='reload-available'?'画面恢复暂未完成，可重新载入并保留活动身份与当前位置。':'正在恢复校园画面…';
+    if(entryCoverOpen&&status==='ready'&&startupTimings.worldReadyMs!==undefined){document.documentElement.dataset.campusReady='true';window.dispatchEvent(new Event('campus:ready'));}
+  },
 });
 canvas.dataset.graphicsState='ready';
 const buildId=typeof __CAMPUS_BUILD__==='string'?__CAMPUS_BUILD__:'local';canvas.dataset.buildId=buildId;
@@ -788,7 +798,7 @@ async function loadDataset(data, manifest = {}) {
   startupTimings.interactiveMs=startupTimings.worldReadyMs;
   firstDrawPending=true;
   canvas.dataset.startupTimings=JSON.stringify(startupTimings);
-  window.dispatchEvent(new Event('campus:ready'));
+  if(!graphicsSuspended){document.documentElement.dataset.campusReady='true';window.dispatchEvent(new Event('campus:ready'));}
   $("load-screen").hidden = true;
   campusMusic.update({ready:true});
   liveControl?.sync();
@@ -1014,14 +1024,14 @@ function addMeasure(point) {
 }
 let down;
 canvas.addEventListener("pointerdown", (e) => {
-  if (liveFrozen) { down = null; return; }
+  if (entryCoverOpen||liveFrozen) { down = null; return; }
   if (commute?.player.active) { down = null; return; }
   animation = null;
   commute?.stopFollow();
   down = [e.clientX, e.clientY];
 });
 canvas.addEventListener("pointerup", (e) => {
-  if (liveFrozen) return;
+  if (entryCoverOpen||liveFrozen) return;
   if (commute?.player.active) return;
   if (
     !down ||
@@ -1096,7 +1106,7 @@ let frameWindow=0,frameSamples=0,renderedSamples=0,renderWork=0,tickWork=0,scene
 let drawCalls=0,triangles=0,lastFrameCpu=0,lastFrameRendered=false,lastLabelAt=-Infinity;
 function render(now) {
   requestAnimationFrame(render);
-  const frameStart=performance.now(),timing=frameClock.sample(now),{elapsed,dt}=timing,frozen=liveFrozen||graphicsSuspended||datasetLoading;
+  const frameStart=performance.now(),timing=frameClock.sample(now),{elapsed,dt}=timing,frozen=entryCoverOpen||liveFrozen||graphicsSuspended||datasetLoading;
   if(timing.hidden){renderCadence.reset();lastRenderedAt=NaN;renderCpuAccumulator=0;lastFrameRendered=false;frameWindow=frameSamples=renderedSamples=renderWork=tickWork=sceneWork=drawWork=0;return;}
   if(timing.resumed){needsRender=true;lastShadowAt=-Infinity;renderCadence.reset();lastRenderedAt=NaN;renderCpuAccumulator=0;}
   if(graphicsSuspended){renderCadence.reset();lastRenderedAt=NaN;renderCpuAccumulator=0;lastFrameRendered=false;return;}
@@ -1140,8 +1150,8 @@ function render(now) {
     const overviewLift=Math.max(0,camera.position.y-120);
     atmosphere.update(camera,{overviewLift});
     campus?.update?.(camera, { viewportHeight,detailDistanceScale:qualityBudget.detailDistanceScale });
-    fieldGroupQr?.update(camera,{visible:layerSettings.symbolic&&layerSettings.building&&!liveControl?.portalOpen,interactive:!liveFrozen});
-    eastNineBuildersPoster?.update(camera,{visible:layerSettings.symbolic&&layerSettings.building&&!liveControl?.portalOpen,interactive:!liveFrozen});
+    fieldGroupQr?.update(camera,{visible:layerSettings.symbolic&&layerSettings.building&&!liveControl?.portalOpen,interactive:!frozen});
+    eastNineBuildersPoster?.update(camera,{visible:layerSettings.symbolic&&layerSettings.building&&!liveControl?.portalOpen,interactive:!frozen});
     if(now-lastLabelAt>=100){updateLabels();lastLabelAt=now;}
     if(!frozen)waterDetails?.renderReflection(renderer,scene,camera,now);
     lastPasses.reflectionCalls=renderer.info.render.calls;lastPasses.reflectionTriangles=renderer.info.render.triangles;

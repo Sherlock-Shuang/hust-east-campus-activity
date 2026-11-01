@@ -1,9 +1,13 @@
 import {installBrowserCompatibility} from './browser-compat.js';
 import {getCampusStartupData} from './campus-startup-data.js';
+import {mountEntryCover} from './entry-cover.js';
+import {mountEntryCoverMotion} from './entry-cover-motion.js';
+import './entry-cover.css';
 import './survey.css';
 import './transport-ui.css';
 import './mobile-controls.css';
 installBrowserCompatibility();
+mountEntryCover({document,window,mountMotion:mountEntryCoverMotion});
 // Fetch maps while the larger scene module downloads. The scene consumes this
 // same promise; attach a handler now so an early failure is never unhandled.
 getCampusStartupData().catch(()=>{});
