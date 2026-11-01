@@ -15,17 +15,17 @@ class Element extends EventTarget{
   querySelector(){return this.button;}
 }
 function fixture({ready=false,reduced=false,priorHeaderInert=false,initialMarkers=true}={}){
-  const cover=new Element(),start=new Element(),status=new Element(),canvas=new Element(),header=new Element(),viewport=new Element(),body=new Element(),documentElement=new Element(),help=new Element();
+  const cover=new Element(),start=new Element(),status=new Element(),video=new Element(),header=new Element(),viewport=new Element(),body=new Element(),documentElement=new Element(),help=new Element();
   help.hidden=true;help.button=new Element();header.inert=priorHeaderInert;
   if(initialMarkers){for(const el of [header,viewport]){el.inert=true;el.setAttribute('data-entry-cover-inert','');}}
   body.classList.add('entry-cover-open');if(ready)documentElement.dataset.campusReady='true';
-  const ids=new Map([['campus-entry-cover',cover],['entry-cover-start',start],['entry-cover-status',status],['entry-cover-particles',canvas],['viewport',viewport],['campus-startup-help',help]]);
+  const ids=new Map([['campus-entry-cover',cover],['entry-cover-start',start],['entry-cover-status',status],['entry-cover-film',video],['viewport',viewport],['campus-startup-help',help]]);
   const document={body,documentElement,getElementById:id=>ids.get(id),querySelector:selector=>selector==='body > header'?header:null};
   const window=new EventTarget();window.Event=Event;window.matchMedia=()=>({matches:reduced});
   let sequence=0,mounted=0,stopped=0,entered=0;const timers=new Map();
   window.setTimeout=(fn,delay)=>{timers.set(++sequence,{fn,delay});return sequence;};window.clearTimeout=id=>timers.delete(id);
   window.addEventListener('campus:entry-entered',()=>entered++);
-  const api=mountEntryCover({document,window,mountMotion:({cover:target,canvas:particles})=>{assert.equal(target,cover);assert.equal(particles,canvas);mounted++;return()=>stopped++;}});
+  const api=mountEntryCover({document,window,mountMotion:({cover:target,video:film})=>{assert.equal(target,cover);assert.equal(film,video);mounted++;return()=>stopped++;}});
   function emit(type,detail){const event=new Event(type);if(detail!==undefined)Object.defineProperty(event,'detail',{value:detail});window.dispatchEvent(event);}
   function page(type,persisted){const event=new Event(type);Object.defineProperty(event,'persisted',{value:persisted});window.dispatchEvent(event);}
   function advance(){const current=[...timers.values()];timers.clear();for(const {fn} of current)fn();}
@@ -33,10 +33,13 @@ function fixture({ready=false,reduced=false,priorHeaderInert=false,initialMarker
     get mounted(){return mounted;},get stopped(){return stopped;},get entered(){return entered;}};
 }
 
-test('an early click waits for real readiness; only then does the cover fade and release',()=>{
+test('start remains hidden until real readiness; early clicks cannot queue an entry',()=>{
   const f=fixture();assert.equal(f.cover.dataset.state,'loading');assert.equal(f.header.inert,true);assert.equal(f.viewport.inert,true);
-  f.click();assert.equal(f.cover.dataset.state,'waiting');assert.equal(f.start.disabled,true);assert.equal(f.start.getAttribute('aria-busy'),'true');assert.match(f.status.textContent,/准备/);assert.equal(f.timers.size,0);
-  f.emit('campus:ready');assert.equal(f.cover.dataset.state,'entering');assert.equal(f.cover.hidden,false);assert.equal(f.body.classList.contains('entry-cover-open'),true);assert.equal(f.entered,0);
+  assert.equal(f.start.hidden,true);assert.equal(f.start.disabled,true);
+  f.click();assert.equal(f.cover.dataset.state,'loading');assert.match(f.status.textContent,/准备/);assert.equal(f.timers.size,0);
+  f.emit('campus:ready');assert.equal(f.cover.dataset.state,'ready');assert.equal(f.start.hidden,false);assert.equal(f.start.disabled,false);assert.equal(f.timers.size,0);
+  assert.equal(f.cover.hidden,false);assert.equal(f.body.classList.contains('entry-cover-open'),true);assert.equal(f.entered,0);
+  f.click();assert.equal(f.cover.dataset.state,'entering');assert.equal(f.start.getAttribute('aria-busy'),'true');
   assert.equal([...f.timers.values()][0].delay,900);f.advance();
   assert.equal(f.cover.dataset.state,'entered');assert.equal(f.cover.hidden,true);assert.equal(f.body.classList.contains('entry-cover-open'),false);assert.equal(f.viewport.inert,false);assert.equal(f.header.inert,false);assert.equal(f.header.hasAttribute('data-entry-cover-inert'),false);assert.equal(f.entered,1);assert.equal(f.stopped,1);f.api.dispose();
 });
@@ -50,13 +53,13 @@ test('a prepared campus waits indefinitely for its visitor, including an early r
 });
 
 test('repeated clicks and ready events cannot shorten the transition or enter twice',()=>{
-  const f=fixture();f.click();f.click();f.emit('campus:ready');f.emit('campus:ready');f.click();
+  const f=fixture();f.click();f.click();f.emit('campus:ready');f.click();f.emit('campus:ready');f.click();
   assert.equal(f.timers.size,1);assert.equal(f.start.textContent,'开始体验');f.advance();f.click();f.emit('campus:ready');f.advance();assert.equal(f.entered,1);assert.equal(f.stopped,1);f.api.dispose();
 });
 
 test('startup errors cancel pending entry and leave the existing recovery button usable',()=>{
   const f=fixture({ready:true});f.click();f.help.hidden=false;f.emit('campus:startup-error','网络连接中断，请重新载入。');
-  assert.equal(f.cover.dataset.state,'error');assert.equal(f.status.textContent,'网络连接中断，请重新载入。');assert.equal(f.help.button.focused,true);assert.equal(f.help.inert,false);assert.equal(f.start.disabled,true);assert.equal(f.timers.size,0);
+  assert.equal(f.cover.dataset.state,'error');assert.equal(f.status.textContent,'网络连接中断，请重新载入。');assert.equal(f.help.button.focused,true);assert.equal(f.help.inert,false);assert.equal(f.start.disabled,true);assert.equal(f.start.hidden,true);assert.equal(f.timers.size,0);
   f.advance();assert.equal(f.entered,0);assert.equal(f.viewport.inert,true);assert.equal(f.cover.hidden,false);
   f.emit('campus:ready');assert.equal(f.cover.dataset.state,'ready');assert.equal(f.timers.size,0,'an error clears the previous start intent');f.click();f.advance();assert.equal(f.entered,1);f.api.dispose();
 });

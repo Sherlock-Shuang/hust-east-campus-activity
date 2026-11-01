@@ -20,11 +20,17 @@ test('corrupt, blocked or quota-limited storage does not prevent a playable pref
   assert.equal(normalizeControlPreferences({sensitivity:NaN}).sensitivity,1);
 });
 
-test('equal touch viewport fractions yield equal angles at phone, tablet and portrait sizes',()=>{
-  const angles=[[844,390],[667,375],[1024,768],[390,844]].map(([width,height])=>controlLookDelta(width*.12,height*.08,{touch:true,width,height}));
-  for(const angle of angles){assert.ok(Math.abs(angle.x-angles[0].x)<1e-10);assert.ok(Math.abs(angle.y-angles[0].y)<1e-10);}
-  const mouse=controlLookDelta(40,20),touch=controlLookDelta(40,20,{touch:true,width:844,height:390});
-  assert.equal(mouse.x,.128);assert.equal(mouse.y,.05);assert.ok(Math.abs(touch.x/mouse.x-1.5)<1e-10);assert.ok(Math.abs(touch.y/mouse.y-1.5)<1e-10);
+test('mobile swipes use the short edge and remain equally responsive after rotation',()=>{
+  const landscape=controlLookDelta(100,40,{touch:true,width:844,height:390,preferences:{sensitivity:.75}});
+  const portrait=controlLookDelta(100,40,{touch:true,width:390,height:844,preferences:{sensitivity:.75}});
+  assert.deepEqual(landscape,portrait);
+  assert.ok(landscape.x>.9&&landscape.x<1.1,'100 CSS px turns roughly 58 degrees at the default campus gain');
+  for(const [width,height]of [[844,390],[667,375],[1024,768],[390,844]]){
+    const short=Math.min(width,height),angle=controlLookDelta(short*.12,short*.08,{touch:true,width,height});
+    assert.ok(Math.abs(angle.x-Math.PI*.2)<1e-10);
+    assert.ok(Math.abs(angle.y-Math.PI*.08/.6*.65)<1e-10);
+  }
+  assert.deepEqual(controlLookDelta(40,20),{x:.128,y:.05},'desktop gain is unchanged');
 });
 
 test('invert and sensitivity apply exactly once and invalid look events remain inert',()=>{

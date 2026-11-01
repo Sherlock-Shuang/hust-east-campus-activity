@@ -134,7 +134,8 @@ export function planOptoC118Interior(options = {}) {
 
 /** No document/canvas, fetch, timer, input bindings or source-map mutations. */
 export function createOptoC118Interior(THREE,options={}) {
-  const plan=planOptoC118Interior(options),c=plan.config;
+  const {lowDetail=false,...planOptions}=options;
+  const plan=planOptoC118Interior(planOptions),c=plan.config;
   const group=new THREE.Group();group.name='opto-c118-photo-reconstruction';
   group.userData={landmarkId:plan.id,evidence:OPTO_C118_EVIDENCE,dimensions:plan.dimensions,
     estimatedSeatCount:plan.seatCount,photoTexturesUsed:false,walkSurfaces:plan.walkSurfaces,collisionBarriers:plan.colliders};
@@ -180,7 +181,7 @@ export function createOptoC118Interior(THREE,options={}) {
   roundedShape.lineTo(.5,.5-r);roundedShape.quadraticCurveTo(.5,.5,.5-r,.5);
   roundedShape.lineTo(-.5+r,.5);roundedShape.quadraticCurveTo(-.5,.5,-.5,.5-r);
   roundedShape.lineTo(-.5,-.5+r);roundedShape.quadraticCurveTo(-.5,-.5,-.5+r,-.5);
-  const roundedSeat=ownGeo(new THREE.ExtrudeGeometry(roundedShape,{depth:1,bevelEnabled:false,curveSegments:3}));roundedSeat.translate(0,0,-.5);
+  const roundedSeat=ownGeo(new THREE.ExtrudeGeometry(roundedShape,{depth:1,bevelEnabled:false,curveSegments:lowDetail?1:3}));roundedSeat.translate(0,0,-.5);
   const dummy=new THREE.Object3D();
   const batch=(name,geometry,material,x,y,z,sx,sy,sz,rx=0,ry=0,rz=0)=>{
     const fine=/seat-number-plates|seat-foot-brackets/.test(name),zone=fine?Math.floor((z+c.depth/2)/(c.depth/3)):'';

@@ -14,7 +14,7 @@ export function mountEntryCover({document=globalThis.document,window=globalThis.
   }
   function startMotion(){
     if(motion||!mountMotion||entered||disposed)return;
-    try{motion=mountMotion({cover,canvas:document.getElementById('entry-cover-particles')});}
+    try{motion=mountMotion({cover,video:document.getElementById('entry-cover-film'),document,window});}
     catch(error){console.warn('Entry cover animation unavailable:',error);}
   }
   function holdCampus(){
@@ -37,12 +37,12 @@ export function mountEntryCover({document=globalThis.document,window=globalThis.
   function message(value){if(status){status.textContent=value;status.hidden=!value;}}
   function showState(state){
     cover.dataset.state=state;
-    const busy=state==='waiting'||state==='entering';
-    start.disabled=busy||state==='error';
+    const busy=state==='entering';
+    start.hidden=state!=='ready'&&state!=='entering';
+    start.disabled=state!=='ready';
     start.setAttribute('aria-busy',String(busy));
     start.textContent='开始体验';
     if(state==='loading')message('正在准备校园');
-    else if(state==='waiting')message('正在准备校园，准备好后即会进入…');
     else if(state!=='error')message('');
   }
   function cancelTransition(){if(timer!==null){window.clearTimeout(timer);timer=null;}cover.classList.remove('is-leaving');}
@@ -60,8 +60,8 @@ export function mountEntryCover({document=globalThis.document,window=globalThis.
     timer=window.setTimeout(finishEntry,reduced()?0:Math.max(0,transitionMs));
   }
   function click(){
-    if(disposed||entered||failed||requested)return;
-    requested=true;if(ready)enter();else showState('waiting');
+    if(disposed||entered||failed||requested||!ready)return;
+    requested=true;enter();
   }
   function onReady(){
     if(disposed||entered)return;

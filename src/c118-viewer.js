@@ -16,8 +16,10 @@ import {createC118Audience} from './c118-audience.js';
 import {createC118Swimming} from './c118-swimming.js';
 import {createC118Performance,c118RenderRate} from './c118-performance.js';
 import {createMobileRenderProfile} from './mobile-render-profile.js';
+import {cacheStaticTransforms} from './render-performance.js';
 import {readQualityPreference,getQualityStorage} from './performance-ui.js';
-import {CONTROL_PREFERENCES_KEY,createControlPreferences,controlLookDelta} from './control-preferences.js';
+import {CONTROL_PREFERENCES_KEY,createControlPreferences} from './control-preferences.js';
+import {c118LookPose} from './c118-look.js';
 import {createFrameMetrics} from './frame-metrics.js';
 import {createC118PageLifecycle} from './c118-page-lifecycle.js';
 import {createRenderCadence} from './render-cadence.js';
@@ -65,7 +67,7 @@ function syncScreenProgramme(){
   screenPlayer?.update({active:usable()&&!floodRunning&&!codex,visible:screenInView});
 }
 function resetInput(){keys.clear();swimVertical=0;joy=look=mouse=null;axes={forward:0,sideways:0};stick.hidden=true;motion?.suspend();}
-function rotate(dx,dy,touch=false){if(cinema)return;const delta=controlLookDelta(dx,dy,{touch,width:innerWidth,height:innerHeight,preferences:controlsPreference});heading-=Math.max(-.8,Math.min(.8,delta.x));pitch=Math.max(-1.35,Math.min(1.3,pitch-Math.max(-.65,Math.min(.65,delta.y))));}
+function rotate(dx,dy,touch=false){if(cinema)return;({heading,pitch}=c118LookPose({heading,pitch},dx,dy,{touch,width:innerWidth,height:innerHeight,preferences:controlsPreference}));}
 function exit(returnEntryId){
   returnEntryId=['opto-c1','opto-c2'].includes(returnEntryId)?returnEntryId:undefined;if(paused||returning)return;returning=true;screenPlayer?.update({active:false,visible:false});floodSensory?.update({active:false});resetInput();lock.release();if(window.parent!==window&&window.campusActivity)window.campusActivity.exit(returnEntryId);else location.href=returnEntryId?`./?place=${returnEntryId}`:'./';}
 onNavigation(document.querySelector('#hall-return'),'click',event=>{event.preventDefault();exit();});
@@ -97,7 +99,7 @@ on(canvas,'pointerdown',event=>{
   if(event.pointerType==='mouse')return;
   event.preventDefault();canvas.setPointerCapture(event.pointerId);
   if(event.clientX<innerWidth*.47&&!joy){joy={id:event.pointerId,x:event.clientX,y:event.clientY};stick.style.left=`${joy.x}px`;stick.style.top=`${joy.y}px`;stick.firstElementChild.style.transform='';stick.hidden=false;}
-  else if(!look)look={id:event.pointerId,x:event.clientX,y:event.clientY};
+  else if(!look){prepareFreeLook();look={id:event.pointerId,x:event.clientX,y:event.clientY};}
 });
 for(const type of ['mousedown','auxclick'])on(canvas,type,event=>{if(event.button===1)event.preventDefault();});
 on(document,'pointerdown',event=>{if(event.target!==canvas&&!event.target.closest?.('.hall-codex-reply'))codexScreen?.close();},{capture:true});
@@ -154,13 +156,17 @@ if(!disposed)pageLifecycle=createC118PageLifecycle({window,onDispose:dispose,
   },
 });
 if(!disposed)try{
-  renderer=resources.own(new THREE.WebGLRenderer({canvas,antialias:devicePixelRatio<=1.5,powerPreference:'low-power'}),'renderer');
+  renderer=resources.own(new THREE.WebGLRenderer({canvas,antialias:!handheld&&devicePixelRatio<=1.5,powerPreference:handheld?'default':'high-performance'}),'renderer');
   if(diagnostics&&new URLSearchParams(location.search).get('gpu')==='1')gpuTimer=resources.own(createGpuFrameTimer(renderer,{enabled:true}),'gpu-timer');
   renderer.setPixelRatio(qualityBudget.pixelRatio);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;
   const scene=new THREE.Scene();scene.background=new THREE.Color('#26272c');
   const camera=new THREE.PerspectiveCamera(65,1,.07,120);camera.rotation.order='YXZ';
-  interior=resources.own(createOptoC118Interior(THREE,{withFoyer:true}),'interior');scene.add(interior.group);motion=createC118Navigation(interior);
-  seating=createC118Seating(interior.plan);audience=resources.own(createC118Audience(THREE,{plan:interior.plan}),'audience');scene.add(audience.group);
+  interior=resources.own(createOptoC118Interior(THREE,{withFoyer:true,lowDetail:handheld}),'interior');scene.add(interior.group);
+  // Architecture is immutable; the stage screen keeps its live video/Codex fit.
+  cacheStaticTransforms(interior.group);interior.videoScreen.matrixAutoUpdate=true;interior.videoScreen.matrixWorldAutoUpdate=true;
+  if(handheld){const seen=new Set();interior.group.traverse(object=>{for(const material of (Array.isArray(object.material)?object.material:[object.material]))if(material&&!seen.has(material)){seen.add(material);if(material.bumpMap){material.bumpMap=null;material.needsUpdate=true;}}});}
+  motion=createC118Navigation(interior);
+  seating=createC118Seating(interior.plan);audience=resources.own(createC118Audience(THREE,{plan:interior.plan,lowDetail:handheld}),'audience');scene.add(audience.group);
   floodEffect=resources.own(createC118FloodEffect(THREE,{plan:interior.plan,level:qualityBudget.waterLevel}),'flood-effect');scene.add(floodEffect.group);
   function applyQuality(budget){
     if(qualityBudget.pixelRatio!==budget.pixelRatio)renderer.setPixelRatio(budget.pixelRatio);
@@ -206,7 +212,7 @@ if(!disposed)try{
   let inHall=isInsideC118(interior.plan,motion.state);
   updateInputHint=()=>{
     const movement=swimming.state.active?'WASD 游动 · 空格 上浮 · C 下潜':seatedSeat?'E 起身 · 鼠标环视':inHall?'WASD 移动 · E 就近入座':'WASD 移动 · 鼠标环视';
-    const text=handheld?(swimming.state.active?'左侧拖动游动 · 右侧拖动环视\n按住 ↑ 上浮 · ↓ 下潜':seatedSeat?(cinema?'点击「环视报告厅」查看四周\n点击「起身」离座':'右侧拖动环视 · 点击起身离座'):'左侧拖动移动 · 右侧拖动环视\n点击「入座看大屏」就座'):`${movement}\n中键 / L ${lock.locked?'解锁':'锁定'}视角${lock.locked?' · Esc 释放':''}`;
+    const text=handheld?(swimming.state.active?'左侧拖动游动 · 右侧拖动环视\n按住 ↑ 上浮 · ↓ 下潜':seatedSeat?(cinema?'右侧拖动环视报告厅\n点击「起身」离座':'右侧拖动环视 · 点击起身离座'):'左侧拖动移动 · 右侧拖动环视\n点击「入座看大屏」就座'):`${movement}\n中键 / L ${lock.locked?'解锁':'锁定'}视角${lock.locked?' · Esc 释放':''}`;
     renderControlHints(document.querySelector('#hall-input-hint'),text);
   };
   function updateSeatControls(){

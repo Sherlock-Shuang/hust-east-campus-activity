@@ -1,66 +1,75 @@
-/* A cinematic game title: the supplied artwork carries the scene. */
+/* Let the film and a few handwritten letters carry the opening. */
 body.entry-cover-open{overflow:hidden;background:#2c2638}
 body.entry-cover-open #campus-music{visibility:hidden}
 #campus-entry-cover{
-  --entry-pan-x:0px;--entry-pan-y:0px;
   isolation:isolate;min-height:100dvh;touch-action:manipulation;
   opacity:1;transition:opacity 900ms cubic-bezier(.3,0,.3,1),visibility 900ms;
   -webkit-tap-highlight-color:transparent;
 }
-#campus-entry-cover .entry-cover-scene{position:absolute;inset:-2.5%;transform:translate3d(var(--entry-pan-x),var(--entry-pan-y),0);will-change:transform}
-#campus-entry-cover .entry-cover-art{max-width:none;user-select:none;pointer-events:none;animation:entry-camera-drift 28s ease-in-out infinite alternate}
-.entry-cover-light{position:absolute;inset:0;background:radial-gradient(ellipse at 25% 71%,#ffb75218,transparent 47%);mix-blend-mode:screen;animation:entry-light-breathe 9s ease-in-out infinite alternate;pointer-events:none}
-.entry-cover-shade{position:absolute;inset:0;background:linear-gradient(180deg,#17122206 13%,#211a3108 29%,#21132c28 49%,transparent 65%,#17121e52 100%),radial-gradient(ellipse at 50% 45%,transparent 50%,#15112025);pointer-events:none}
-#entry-cover-particles{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-#campus-entry-cover .entry-cover-content{inset:38% 24px auto;pointer-events:none;animation:entry-title-arrive 1600ms cubic-bezier(.2,.65,.3,1) both}
+#campus-entry-cover .entry-cover-scene{position:absolute;inset:0;transform:scale(1);transition:transform 1100ms cubic-bezier(.2,.5,.3,1)}
+#campus-entry-cover .entry-cover-art{max-width:none;user-select:none;pointer-events:none}
+#campus-entry-cover .entry-cover-film{transition:opacity 750ms ease}
+#campus-entry-cover.has-entry-film .entry-cover-film{opacity:1}
+.entry-cover-shade{position:absolute;inset:0;background:linear-gradient(180deg,#17122205 13%,#211a310a 29%,#21132c20 49%,transparent 65%,#17121e66 100%);pointer-events:none}
+#campus-entry-cover .entry-cover-content{inset:30% 24px auto;pointer-events:none}
 #campus-entry-cover .entry-cover-heading{
-  display:inline-flex;align-items:baseline;gap:clamp(12px,1.8vw,28px);
-  font-family:"Songti SC","STSong","Noto Serif CJK SC",serif;font-size:clamp(48px,6.8vw,98px);
-  font-weight:500;letter-spacing:.12em;line-height:1.2;
-  color:#fff7e8;text-shadow:0 2px 20px #301d3d55,0 0 70px #ffca8d2b;
+  display:inline-flex;align-items:baseline;gap:clamp(14px,1.5vw,26px);
+  font-family:CampusBrush,"Kaiti SC",cursive;font-size:clamp(88px,9vw,148px);
+  font-weight:400;letter-spacing:0;line-height:1.3;
+  color:#fffaf2;text-shadow:0 3px 24px #301d3d66,0 0 60px #ffca8d24;
 }
+.entry-cover-word{display:inline-flex;align-items:baseline}
+.entry-cover-glyph{display:inline-block;transform:rotate(var(--tilt));animation:entry-ink-arrive 1600ms cubic-bezier(.2,.6,.25,1) calc(120ms + var(--glyph)*240ms) both}
+.entry-cover-glyph>span{display:inline-block;animation:entry-letter-float 7s ease-in-out calc(var(--glyph)*-1.8s) infinite alternate}
+.entry-cover-glyph:nth-child(2){margin-left:-.06em;translate:0 .05em}
+.entry-cover-glyph:nth-child(3){margin-left:-.08em;translate:0 -.025em}
 #campus-entry-cover .entry-cover-online{
-  font-family:"Avenir Next","Helvetica Neue",sans-serif;font-size:clamp(23px,2.8vw,40px);font-weight:300;letter-spacing:.015em;
+  font-family:CampusBrush,cursive;font-size:clamp(34px,3.3vw,54px);font-weight:400;letter-spacing:.015em;
+  rotate:-6deg;translate:0 .14em;animation:entry-ink-arrive 1600ms 800ms both;
 }
-#campus-entry-cover .entry-cover-actions{bottom:max(12%,calc(28px + env(safe-area-inset-bottom)));min-width:230px;animation:entry-title-arrive 1400ms 250ms both}
+#campus-entry-cover .entry-cover-actions{bottom:max(11%,calc(28px + env(safe-area-inset-bottom)));width:min(340px,calc(100% - 48px));min-height:78px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start}
 #entry-cover-start{
-  position:relative;min-width:228px;min-height:58px;padding:14px 40px 14px 45px;
-  border:0;border-radius:0;outline-offset:8px;background:linear-gradient(90deg,transparent,#241a2c35 28%,#241a2c35 72%,transparent);
-  font-family:"PingFang SC","Microsoft YaHei",sans-serif;font-size:17px;font-weight:400;letter-spacing:.3em;
-  text-shadow:0 2px 10px #21122280;transition:color 250ms,background 250ms,letter-spacing 300ms;
+  position:relative;min-width:228px;min-height:60px;padding:10px 32px 12px 36px;
+  border:0;border-radius:0;outline-offset:8px;background:linear-gradient(90deg,transparent,#241a2c40 28%,#241a2c40 72%,transparent);
+  font-family:CampusBrush,"Kaiti SC",cursive;font-size:29px;font-weight:400;letter-spacing:.14em;
+  text-shadow:0 2px 12px #211222aa;transition:color 250ms,background 250ms,letter-spacing 300ms;
+  animation:entry-start-arrive 900ms cubic-bezier(.2,.6,.3,1) both;
 }
-#entry-cover-start::before,#entry-cover-start::after{content:"";position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#fff1d688 25%,#fff5dfb3 50%,#fff1d688 75%,transparent);transition:transform 350ms,opacity 350ms}
-#entry-cover-start::before{top:0}#entry-cover-start::after{bottom:0;opacity:.65}
-#entry-cover-start:hover:not(:disabled){background:linear-gradient(90deg,transparent,#60412750 25%,#60412750 75%,transparent);color:#fff;letter-spacing:.36em}
+#entry-cover-start::before,#entry-cover-start::after{content:"";position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#fff1d666 25%,#fff5df9c 50%,#fff1d666 75%,transparent);transition:transform 350ms,opacity 350ms}
+#entry-cover-start::before{top:0}#entry-cover-start::after{bottom:0;opacity:.6}
+#entry-cover-start:hover:not(:disabled){background:linear-gradient(90deg,transparent,#60412760 25%,#60412760 75%,transparent);color:#fff;letter-spacing:.2em}
 #entry-cover-start:hover::before{transform:translateY(-3px)}#entry-cover-start:hover::after{transform:translateY(3px);opacity:1}
 #entry-cover-start:focus-visible{outline:2px solid #fff4db}
-#entry-cover-start:disabled{cursor:wait;opacity:.85}
-#campus-entry-cover #entry-cover-status{margin-top:18px;font-size:11px;letter-spacing:.13em;text-shadow:0 1px 8px #1f1428;color:#fff1dbd9}
-#campus-entry-cover[data-state="ready"] #entry-cover-status{visibility:hidden}
+#entry-cover-start:disabled{cursor:wait}
+#campus-entry-cover #entry-cover-status{margin-top:22px;font-size:11px;letter-spacing:.16em;text-shadow:0 1px 8px #1f1428;color:#fff1dbeb}
+#campus-entry-cover[data-state="loading"] #entry-cover-status{animation:entry-loading-breathe 2.4s ease-in-out infinite alternate}
 #campus-entry-cover.is-leaving{opacity:0;visibility:hidden;pointer-events:none}
-#campus-entry-cover.is-leaving .entry-cover-art{animation:entry-camera-enter 1100ms cubic-bezier(.2,.5,.3,1) forwards}
+#campus-entry-cover.is-leaving .entry-cover-scene{transform:scale(1.065)}
 #campus-entry-cover.is-leaving .entry-cover-content,#campus-entry-cover.is-leaving .entry-cover-actions{animation:entry-title-leave 550ms ease forwards}
-@keyframes entry-camera-drift{from{transform:scale(1)}to{transform:scale(1.045)}}
-@keyframes entry-camera-enter{from{transform:scale(1.025)}to{transform:scale(1.12)}}
-@keyframes entry-title-arrive{from{opacity:0;filter:blur(6px);translate:0 14px}to{opacity:1;filter:blur(0);translate:0 0}}
+#campus-entry-cover.entry-motion-paused *{animation-play-state:paused!important}
+@keyframes entry-ink-arrive{from{opacity:0;filter:blur(5px);translate:0 16px;clip-path:inset(0 100% -25% -25%)}60%{clip-path:inset(0 -25% -25% -25%)}to{opacity:1;filter:blur(0);translate:0 0;clip-path:inset(-25%)}}
+@keyframes entry-letter-float{from{transform:translateY(0) rotate(-.6deg)}to{transform:translateY(-5px) rotate(.6deg)}}
+@keyframes entry-start-arrive{from{opacity:0;translate:0 9px;filter:blur(3px)}to{opacity:1;translate:0 0;filter:blur(0)}}
 @keyframes entry-title-leave{to{opacity:0;filter:blur(3px);translate:0 -10px}}
-@keyframes entry-light-breathe{from{opacity:.45}to{opacity:.95}}
+@keyframes entry-loading-breathe{from{opacity:.5}to{opacity:1}}
 @media(max-width:600px){
-  #campus-entry-cover .entry-cover-art{object-position:54% center}
-  #campus-entry-cover .entry-cover-content{inset:38% 16px auto}
-  #campus-entry-cover .entry-cover-heading{font-size:clamp(44px,11vw,65px);gap:12px;letter-spacing:.08em}
-  #campus-entry-cover .entry-cover-online{font-size:24px}
-  #campus-entry-cover .entry-cover-actions{bottom:max(13%,calc(40px + env(safe-area-inset-bottom)))}
+  #campus-entry-cover .entry-cover-art,#campus-entry-cover .entry-cover-film{object-position:54% center}
+  #campus-entry-cover .entry-cover-content{inset:31% 16px auto}
+  #campus-entry-cover .entry-cover-heading{font-size:clamp(76px,19vw,105px);gap:9px}
+  #campus-entry-cover .entry-cover-online{font-size:32px}
+  #campus-entry-cover .entry-cover-actions{bottom:max(12%,calc(40px + env(safe-area-inset-bottom)))}
 }
 @media(max-height:500px) and (orientation:landscape){
-  #campus-entry-cover .entry-cover-content{top:29%}
-  #campus-entry-cover .entry-cover-heading{font-size:54px}
-  #campus-entry-cover .entry-cover-actions{bottom:max(8%,calc(12px + env(safe-area-inset-bottom)))}
-  #campus-entry-cover #entry-cover-status{margin-top:8px}
+  #campus-entry-cover .entry-cover-content{top:20%}
+  #campus-entry-cover .entry-cover-heading{font-size:80px}
+  #campus-entry-cover .entry-cover-online{font-size:32px}
+  #campus-entry-cover .entry-cover-actions{bottom:max(5%,calc(12px + env(safe-area-inset-bottom)));min-height:65px}
+  #campus-entry-cover #entry-cover-status{margin-top:18px}
 }
 @media(prefers-reduced-motion:reduce){
   #campus-entry-cover{transition-duration:180ms}
-  #campus-entry-cover .entry-cover-scene,#campus-entry-cover .entry-cover-art,#campus-entry-cover .entry-cover-light,#campus-entry-cover .entry-cover-content,#campus-entry-cover .entry-cover-actions{animation:none;transform:none;will-change:auto}
-  #entry-cover-particles{display:none}
+  #campus-entry-cover .entry-cover-scene{transition:none;transform:none}
+  #campus-entry-cover .entry-cover-film{display:none}
+  #campus-entry-cover .entry-cover-content,#campus-entry-cover .entry-cover-actions,#campus-entry-cover .entry-cover-glyph,#campus-entry-cover .entry-cover-glyph>span,#campus-entry-cover .entry-cover-online,#campus-entry-cover #entry-cover-start,#campus-entry-cover #entry-cover-status{animation:none}
 }
 @media(forced-colors:active){#entry-cover-start{border:1px solid ButtonText;background:ButtonFace;color:ButtonText}#campus-entry-cover .entry-cover-heading{color:CanvasText;background:Canvas;text-shadow:none}}

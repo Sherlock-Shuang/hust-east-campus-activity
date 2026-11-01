@@ -25,6 +25,7 @@ function modules(mocks = {}) {
     cache.set(name, module.exports);
     new Function('require', 'module', 'exports', script)(specifier => {
       if (specifier.endsWith('.css')) return {};
+      if (/\.(jpg|svg)$/.test(specifier)) return {default: specifier};
       return specifier.startsWith('.') ? load(path.posix.normalize(path.posix.join(path.posix.dirname(name), specifier))) : require(specifier);
     }, module, module.exports);
     return module.exports;

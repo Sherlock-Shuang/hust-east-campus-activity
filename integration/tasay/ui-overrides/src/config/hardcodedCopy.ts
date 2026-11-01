@@ -164,11 +164,11 @@ export const storyCopy = {
     "我们以为自己在选择说什么，其实更多时候，是那些未被说出的部分，决定了我们最终会成为什么。"
   ],
   // 总对话数到 15 时，TA 直接发来的监控截图的替代说明文本。
-  monitorImageAlt: "一张像监控画面的偷拍截图。",
+  monitorImageAlt: "华科光电大楼 C118 报告厅的诡异监控画面：从台上望向略呈扇形的观众席，电脑冷光映在观众脸上，暗处带着细密的监控噪点。",
   // 总对话数到 15 时，监控截图后立刻接上的硬编码回复。
   monitorImageLine: "我会一直盯着你",
   // 第一次触发监控截图后写入 metaMemory 的文本。
-  monitorImageMetaMemory: "第十五条对话时，TA 发来了一张监控截图。",
+  monitorImageMetaMemory: "第十五条对话时，TA 发来了华科光电大楼 C118 报告厅的监控画面。",
   // 第一次进入朋友圈时展示的正常动态。
   normalSpacePosts: [
     "今天也想被好好理解一次。",
@@ -185,7 +185,7 @@ export const storyCopy = {
     "最新动态：'别再试图退出我了。'"
   ],
   // 定位阶段插入聊天流的系统提示。
-  locationNotice: "TA 发来了一张定位图。",
+  locationNotice: "TA 发来了华科光电大楼的位置。",
   // 看完定位图后，TA 当场追加的第一句短消息。
   locationRevealLine: "回头",
   // 定位结尾第二次触发时，TA 追加的第二句短消息。
