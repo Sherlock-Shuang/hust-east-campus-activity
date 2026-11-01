@@ -31,6 +31,48 @@ test('scene priorities select all six requested songs, with indoor/game preceden
     for(const experience of ['library','wanyan','she-love-me'])assert.equal(selectCampusTrack({experience,mode:'spider'}),null);
   }
 });
+test('outdoor tsunami overrides every vehicle and atmosphere, while rooms keep their own score',()=>{
+  for(const atmosphere of ['day','sunset','night'])for(const mode of ['walk','scooter','roadster','spider','boat']){
+    const scene={atmosphere,mode,tsunamiId:'wave-1'};
+    assert.equal(selectCampusTrack(scene),'tsunami');
+    assert.equal(selectCampusTrack({...scene,experience:'opto-c118'}),'opto');
+    assert.equal(selectCampusTrack({...scene,experience:'tasay'}),'tasay');
+    assert.equal(selectCampusTrack({...scene,experience:'wanyan'}),null);
+  }
+});
+test('tsunami switches once, survives indoor visits and pauses, then restores outdoor music on reset',async()=>{
+  const f=setup();await f.start();
+  f.music.update({mode:'spider',tsunamiId:'wave-1'});await flush();f.advance(900);
+  assert.equal(f.music.state.trackId,'tsunami');assert.equal(f.playing().length,1);
+  const song=f.forTrack('tsunami');song.currentTime=38;
+  f.music.update({tsunamiId:'wave-1',mode:'roadster'});await flush();
+  assert.equal(song.currentTime,38);assert.equal(f.playing().length,1);
+  for(const property of ['paused','hidden','foregroundAudio']){
+    f.music.update({[property]:true});assert.equal(f.playing().length,0);
+    f.music.update({[property]:false});await flush();f.advance(900);assert.equal(f.forTrack('tsunami').currentTime,38);
+  }
+  f.music.update({experience:'opto-c118'});await flush();f.advance(900);assert.equal(f.music.state.trackId,'opto');
+  f.music.update({experience:'tasay'});await flush();f.advance(900);assert.equal(f.music.state.trackId,'tasay');
+  f.music.update({experience:null});await flush();f.forTrack('tsunami').handlers.get('loadedmetadata')();f.advance(900);
+  assert.equal(f.music.state.trackId,'tsunami');assert.equal(f.forTrack('tsunami').currentTime,38);assert.equal(f.playing().length,1);
+  f.music.update({tsunamiId:null});await flush();f.advance(900);
+  assert.equal(f.music.state.trackId,'vehicle');assert.equal(f.playing().length,1);f.music.dispose();
+});
+test('each new tsunami starts from the beginning, even after eviction or while muted',async()=>{
+  const f=setup();await f.start();f.music.update({tsunamiId:'wave-1'});await flush();f.advance(900);
+  f.forTrack('tsunami').currentTime=71;
+  f.music.update({tsunamiId:'wave-2'});await flush();f.advance(900);
+  assert.equal(f.forTrack('tsunami').currentTime,0);assert.equal(f.playing().length,1);
+  f.forTrack('tsunami').currentTime=43;
+  f.music.update({tsunamiId:null,mode:'spider'});await flush();f.advance(900);
+  f.music.update({mode:'roadster'});await flush();f.advance(900);
+  assert.equal(f.forTrack('tsunami'),undefined,'the old tsunami deck has been reused');
+  f.music.setMuted(true);const counts=f.audios.map(a=>a.assignments.length);
+  f.music.update({tsunamiId:'wave-3'});await flush();assert.equal(f.playing().length,0);
+  assert.deepEqual(f.audios.map(a=>a.assignments.length),counts,'muted events must not load audio');
+  f.music.setMuted(false);await flush();f.forTrack('tsunami').handlers.get('loadedmetadata')();f.advance(900);
+  assert.equal(f.forTrack('tsunami').currentTime,0);assert.equal(f.playing().length,1);f.music.dispose();
+});
 test('nothing loads or plays before consent, world readiness and nickname registration',async()=>{
   const f=setup();f.music.update({ready:true});await flush();assert.ok(f.audios.every(a=>a.assignments.length===0));
   f.music.update({registered:true});await flush();assert.ok(f.audios.every(a=>a.assignments.length===0));

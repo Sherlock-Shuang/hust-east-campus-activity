@@ -40,6 +40,7 @@ function fixture(t,{initialState={},initialPlayer=player(),savedPose,registered=
   if(savedPose)sessionStorage.setItem('campus-return-pose',JSON.stringify({audienceId:'audience-test',pose:savedPose}));
   let clientOptions,audienceOptions,currentPlayer=initialPlayer;
   const records=[],suspended=[],music=[],waves=[],civilizations=[],skyUpdates=[],notices=[];
+  const civilization={active:false,update:value=>civilizations.push(value),continueExploring:()=>false};
   const client={state:{...createDefaultLiveState(),...initialState},connected:true,now:()=>Date.now(),dispose(){}};
   const audience={registered,client:{identity:{id:'audience-test'},event:async(type,details)=>{records.push({type,details});return {};}},phase(){},dispose(){}};
   const entry={id:'test-interior',kind:'building-interior',label:'Test interior',url:'/interior',workId:'opto-c118'};
@@ -53,17 +54,30 @@ function fixture(t,{initialState={},initialPlayer=player(),savedPose,registered=
     nearbyInterior:()=>interior?entry:null,crossedInteriorDoor:()=>crossedInterior?entry:null,interiorReturnSnapshot:pose=>pose,interiorExitEntry:()=>entry,
     createActivityBridgeMessage:()=>({}),createCampusTsunami:()=>({active:false,resident:false,update:value=>{waves.push(value);return false;},setQuality:()=>false,releaseResources(){},dispose(){}}),
     mountCampusTsunamiNotice:()=>({update:value=>notices.push(value),dispose(){}}),campusEffectBudget:()=>({level:2}),getC118FloodElapsed:()=>null,
-    createCivilizationPause:()=>({active:false,update:value=>civilizations.push(value),continueExploring:()=>false}),CIVILIZATION_PAUSE_MESSAGE:'paused',CIVILIZATION_CONTINUE_LABEL:'continue'});
+    createCivilizationPause:()=>civilization,CIVILIZATION_PAUSE_MESSAGE:'paused',CIVILIZATION_CONTINUE_LABEL:'continue'});
   vm.runInContext(source,context,{filename:'src/live-experience.js'});
   const live=context.createLiveExperience({THREE,scene:new THREE.Scene(),camera:new THREE.PerspectiveCamera(),canvas,container,getPlayer:()=>currentPlayer,getInteriors:()=>interior?[entry]:[],setSuspended:value=>suspended.push(value),onMusicStateChange:value=>music.push(value),invalidate(){},notify(){}});
   const root=container.children[0];t.after(()=>live.dispose());
-  return {live,root,client,audience,initialPlayer,storage,canvas,header,nickname,document,records,suspended,music,waves,civilizations,skyUpdates,notices,setPlayer:value=>{currentPlayer=value;},
+  return {live,root,client,audience,initialPlayer,storage,canvas,header,nickname,document,records,suspended,music,waves,civilizations,civilization,skyUpdates,notices,setPlayer:value=>{currentPlayer=value;},
     enter(){document.body.classList.remove('entry-cover-open');header.inert=false;live.sync();},
     async receive(patch){client.state={...client.state,...patch};clientOptions.onState(client.state);await flush();},
     async reconnect(patch){client.connected=false;clientOptions.onConnection(false);client.state={...client.state,...patch};client.connected=true;clientOptions.onConnection(true);clientOptions.onState(client.state);await flush();},
     async register(){audience.registered=true;audienceOptions.onChange();await flush();},
     refresh(){for(const callback of timers.values())callback();}};
 }
+
+test('host tsunami cues reach music across room returns, replay and reset; the local end card retains its score',async t=>{
+  const f=fixture(t,{interior:true});f.live.sync();assert.equal(f.music.at(-1).tsunamiId,null);
+  await f.receive({c118Flood:{id:'wave-1'}});assert.equal(f.music.at(-1).tsunamiId,'wave-1');
+  f.root.querySelector('.live-portal-prompt').emit('click');
+  assert.equal(f.music.at(-1).experience,'opto-c118');assert.equal(f.music.at(-1).tsunamiId,'wave-1');
+  f.root.querySelector('.live-portal-bar button').emit('click');
+  assert.equal(f.music.at(-1).experience,null);assert.equal(f.music.at(-1).tsunamiId,'wave-1');
+  f.civilization.active=true;f.live.sync();assert.equal(f.live.frozen,true);assert.equal(f.music.at(-1).paused,false);
+  await f.receive({paused:true});assert.equal(f.music.at(-1).paused,true);
+  await f.receive({paused:false,c118Flood:{id:'wave-2'}});assert.equal(f.music.at(-1).tsunamiId,'wave-2');assert.equal(f.music.at(-1).paused,false);
+  await f.receive({c118Flood:null});assert.equal(f.music.at(-1).tsunamiId,null);
+});
 
 test('live sky look follows strict host booleans on initial sync, show, hide and reconnect',async t=>{
   const f=fixture(t),p=f.initialPlayer;f.live.sync();assert.equal(p.gate,false);

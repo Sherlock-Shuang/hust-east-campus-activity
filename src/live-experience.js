@@ -100,7 +100,10 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   function updateFrozen(){
     const frozen=entryCoverOpen()||!!client?.state.paused||civilization.active||!!opened||!!skyQr?.isOpen||!audienceUI?.registered;
     onMusicStateChange({registered:!!audienceUI?.registered,experience:opened?(opened.workId||opened.kind||opened.id):null,
-      paused:entryCoverOpen()||!!client?.state.paused||civilization.active,foregroundAudio:!!opened?.foregroundAudio});
+      tsunamiId:client?.state.c118Flood?.id||null,
+      // Keep the score under the civilization end card; host pauses still
+      // silence it, as do the cover and any foreground room video.
+      paused:entryCoverOpen()||!!client?.state.paused,foregroundAudio:!!opened?.foregroundAudio});
     if(frozen!==lastFrozen){
       lastFrozen=frozen;
       if(frozen){restoreFocus=entryCoverOpen()?null:document.activeElement;document.exitPointerLock?.();}

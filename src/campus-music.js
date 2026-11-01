@@ -8,6 +8,7 @@ export const CAMPUS_TRACKS=Object.freeze({
   spider:{title:'Scared of the Dark',url:'/audio/scared-of-the-dark-v1.m4a',source:'https://www.youtube.com/watch?v=KCp_I6ZlfE4'},
   evening:{title:'Another Day of Sun',url:'/audio/another-day-of-sun-v1.m4a'},
   tasay:{title:'只要为你活一天',url:'/audio/live-for-you-v1.m4a'},
+  tsunami:{title:'一生所爱',url:'/audio/love-of-a-lifetime-v1.m4a'},
 });
 export function campusBackground({atmosphere}={}){return atmosphere==='sunset'||atmosphere==='night'?'evening':'campus';}
 export function selectCampusTrack(scene={}){
@@ -15,6 +16,7 @@ export function selectCampusTrack(scene={}){
   if(scene.experience==='opto-c118')return 'opto';
   // Other works retain their own soundtrack and sound effects.
   if(scene.experience)return null;
+  if(scene.tsunamiId)return 'tsunami';
   if(scene.mode==='spider')return 'spider';
   if(scene.mode==='roadster')return 'vehicle';
   return campusBackground(scene);
@@ -35,7 +37,7 @@ export function createCampusMusic({tracks=CAMPUS_TRACKS,storage=defaultStorage()
   now=()=>performance.now(),schedule=(fn,ms)=>setTimeout(fn,ms),cancel=id=>clearTimeout(id),fadeMs=850,onState=()=>{}}={}){
   const preference=readMusicPreference(storage),positions=new Map(),failed=new Set();
   const decks=[0,1].map(()=>{const audio=createAudio();audio.preload='none';audio.loop=true;audio.playsInline=true;audio.setAttribute?.('playsinline','');return {audio,key:null,gain:0,attempt:0,pending:false,seek:0,node:null,source:null,primed:false};});
-  let scene={ready:false,registered:false,mode:'walk',atmosphere:'day',experience:null,paused:false,hidden:false,foregroundAudio:false};
+  let scene={ready:false,registered:false,mode:'walk',atmosphere:'day',experience:null,tsunamiId:null,paused:false,hidden:false,foregroundAudio:false};
   let muted=preference.muted,volume=preference.volume,unlocked=false,blocked=false,disposed=false,context=null,contextTried=false;
   let active=null,timer=null,fade=null,revision=0,lastState='';
   const listeners=new Set();
@@ -119,6 +121,14 @@ export function createCampusMusic({tracks=CAMPUS_TRACKS,storage=defaultStorage()
   }
   function update(next){
     if(disposed||!Object.entries(next).some(([key,value])=>scene[key]!==value))return;
+    // A host replay is a new performance; room visits, pauses and repeated
+    // snapshots of the same event keep their place in the soundtrack.
+    if(next.tsunamiId&&next.tsunamiId!==scene.tsunamiId){
+      positions.delete('tsunami');
+      for(const deck of decks)if(deck.key==='tsunami'){
+        deck.seek=0;try{deck.audio.currentTime=0;}catch{}
+      }
+    }
     scene={...scene,...next};reconcile();
   }
   emit();
