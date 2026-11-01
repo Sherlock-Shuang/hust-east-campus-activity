@@ -1,13 +1,13 @@
 # 东校区 online 场景配乐
 
-配乐配置位于 `src/campus-music.js`，由校园页面统一持有播放器。原始音源只读，发布的是 AAC 128 kbps M4A 副本。当前四首合计 17,085,031 字节（16.3 MiB），按需流式加载；不阻塞模型和首次可玩画面，不将整首解码为 AudioBuffer。
+配乐配置位于 `src/campus-music.js`，由校园页面统一持有播放器。原始音源只读，发布的是 AAC 128 kbps M4A 副本。当前六首合计 23,321,709 字节（22.2 MiB），按需流式加载；不阻塞模型和首次可玩画面，不将整首解码为 AudioBuffer。
 
 | 场景 | 曲目 | 状态 |
 | --- | --- | --- |
 | 日间校园 | Forrest Gump Suite | 已接入 |
 | 光电大楼（所有室内入口、C118） | Cornfield Chase | 已接入 |
-| 特斯拉 | Sunflower — Post Malone & Swae Lee | 已配置场景，缺完整音频文件 |
-| 蜘蛛侠战衣 | Scared of the Dark — Lil Wayne & Ty Dolla $ign feat. XXXTENTACION | 已配置场景，缺完整音频文件 |
+| 特斯拉 | Sunflower — Post Malone & Swae Lee | 已接入用户提供的原版 |
+| 蜘蛛侠战衣 | Scared of the Dark — Lil Wayne & Ty Dolla $ign feat. XXXTENTACION | 已接入用户提供的原版 |
 | 夕阳或夜晚校园 | Another Day of Sun | 已接入 |
 | 过拟合恋人 | 只要为你活一天 — 黄英华 | 已接入 |
 
@@ -17,15 +17,15 @@
 
 左上角「♫ 配乐」可静音，再点展开箭头可调音量。输入昵称或进入体验时的首次交互会尝试解锁；浏览器拒绝自动播放时显示「开启配乐」，由玩家点击恢复。隐藏页面／离开页面、主持人暂停与文明暂停时立即停播；恢复后继续。C118 大屏视频有声且正在播放时暂停 BGM，关闭视频声音／暂停／转身停播后恢复。音频焦点只接受当前同源、attemptId 匹配的 C118 iframe；其他作品不可请求这个状态。
 
-## 待补音源
+## 原版音源
 
-找到的官方原版：
+2026-11-01 接入用户提供的两份完整 MP3，原文件保持不变：
 
-- [Sunflower 官方发行入口](https://postmalone.lnk.to/Sunflower)；[艺人 SoundCloud](https://soundcloud.com/postmalone/sunflower-spider-man-into-the)。2026-11-01 查询时 SoundCloud 返回 `downloadable:false`、`policy:BLOCK`，不能作为当前网站可靠的完整背景音源。
-- [Scared of the Dark 官方艺人音源](https://www.youtube.com/watch?v=KCp_I6ZlfE4)。本轮找到官方播放页，未取得可直接托管的完整音频文件。
+- `Sunflower+(Spider-Man：+Into+the+Spider-Verse)-Post+Malone&Swae+Lee.mp3`，约 158.07 秒；发布为 `public/audio/sunflower-original-v1.m4a`。
+- `Scared+of+the+Dark-Lil+Wayne&Ty+Dolla+$ign&XXXTentacion.mp3`，约 233.04 秒；发布为 `public/audio/scared-of-the-dark-v1.m4a`。
 
-这两个配置的 `url` 暂为 `null`，实际特斯拉／战衣场景继续当前昼夜校园音乐。取得文件后放入 `public/audio/`，分别补 `CAMPUS_TRACKS.vehicle.url` 和 `.spider.url` 即可。不使用预览、翻唱、盗版镜像或会失效的临时串流地址冒充完整音源。
+两首按场景加载，只有特斯拉触发 Sunflower，蜘蛛侠模式触发 Scared of the Dark。所有音源使用本站固定文件地址，音频异常时继续回退当前昼夜校园配乐。
 
 ## 验证
 
-测试及音源指纹记录在工作副本 `artifacts/soundtrack-20261101/`。音频实际解码和播放、跨场景切换、静音及音量使用应用内浏览器验证；未声称已在所有安卓或 iOS 真机测试。部署后还需核验静态音源 HEAD／Range、构建版本和公开页面。
+测试及音源指纹记录在工作副本 `artifacts/soundtrack-20261101/` 和 `artifacts/original-music-20261101/`。音频实际解码和播放、跨场景切换、静音及音量使用应用内浏览器验证；未声称已在所有安卓或 iOS 真机测试。部署后还需核验静态音源 HEAD／Range、构建版本和公开页面。

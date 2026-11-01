@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {CAMPUS_TRACKS,MUSIC_STORAGE_KEY,createCampusMusic,selectCampusTrack,readMusicPreference} from '../src/campus-music.js';
 
 const flush=async()=>{for(let i=0;i<5;i++)await Promise.resolve();};
-function setup({deferred=false,tracks={...CAMPUS_TRACKS,vehicle:{title:'Sunflower',url:'/audio/sunflower-v1.m4a'},spider:{title:'Scared of the Dark',url:'/audio/scared-of-the-dark-v1.m4a'}},storage}={}){
+function setup({deferred=false,tracks=CAMPUS_TRACKS,storage}={}){
   const audios=[],events=[];let time=0,id=0;const timers=new Map();
   class FakeAudio{
     paused=true;currentTime=0;duration=300;volume=1;requests=[];handlers=new Map();_src='';assignments=[];
@@ -93,6 +93,7 @@ test('an unavailable file falls back once, with no infinite failed requests',asy
   assert.equal(f.music.state.trackId,'campus');assert.equal(f.playing().length,1);const count=a.plays;f.music.update({atmosphere:'day'});await flush();assert.equal(a.plays,count);f.music.dispose();
 });
 test('missing vehicle and suit assets retain the selected campus background',async()=>{
-  const f=setup({tracks:CAMPUS_TRACKS});await f.start();f.music.update({mode:'spider'});assert.equal(f.music.state.trackId,CAMPUS_TRACKS.spider.url?'spider':'campus');
-  f.music.update({mode:'roadster',atmosphere:'night'});await flush();f.advance(900);assert.equal(f.music.state.trackId,CAMPUS_TRACKS.vehicle.url?'vehicle':'evening');f.music.dispose();
+  const tracks={...CAMPUS_TRACKS,vehicle:{...CAMPUS_TRACKS.vehicle,url:null},spider:{...CAMPUS_TRACKS.spider,url:null}};
+  const f=setup({tracks});await f.start();f.music.update({mode:'spider'});assert.equal(f.music.state.trackId,'campus');
+  f.music.update({mode:'roadster',atmosphere:'night'});await flush();f.advance(900);assert.equal(f.music.state.trackId,'evening');f.music.dispose();
 });
