@@ -1391,16 +1391,16 @@
     "/works/tasay/": {
       "chunks": [
         {
-          "url": "/_activity_assets/e499e7ae39f93d1c2c63074bee1f683571e76b01160635afd707526530736e4b.bin",
+          "url": "/_activity_assets/931e0d92d743ac3bf2a8cc61c3054279973f56f4afbf273fda38844383ac97dc.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 332,
-          "sha256": "72afe32c9bd2b50e0e291c92eaecfcbaeaaa61d7d20bf27a92a19d01b516a1a7"
+          "storedBytes": 327,
+          "sha256": "2a2352615843ae12cd6cb7b62f6a533e8da2ad15e4552a3cecf63d6633f9a13d"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "72afe32c9bd2b50e0e291c92eaecfcbaeaaa61d7d20bf27a92a19d01b516a1a7"
+      "sha256": "2a2352615843ae12cd6cb7b62f6a533e8da2ad15e4552a3cecf63d6633f9a13d"
     },
     "/works/tasay/assets/66c8ec9cf7b1f1e882d92c7f0c2e8d73-B7Cr3f9M.png": {
       "chunks": [
@@ -1461,16 +1461,16 @@
     "/works/tasay/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/e499e7ae39f93d1c2c63074bee1f683571e76b01160635afd707526530736e4b.bin",
+          "url": "/_activity_assets/931e0d92d743ac3bf2a8cc61c3054279973f56f4afbf273fda38844383ac97dc.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 332,
-          "sha256": "72afe32c9bd2b50e0e291c92eaecfcbaeaaa61d7d20bf27a92a19d01b516a1a7"
+          "storedBytes": 327,
+          "sha256": "2a2352615843ae12cd6cb7b62f6a533e8da2ad15e4552a3cecf63d6633f9a13d"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "72afe32c9bd2b50e0e291c92eaecfcbaeaaa61d7d20bf27a92a19d01b516a1a7"
+      "sha256": "2a2352615843ae12cd6cb7b62f6a533e8da2ad15e4552a3cecf63d6633f9a13d"
     },
     "/works/wanyan/": {
       "chunks": [
@@ -2299,6 +2299,34 @@
       "mime": "image/jpeg",
       "bytes": 386175,
       "sha256": "0f8e8de1f46c248fb02cb0522c27cb6332881ce6c2f00db8ea8839f307f1fce2"
+    },
+    "/works/tasay/assets/index-BaVUxhSb.js": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/4d4e7d4c575ff318a20c23cac6c262eedbcf3baaf9002b6d3cf4aad202603ecb.bin",
+          "encoding": "gzip",
+          "bytes": 253879,
+          "storedBytes": 82244,
+          "sha256": "28ac739edab069c529dc5162c363c339e71d73577826915015d416131ea7bcf2"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 253879,
+      "sha256": "28ac739edab069c529dc5162c363c339e71d73577826915015d416131ea7bcf2"
+    },
+    "/works/tasay/assets/opto-c118-audience-v3-eerie-CPqBXi-s.jpg": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/6171fb5df821cbcf9eb6f3de2849f0fc5fa73c7ecd6ce7ee3b011e6508b65989.bin",
+          "encoding": "gzip",
+          "bytes": 364765,
+          "storedBytes": 364690,
+          "sha256": "87c3a03dd029abb00acce84322759190a85807a735935115e7aadb35354db045"
+        }
+      ],
+      "mime": "image/jpeg",
+      "bytes": 364765,
+      "sha256": "87c3a03dd029abb00acce84322759190a85807a735935115e7aadb35354db045"
     }
   },
   "spa": [
