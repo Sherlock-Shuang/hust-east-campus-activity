@@ -63,3 +63,13 @@ npm run build:vercel
 ## 运行与发布边界
 
 继续使用现有 `npm run dev` / `npm start` 和 GitHub → Vercel 发布流程，不更换服务器或要求新购买服务。小型作品运行文件经 `deploy-assets/update-work-assets.mjs` 加入显式白名单、哈希资源包及 Vercel 路由；不能只修改源码转换器却遗漏活动运行副本。主工程同步保留 `library-manifest.json` 的原来源检查及 Unity 元数据。静态地图数据、人物/车辆控制、活动统计与通关协议不因本轮优化改变。
+
+## 最终回归与作品生命周期
+
+最终Node24整套回归（校园、部署资产及图书馆集成）全部通过，结果见 `artifacts/performance-20261101/tests-final.log`；`npm run build:vercel` 成功，103个作品文件完成白名单物化，相关静态路由与manifest一致。原有大chunk和经典script提示仍保留，不把构建警告隐藏为零。
+
+三个作品各实际进入、返回10次：图书馆单独完成10次循环；晚言与恋人在另一临时活动服务共完成20次。晚言需等真实NativeControls首帧，再通过真实画布点击和回车进入战斗；图书馆保留原Esc释放鼠标锁定后返回的操作。测试夹具因此更新，没有绕过原输入或伪造完成。
+
+每次退出后仅余校园1个frame，强制GC后的document数为1；预热后JS堆约228MB并保持平台，没有观察到连续增长。这个指标不等于进程总内存或物理GPU内存。各作品首轮公告/暂停/恢复期间，校园的renderer.render计数完全不增加，返回后立即继续绘制，保存的位置和交通模式不变；活动记录均为独立打开1人、当前体验0人，没有完成事件。
+
+原始数据：`library-lifecycle-passed.json` 为已完成图书馆10轮的独立核对；`wanyan-tasay-lifecycle/report.json` 为后两作品20轮完整通过结果。较早的自动化启动时序/鼠标锁定失败报告保留，未覆盖为成功。最终源码与新的资源已同步原校园工程，生日原版未修改。
