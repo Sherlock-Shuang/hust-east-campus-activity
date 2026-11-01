@@ -1391,16 +1391,16 @@
     "/works/tasay/": {
       "chunks": [
         {
-          "url": "/_activity_assets/38e1605ee3f9481dcd129d9e2ee66d4c8794000b0643ca7a974901d1f788752f.bin",
+          "url": "/_activity_assets/cf9b0ac0255024b0eefcb606e2a4f83b90149d828e0743a81e6e58ff4c0595d4.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 332,
-          "sha256": "a25f57b0c88dd838df41d0c0103d12e580cb30d178f9987ea87e0fd5e6557974"
+          "storedBytes": 330,
+          "sha256": "74d0f12bc51c8f747a300a54748cfa54355c5dc752a1c273d5dfdd13798e6ef2"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "a25f57b0c88dd838df41d0c0103d12e580cb30d178f9987ea87e0fd5e6557974"
+      "sha256": "74d0f12bc51c8f747a300a54748cfa54355c5dc752a1c273d5dfdd13798e6ef2"
     },
     "/works/tasay/assets/66c8ec9cf7b1f1e882d92c7f0c2e8d73-B7Cr3f9M.png": {
       "chunks": [
@@ -1461,16 +1461,16 @@
     "/works/tasay/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/38e1605ee3f9481dcd129d9e2ee66d4c8794000b0643ca7a974901d1f788752f.bin",
+          "url": "/_activity_assets/cf9b0ac0255024b0eefcb606e2a4f83b90149d828e0743a81e6e58ff4c0595d4.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 332,
-          "sha256": "a25f57b0c88dd838df41d0c0103d12e580cb30d178f9987ea87e0fd5e6557974"
+          "storedBytes": 330,
+          "sha256": "74d0f12bc51c8f747a300a54748cfa54355c5dc752a1c273d5dfdd13798e6ef2"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "a25f57b0c88dd838df41d0c0103d12e580cb30d178f9987ea87e0fd5e6557974"
+      "sha256": "74d0f12bc51c8f747a300a54748cfa54355c5dc752a1c273d5dfdd13798e6ef2"
     },
     "/works/wanyan/": {
       "chunks": [
@@ -2215,6 +2215,62 @@
       "mime": "text/javascript; charset=utf-8",
       "bytes": 252569,
       "sha256": "1f31c8ac0c0cef9ca9378e3ff4dcababcbb72a041ccef4ff08bb18e6356bca74"
+    },
+    "/works/tasay/assets/index-DU5CioSM.js": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/272f735de3f1942b754dedbf7ecf7dc8d7200d272c9903f466f6001400f3f588.bin",
+          "encoding": "gzip",
+          "bytes": 253813,
+          "storedBytes": 82194,
+          "sha256": "767ec490276273176f78f4227af96356b0e292424254fc711b627cdf647056bf"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 253813,
+      "sha256": "767ec490276273176f78f4227af96356b0e292424254fc711b627cdf647056bf"
+    },
+    "/works/tasay/assets/opto-location-map-CgBtfuv0.svg": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/dc14da7be5246160f61d925b935bab6185c465dcaf814ea90d5403389689d79c.bin",
+          "encoding": "gzip",
+          "bytes": 24312,
+          "storedBytes": 4887,
+          "sha256": "1f11efe3a68f0a059479460e86edac25657baf27dd1cfb6f6d3466a2d3f91aa0"
+        }
+      ],
+      "mime": "image/svg+xml",
+      "bytes": 24312,
+      "sha256": "1f11efe3a68f0a059479460e86edac25657baf27dd1cfb6f6d3466a2d3f91aa0"
+    },
+    "/works/tasay/assets/opto-c118-audience-v1-BcvyN3nW.jpg": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/3107b99a1dd3d494a61d0230f7b79d67971dbeb9535e49d0d6f5a3275680fbca.bin",
+          "encoding": "gzip",
+          "bytes": 384329,
+          "storedBytes": 384254,
+          "sha256": "6fed96d26b8549a4714700ac82ca80bf5d810870de37ec6968a1b2565b322c7c"
+        }
+      ],
+      "mime": "image/jpeg",
+      "bytes": 384329,
+      "sha256": "6fed96d26b8549a4714700ac82ca80bf5d810870de37ec6968a1b2565b322c7c"
+    },
+    "/works/tasay/assets/index-Bux-W7sv.css": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/f791eec2061470a278a939ec2b263706cc1a5219581841425cb0da4f00b6d754.bin",
+          "encoding": "gzip",
+          "bytes": 76249,
+          "storedBytes": 15275,
+          "sha256": "209e3a337475450452cb4e2f560a4d6b301a9cfa606d308771d7e985d63944ee"
+        }
+      ],
+      "mime": "text/css; charset=utf-8",
+      "bytes": 76249,
+      "sha256": "209e3a337475450452cb4e2f560a4d6b301a9cfa606d308771d7e985d63944ee"
     }
   },
   "spa": [

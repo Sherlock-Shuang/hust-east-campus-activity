@@ -1,0 +1,28 @@
+.campus-location-screen .location-shell { max-width: 760px; }
+.campus-location-card { overflow: hidden; border-radius: 16px; background: #fff; color: #202a25; border: 1px solid #344037; }
+.campus-location-map { position: relative; height: clamp(230px, 47svh, 420px); background: #e6eadf; overflow: hidden; }
+.campus-location-map > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.campus-location-marker { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.campus-location-label { position: absolute; bottom: 49px; left: 0; transform: translateX(-50%); white-space: nowrap; padding: 10px 16px; background: #fff; border-radius: 7px; box-shadow: 0 3px 14px #283b2426; font-size: 15px; font-weight: 600; }
+.campus-location-pin { position: absolute; left: -15px; bottom: 9px; width: 30px; height: 30px; background: #db6358; border: 3px solid white; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 6px #283b2433; z-index: 1; }
+.campus-location-pin i { display: block; position: absolute; inset: 7px; border-radius: 50%; background: white; }
+.campus-location-dot { display: block; position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; border: 3px solid #fff; background: #4c91d1; box-shadow: 0 0 0 18px #5b9cd123; }
+.campus-location-north { position: absolute; right: 16px; top: 14px; display: grid; text-align: center; font-size: 24px; line-height: 1; color: #626c60; }
+.campus-location-north small { margin-top: 5px; font-size: 10px; }
+.campus-location-credit { position: absolute; bottom: 6px; right: 8px; color: #6e796e; background: #ffffffb5; padding: 2px 4px; border-radius: 3px; font-size: 10px; text-decoration: none; }
+.campus-location-details { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 22px 24px; }
+.campus-location-details h2 { margin: 0 0 8px; font-size: 21px; font-weight: 600; }
+.campus-location-details p { margin: 0; font-size: 13px; line-height: 1.6; color: #7a817b; }
+.campus-location-distance { flex-shrink: 0; font-size: 12px; color: #838b84; white-space: nowrap; }
+.campus-location-distance strong { font-size: 17px; font-weight: 500; color: #68796b; }
+@media (max-width: 600px) {
+  .campus-location-screen { padding: max(18px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .campus-location-details { align-items: flex-start; flex-direction: column; gap: 12px; padding: 20px; }
+  .campus-location-details h2 { font-size: 20px; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .campus-location-screen { align-items: start; padding-top: max(16px, env(safe-area-inset-top)); }
+  .campus-location-screen .location-heading { margin-bottom: 12px; }
+  .campus-location-map { height: 230px; }
+  .campus-location-details { padding: 16px 20px; }
+}

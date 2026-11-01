@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, Fragment, type K
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAppStore } from "../../app/store/useAppStore";
 import { exitCopy, mockChatCopy, rollbackCopy, storyCopy } from "../../config/hardcodedCopy";
+import { monitorImageUrl, storyLocation } from "../../config/storyMedia";
 import { getStageStatus } from "../../features/story/stageConfig";
 import { countNarrativeConversationMessages, type ChatMessage } from "../../types/session";
 import { useChatViewport } from "../../hooks/useChatViewport";
@@ -1033,6 +1034,8 @@ export function ChatPage() {
                   <article key={message.id} className="desktop-space-notice-row">
                     <div className="desktop-space-notice-card">
                       <div className="desktop-space-notice-badge">定位共享</div>
+                      <strong className="desktop-space-notice-title">{storyLocation.name}</strong>
+                      <p className="desktop-space-notice-copy">{storyLocation.address}</p>
                       <button
                         className="desktop-message-rollback"
                         type="button"
@@ -1051,7 +1054,7 @@ export function ChatPage() {
                 return null;
               }
 
-              const isMonitorImage = message.kind === "monitor_image" && Boolean(message.mediaUrl);
+              const isMonitorImage = message.kind === "monitor_image";
 
               const showTime = messageTimeBreaks.has(message.id);
               return (
@@ -1070,13 +1073,13 @@ export function ChatPage() {
                     <span className="desktop-message-pending-spinner" aria-label="等待发送" />
                   ) : null}
 
-                  <div className={`desktop-message-stack ${message.role}`}>
+                  <div className={`desktop-message-stack ${message.role}${isMonitorImage ? " has-media" : ""}`}>
                     <div className={`desktop-message-bubble ${message.role}${isMonitorImage ? " media" : ""}`}>
                       {isMonitorImage ? (
                         <img
                           className="desktop-message-media"
-                          src={message.mediaUrl}
-                          alt={message.displayedText}
+                          src={monitorImageUrl}
+                          alt={storyCopy.monitorImageAlt}
                           loading="lazy"
                           onLoad={() => { if (followScrollRef.current && streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight; }}
                         />

@@ -23,6 +23,13 @@ await cp(join(source,'public'),join(stage,'public'),{recursive:true,filter:path=
 await symlink(join(source,'node_modules'),join(stage,'node_modules'),'dir');
 // Keep restored narrative and mobile UI reproducible without changing the upstream checkout.
 await cp(join(here,'ui-overrides'),stage,{recursive:true});
+// New messages and restored chat views share the same versioned campus media.
+const storePath=join(stage,'src/app/store/useAppStore.ts');
+let storeSource=await readFile(storePath,'utf8');
+const oldMonitor='const monitorImageUrl = new URL("../../../66c8ec9cf7b1f1e882d92c7f0c2e8d73.png", import.meta.url).href;';
+if(storeSource.split(oldMonitor).length!==2)throw new Error('Monitor image binding changed; review campus media adapter.');
+storeSource=storeSource.replace(oldMonitor,'import { monitorImageUrl } from "../../config/storyMedia";');
+await writeFile(storePath,storeSource);
 await mkdir(join(stage,'.empty-env'),{recursive:true});
 let entry=await readFile(join(stage,'src/main.tsx'),'utf8');
 if(!entry.includes('<BrowserRouter>'))throw new Error('BrowserRouter entry changed; review adapter before rebuilding.');

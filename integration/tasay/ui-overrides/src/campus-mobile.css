@@ -1,6 +1,9 @@
 /* Campus phone UI. Desktop rules remain upstream; the phone has one full screen per view. */
 .mobile-only { display: none; }
 .wx-avatar-unread { display: none; }
+.wx-shell .desktop-message-stack.has-media { width: 420px; }
+.wx-shell .desktop-message-bubble.media { width: 100%; padding: 0; border: 0; background: transparent; }
+.wx-shell .desktop-message-media { width: 100%; height: auto; }
 .wx-new-messages { position: absolute; right: 16px; bottom: 100px; z-index: 4; min-height: 40px; padding: 8px 14px; border-radius: 4px; background: #fff; color: #576b95; box-shadow: 0 2px 10px #0001; }
 
 @media (max-width: 860px), (max-width: 1024px) and (max-height: 540px) {
