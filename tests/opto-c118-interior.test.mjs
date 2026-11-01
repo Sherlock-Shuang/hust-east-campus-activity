@@ -15,8 +15,8 @@ function travel(m,target,speed=.5){
   assert.fail('walker did not reach target');
 }
 
-test('two user photos revise the rake, cross aisle and mid-side doors while dimensions and 520 seats remain estimates',()=>{
-  assert.equal(OPTO_C118_EVIDENCE.id,'opto-c118');assert.equal(OPTO_C118_EVIDENCE.userPhotos.length,2);
+test('five user photos revise the rake, cross aisle and mid-side doors while dimensions and 520 seats remain estimates',()=>{
+  assert.equal(OPTO_C118_EVIDENCE.id,'opto-c118');assert.equal(OPTO_C118_EVIDENCE.userPhotos.length,5);
   assert.equal(plan.dimensions,'photo-estimate');assert.equal(plan.layoutEstimated,true);assert.equal(plan.seatCount,520);
   assert.ok(OPTO_C118_EVIDENCE.uncertain.some(s=>s.includes('座位数')));
   assert.equal(plan.seatRows.filter(r=>r.section==='front').length,10);assert.equal(plan.seatRows.filter(r=>r.section==='rear').length,10);
@@ -75,8 +75,8 @@ test('front stairs join the audience aisle to the piano and allow walking back d
   const m=motion(),aisle=plan.aisles.find(a=>a.id==='left-main');
   assert.equal(m.placeWalker({x:(aisle.x0+aisle.x1)/2,z:plan.crossAisle.z,yaw:0}).ok,true);
   const waypoints=[{x:m.state.x,z:plan.viewpoints.front.z},plan.viewpoints.front,
-    {x:0,z:plan.stage.front-.75},{x:plan.piano.x-1.65,z:plan.stage.front-.75},
-    {x:plan.piano.x-1.65,z:plan.piano.z+.2}];
+    {x:0,z:plan.stage.front-.75},{x:plan.piano.x-2.1,z:plan.stage.front-.75},
+    {x:plan.piano.x-2.1,z:plan.piano.z+.2}];
   for(const waypoint of waypoints){const walk=travel(m,waypoint,1);assert.ok(walk.maxRise<=.181);m.suspend();}
   close(m.state.y,plan.stage.height);
   assert.equal(m.placeWalker({x:plan.piano.x,z:plan.piano.z,yaw:0}).ok,false,'piano remains solid');
@@ -117,7 +117,7 @@ test('rendered aisle treads match navigation height; video surface and new photo
     const ray=new THREE.Raycaster(new THREE.Vector3(0,s.surfaceY+.2,z),new THREE.Vector3(0,-1,0));
     close(ray.intersectObject(hall.group,true)[0].point.y,s.surfaceY,.003);
   }
-  assert.equal(hall.videoScreen.name,'c118-video-screen');assert.equal(hall.videoScreen.visible,false);close(hall.videoScreen.geometry.parameters.width,9.8);close(hall.videoScreen.geometry.parameters.height,6);
+  assert.equal(hall.videoScreen.name,'c118-video-screen');assert.equal(hall.videoScreen.visible,false);close(hall.videoScreen.geometry.parameters.width,12);close(hall.videoScreen.geometry.parameters.height,6.75);
   for(const name of['c118-grand-piano-case','c118-middle-aisle-wood-guard','c118-side-light-strip','c118-ceiling-low-beams','c118-seat-headrests'])assert.ok(hall.group.getObjectByName(name),name);
   for(const d of hall.plan.doors){
     const ray=new THREE.Raycaster(new THREE.Vector3(d.x-d.side*.8,d.y+1.2,d.z),new THREE.Vector3(d.side,0,0));
@@ -135,7 +135,7 @@ test('instances, LOD, material ownership and repeatable disposal stay bounded',(
   hall.update({position:{x:0,z:100}});assert.ok(hall.group.children.some(o=>!o.visible&&o.name==='c118-seat-foot-brackets'));
   hall.update(null);assert.ok(hall.group.children.filter(o=>o.name==='c118-seat-foot-brackets').every(o=>o.visible));
   let dg=0,dm=0,dt=0;const instanceDisposals=[];hall.group.traverse(o=>{if(o.isInstancedMesh){const state={count:0};instanceDisposals.push(state);o.addEventListener('dispose',()=>state.count++);}});
-  geometries.forEach(g=>g.addEventListener('dispose',()=>dg++));materials.forEach(m=>m.addEventListener('dispose',()=>dm++));textures.forEach(t=>t.addEventListener('dispose',()=>dt++));assert.equal(textures.size,3);
+  geometries.forEach(g=>g.addEventListener('dispose',()=>dg++));materials.forEach(m=>m.addEventListener('dispose',()=>dm++));textures.forEach(t=>t.addEventListener('dispose',()=>dt++));assert.equal(textures.size,4);
   const scene=new THREE.Scene();scene.add(hall.group);
   hall.dispose();hall.dispose();assert.equal(hall.group.children.length,0);assert.equal(hall.group.parent,null);assert.equal(scene.children.length,0);assert.ok(instanceDisposals.length>0);assert.ok(instanceDisposals.every(state=>state.count===1),'each instance buffer owner is released exactly once');assert.equal(dg,geometries.size);assert.equal(dm,materials.size);assert.equal(dt,textures.size);assert.equal(JSON.stringify(hall.plan),original);
 });

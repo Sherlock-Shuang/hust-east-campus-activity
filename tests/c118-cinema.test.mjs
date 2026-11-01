@@ -13,7 +13,7 @@ test('immersive viewing fits the whole programme at ninety percent without persp
   const camera=new THREE.PerspectiveCamera(c118CinemaFov(view,aspect),aspect,.07,90);
   camera.position.set(view.x,view.y,view.z);camera.updateMatrixWorld();
   const corners=[];
-  for(const x of[-4.9,4.9])for(const y of[-9.8*9/32,9.8*9/32])corners.push(new THREE.Vector3(x,view.y+y,view.z-view.distance).project(camera));
+  for(const x of[-plan.screen.width/2,plan.screen.width/2])for(const y of[-plan.screen.width*9/32,plan.screen.width*9/32])corners.push(new THREE.Vector3(x,view.y+y,view.z-view.distance).project(camera));
   const width=Math.max(...corners.map(p=>p.x)),height=Math.max(...corners.map(p=>p.y));
   assert.ok(width<=.900001&&height<=.900001,'all film corners are on screen');
   assert.ok(Math.abs(Math.max(width,height)-.9)<1e-6,'film fills the limiting dimension');

@@ -17,12 +17,12 @@ test('all chairs are addressable and nearby seat selection follows horizontal an
 
 test('the third-row view enlarges the whole screen and clears the people in front across common aspect ratios',()=>{
  const seating=createC118Seating(plan),seat=seating.recommendedSeat,view=seating.viewFor(seat.id);
- const screenZ=-plan.config.depth/2+.43,screenMidY=plan.stage.height+3.75;
+ const screenZ=-plan.config.depth/2+.43,screenMidY=plan.screen.y;
  for(const aspect of[16/9,4/3,9/16,390/844]){
   const fov=c118SeatedFov(view,aspect);
   const camera=new THREE.PerspectiveCamera(fov,aspect,.07,90);camera.rotation.order='YXZ';camera.position.set(view.x,view.y,view.z);camera.rotation.set(view.pitch,view.yaw,0);camera.updateMatrixWorld();
   const corners=[];
-  for(const x of[-4.9,4.9])for(const y of[screenMidY-3,screenMidY+3]){
+  for(const x of[-plan.screen.width/2,plan.screen.width/2])for(const y of[screenMidY-plan.screen.height/2,screenMidY+plan.screen.height/2]){
    const p=new THREE.Vector3(x,y,screenZ).project(camera);corners.push(p);
    assert.ok(Math.abs(p.x)<.95&&Math.abs(p.y)<.95,`whole screen stays inside the comfortable frame at aspect ${aspect}`);
   }
@@ -32,7 +32,7 @@ test('the third-row view enlarges the whole screen and clears the people in fron
  // The lower screen edge is the strictest line of sight. Even if a host later
  // fills any currently empty front chair, its head must not obscure the video.
  for(const row of plan.seatRows.filter(r=>r.row<seat.row)){
-  const t=(view.z-row.z)/(view.z-screenZ),rayY=view.y+(screenMidY-3-view.y)*t;
+  const t=(view.z-row.z)/(view.z-screenZ),rayY=view.y+(screenMidY-plan.screen.height/2-view.y)*t;
   assert.ok(row.y+1.43<rayY,`row ${row.row+1} head clears the screen bottom`);
  }
 });
