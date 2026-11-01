@@ -264,6 +264,14 @@ export function createCommuteSimulation(route,options={}){
     const dx=-Math.sin(yaw)*span,dz=-Math.cos(yaw)*span,ox=-Math.sin(other.yaw)*otherSpan,oz=-Math.cos(other.yaw)*otherSpan;
     return segmentDistance({x:pose.x-dx,z:pose.z-dz},{x:pose.x+dx,z:pose.z+dz},{x:other.x-ox,z:other.z-oz},{x:other.x+ox,z:other.z+oz})-agent.radius-other.radius;
   }
+  // Each neighbour tests the same sweep endpoints, quarters and bisection
+  // fractions. Reuse complete read-only poses only for this one fixed path.
+  // Never memoize centerPose itself: poseWithOffset mutates its result. Never
+  // carry a sample into the next actor, step, or longitudinal/lateral sweep.
+  function memoizeSweepSample(sample){
+    let samples;
+    return t=>{samples??=new Map();if(samples.has(t))return samples.get(t);const value=sample(t);samples.set(t,value);return value;};
+  }
   function playerClearance(agent,progress=agent.progress,lateral=agent.lateral){
     if(!playerObstacle)return Infinity;
     const p=poseForAgent(agent,progress,lateral),obstacle=playerObstacle;
@@ -636,7 +644,7 @@ export function createCommuteSimulation(route,options={}){
         const nearby=new Set(),gx=Math.floor(agent.x/4),gz=Math.floor(agent.z/4);
         for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)for(const other of buckets.get(`${gx+dx},${gz+dz}`)||[])if(other!==agent&&other.active)nearby.add(other);
         const wantedProgress=agent.progress,wantedLateral=agent.lateral,yawDelta=Math.atan2(Math.sin(agent.yaw-previousYaw),Math.cos(agent.yaw-previousYaw));
-        const at=t=>poseForAgent(agent,previousProgress+(wantedProgress-previousProgress)*t,previousLateral+(wantedLateral-previousLateral)*t);
+        const at=memoizeSweepSample(t=>poseForAgent(agent,previousProgress+(wantedProgress-previousProgress)*t,previousLateral+(wantedLateral-previousLateral)*t));
         let fraction=1;
         // Resolve translation before rotation. Coupling both can deadlock a
         // stopped front rider: turning its rear corner needs space that its
@@ -656,7 +664,7 @@ export function createCommuteSimulation(route,options={}){
           // In particular, an outer walker behind a widening-road rider may
           // wait for that rider; keeping the current lateral position lets the
           // rider advance first instead of both waiting for each other forever.
-          const safeFraction=(sample,roadCheck)=>{let result=1;for(const other of nearby){const initial=sample(0),initialGap=worldClearance(agent,initial,previousYaw,other);let previous=0;for(let n=1;n<=4;n++){const t=n/4,p=sample(t),gap=worldClearance(agent,p,previousYaw,other);if(gap<.025&&gap<initialGap-1e-7||roadCheck&&!roadCheck(t)){let lo=previous,hi=t;for(let k=0;k<9;k++){const m=(lo+hi)/2;if(worldClearance(agent,sample(m),previousYaw,other)<Math.min(.025,initialGap)||roadCheck&&!roadCheck(m))hi=m;else lo=m;}result=Math.min(result,lo);break;}previous=t;}}return result;};
+          const safeFraction=(sample,roadCheck)=>{sample=memoizeSweepSample(sample);if(roadCheck)roadCheck=memoizeSweepSample(roadCheck);let result=1;for(const other of nearby){const initial=sample(0),initialGap=worldClearance(agent,initial,previousYaw,other);let previous=0;for(let n=1;n<=4;n++){const t=n/4,p=sample(t),gap=worldClearance(agent,p,previousYaw,other);if(gap<.025&&gap<initialGap-1e-7||roadCheck&&!roadCheck(t)){let lo=previous,hi=t;for(let k=0;k<9;k++){const m=(lo+hi)/2;if(worldClearance(agent,sample(m),previousYaw,other)<Math.min(.025,initialGap)||roadCheck&&!roadCheck(m))hi=m;else lo=m;}result=Math.min(result,lo);break;}previous=t;}}return result;};
           const longitudinal=t=>poseForAgent(agent,previousProgress+(wantedProgress-previousProgress)*t,previousLateral);
           const fitsRoad=t=>agent.kind!=='scooter'||Math.abs(pavementCorridor.limit(previousProgress+(wantedProgress-previousProgress)*t,previousLateral)-previousLateral)<.002;
           const along=Math.min(safeFraction(longitudinal,fitsRoad),playerSweepFraction(agent,previousProgress,previousLateral,wantedProgress,previousLateral));

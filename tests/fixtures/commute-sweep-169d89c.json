@@ -1,0 +1,288 @@
+{
+  "baselineRef": "169d89c",
+  "scenarios": [
+    {
+      "id": "campus-peak-bidirectional",
+      "steps": 500,
+      "hash": "7f0bcb11ae1d2dfa2cc09bd41ec4b282cf88e68ba934e8078c461684128507c0",
+      "coverage": {
+        "directions": [
+          -1,
+          1
+        ],
+        "signalStates": [
+          "amber",
+          "green",
+          "red"
+        ],
+        "constraints": [
+          "body-sweep",
+          "road-envelope"
+        ],
+        "waitReasons": [
+          "queue",
+          "signal"
+        ],
+        "arrivals": 22,
+        "departures": 8,
+        "dismounted": 0,
+        "laneChanges": 6
+      },
+      "finalStats": {
+        "activeCount": 334,
+        "scooterCount": 283,
+        "walkingCount": 51,
+        "pedestrianCount": 51,
+        "queuedCount": 81,
+        "waitingCount": 81,
+        "meanSpeed": 1.938693060626722,
+        "congestion": 0.24251497005988024,
+        "arrivals": 22,
+        "arrivedTotal": 22,
+        "originalScooterCount": 283,
+        "scenarioScooterShare": 0.86,
+        "throughputPerMinute": 22,
+        "inflowPerMinute": 97.74999999999982,
+        "demandFactor": 0.9583333333333315,
+        "targetCount": 352,
+        "maxAgents": 600,
+        "queueSeconds": 1167.1000000000038,
+        "signalQueues": [
+          {
+            "id": "node/11395860771",
+            "waiting": 32
+          },
+          {
+            "id": "user-confirmed/dongjiu-lakeside-turn",
+            "waiting": 42
+          }
+        ],
+        "dismountedTotal": 0,
+        "laneChangesTotal": 6,
+        "laneChangingCount": 1,
+        "estimated": true,
+        "forwardCount": 280,
+        "opposingCount": 54,
+        "departures": 8,
+        "yieldingCount": 0,
+        "originCounts": {
+          "selected-dorm-road": 49,
+          "source-junction:114.4273683,30.5187708": 31,
+          "source-junction:114.4273150,30.5184450": 35,
+          "source-junction:114.4269337,30.5177335": 27,
+          "source-junction:114.4268909,30.5173868": 43,
+          "source-junction:114.4268480,30.5170799": 29,
+          "source-junction:114.4268620,30.5163219": 32,
+          "source-junction:114.4240420,30.5166394": 29,
+          "source-junction:114.4222491,30.5161035": 5,
+          "opposing-public-road": 54
+        }
+      }
+    },
+    {
+      "id": "campus-reset-and-player",
+      "steps": 500,
+      "hash": "65abc368e733c0354cdbeaa864475064aee2c32ba5264dd9df64f63f69aa87df",
+      "coverage": {
+        "directions": [
+          -1,
+          1
+        ],
+        "signalStates": [
+          "green",
+          "off",
+          "red"
+        ],
+        "constraints": [
+          "body-sweep",
+          "road-envelope"
+        ],
+        "waitReasons": [
+          "oncoming",
+          "player",
+          "queue",
+          "signal"
+        ],
+        "arrivals": 7,
+        "departures": 4,
+        "dismounted": 0,
+        "laneChanges": 7
+      },
+      "finalStats": {
+        "activeCount": 135,
+        "scooterCount": 128,
+        "walkingCount": 7,
+        "pedestrianCount": 7,
+        "queuedCount": 8,
+        "waitingCount": 8,
+        "meanSpeed": 3.7584202119534287,
+        "congestion": 0.05925925925925926,
+        "arrivals": 7,
+        "arrivedTotal": 7,
+        "originalScooterCount": 128,
+        "scenarioScooterShare": 0.95,
+        "throughputPerMinute": 7,
+        "inflowPerMinute": 134.0687999999996,
+        "demandFactor": 0.8214999999999976,
+        "targetCount": 131,
+        "maxAgents": 160,
+        "queueSeconds": 50.999999999999936,
+        "signalQueues": [
+          {
+            "id": "node/11395860771",
+            "waiting": 5
+          },
+          {
+            "id": "user-confirmed/dongjiu-lakeside-turn",
+            "waiting": 0
+          }
+        ],
+        "dismountedTotal": 0,
+        "laneChangesTotal": 5,
+        "laneChangingCount": 1,
+        "estimated": true,
+        "forwardCount": 78,
+        "opposingCount": 57,
+        "departures": 4,
+        "yieldingCount": 0,
+        "originCounts": {
+          "selected-dorm-road": 7,
+          "source-junction:114.4273683,30.5187708": 10,
+          "source-junction:114.4273150,30.5184450": 10,
+          "source-junction:114.4269337,30.5177335": 10,
+          "source-junction:114.4268909,30.5173868": 11,
+          "source-junction:114.4268480,30.5170799": 5,
+          "source-junction:114.4268620,30.5163219": 11,
+          "source-junction:114.4240420,30.5166394": 10,
+          "source-junction:114.4222491,30.5161035": 4,
+          "opposing-public-road": 57
+        }
+      }
+    },
+    {
+      "id": "bridge-opposing-signals",
+      "steps": 900,
+      "hash": "8d99bf86342aa2acbb3b6a4fd31ff4b28c8a5d569db81e97c259782774b7ac70",
+      "coverage": {
+        "directions": [
+          -1,
+          1
+        ],
+        "signalStates": [
+          "amber",
+          "green",
+          "red"
+        ],
+        "constraints": [],
+        "waitReasons": [
+          "oncoming",
+          "queue",
+          "signal"
+        ],
+        "arrivals": 11,
+        "departures": 6,
+        "dismounted": 0,
+        "laneChanges": 1
+      },
+      "finalStats": {
+        "activeCount": 36,
+        "scooterCount": 30,
+        "walkingCount": 6,
+        "pedestrianCount": 6,
+        "queuedCount": 32,
+        "waitingCount": 32,
+        "meanSpeed": 0.30738226166711513,
+        "congestion": 0.8888888888888888,
+        "arrivals": 11,
+        "arrivedTotal": 11,
+        "originalScooterCount": 30,
+        "scenarioScooterShare": 0.83,
+        "throughputPerMinute": 11,
+        "inflowPerMinute": 94.35,
+        "demandFactor": 0.925,
+        "targetCount": 38,
+        "maxAgents": 100,
+        "queueSeconds": 1152.6500000000042,
+        "signalQueues": [
+          {
+            "id": "bridge-signal",
+            "waiting": 14
+          }
+        ],
+        "dismountedTotal": 0,
+        "laneChangesTotal": 1,
+        "laneChangingCount": 0,
+        "estimated": true,
+        "forwardCount": 7,
+        "opposingCount": 29,
+        "departures": 6,
+        "yieldingCount": 4,
+        "originCounts": {
+          "route-start": 7,
+          "opposing-public-road": 29
+        }
+      }
+    },
+    {
+      "id": "dismount-completion-borrow",
+      "steps": 1500,
+      "hash": "87541df82769d8feaecf500824feb50436cd79f7bded7972848e91acdd31a596",
+      "coverage": {
+        "directions": [
+          1
+        ],
+        "signalStates": [
+          "amber",
+          "green",
+          "red"
+        ],
+        "constraints": [],
+        "waitReasons": [
+          "queue",
+          "signal"
+        ],
+        "arrivals": 24,
+        "departures": 0,
+        "dismounted": 24,
+        "laneChanges": 4
+      },
+      "finalStats": {
+        "activeCount": 27,
+        "scooterCount": 13,
+        "walkingCount": 14,
+        "pedestrianCount": 14,
+        "queuedCount": 2,
+        "waitingCount": 2,
+        "meanSpeed": 1.4374330776697226,
+        "congestion": 0.07407407407407407,
+        "arrivals": 24,
+        "arrivedTotal": 24,
+        "originalScooterCount": 21,
+        "scenarioScooterShare": 0.85,
+        "throughputPerMinute": 18,
+        "inflowPerMinute": 89.25,
+        "demandFactor": 0.875,
+        "targetCount": 24,
+        "maxAgents": 70,
+        "queueSeconds": 445.29999999999944,
+        "signalQueues": [
+          {
+            "id": "short-signal",
+            "waiting": 1
+          }
+        ],
+        "dismountedTotal": 24,
+        "laneChangesTotal": 4,
+        "laneChangingCount": 0,
+        "estimated": true,
+        "forwardCount": 27,
+        "opposingCount": 0,
+        "departures": 0,
+        "yieldingCount": 0,
+        "originCounts": {
+          "route-start": 27
+        }
+      }
+    }
+  ]
+}

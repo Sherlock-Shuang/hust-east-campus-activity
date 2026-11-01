@@ -1,5 +1,6 @@
 // Read-only release check: no admin login, audience creation or host mutations.
-import {mkdir,writeFile} from 'node:fs/promises';
+import {mkdir,writeFile,readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import {homedir} from 'node:os';
 import {pathToFileURL} from 'node:url';
 import path from 'node:path';
@@ -25,11 +26,14 @@ try{
  const campusRequests={state:0,streams:0};page.on('request',request=>{const p=new URL(request.url()).pathname;if(p==='/api/live/state')campusRequests.state++;if(p==='/api/live/events')campusRequests.streams++;});
  await page.goto(base+'/',{timeout:90000});await page.locator('#load-screen').waitFor({state:'hidden',timeout:90000});
  await page.waitForFunction(()=>document.querySelector('#map-canvas')?.dataset.campusDetails==='ready',null,{timeout:90000});
+ if(await page.locator('#entry-cover-start').count()){await page.locator('#entry-cover-start').click();await page.waitForFunction(()=>!document.body.classList.contains('entry-cover-open'));}
  const campus=await page.locator('#map-canvas').evaluate(el=>({buildId:el.dataset.buildId,details:el.dataset.campusDetails,graphics:el.dataset.graphicsState}));
  assert.equal(campus.buildId,expected);assert.equal(campus.graphics,'ready');await page.screenshot({path:path.join(out,'campus.png')});record('deployed campus',campus);
  await page.waitForFunction(()=>document.querySelector('.live-connection')?.textContent==='活动已连接',null,{timeout:30000});
  assert.equal(campusRequests.state,1,'initial SSE open must not duplicate the initial state GET');assert.equal(campusRequests.streams,1);record('campus live connection',campusRequests);
  await page.goto(base+'/admin');assert.equal(await page.locator('input[type=password]').count(),1);record('admin login page',{passwordForm:true});
+ const assetManifest=JSON.parse(await readFile(new URL('../asset-source/manifest.json',import.meta.url),'utf8'));
+ for(const url of ['/works/library/hub/main.mjs','/works/library/library-render-runtime.mjs','/works/wanyan/index.html','/works/wanyan/wanyan-performance.js']){const response=await api.get(base+url);assert.equal(response.status(),200);const sha256=createHash('sha256').update(await response.body()).digest('hex');assert.equal(sha256,assetManifest.routes[url].sha256);record('deployed performance runtime',{path:url,sha256});}
  const config=await api.get(base+'/works/library/performance-assets.json').then(r=>r.json());
  const unity=await api.get(base+'/works/wanyan/performance-builds.json').then(r=>r.json());
  for(const url of [config.library.url,config.hero.url,config.meshoptDecoder,unity.desktop.dataUrl,unity.mobile.dataUrl]){
@@ -44,13 +48,13 @@ try{
  assert.equal(await page.evaluate(()=>window.__libraryDebug.heroReady),false);assert.equal(requests.some(p=>p.endsWith('/hero.glb')),false);
  await page.locator('#resume').click();await page.keyboard.down('KeyW');await page.waitForTimeout(500);await page.keyboard.up('KeyW');
  await page.screenshot({path:path.join(out,'library.png')});
- const library=await page.evaluate(()=>({ready:__libraryDebug.ready,heroReady:__libraryDebug.heroReady,variant:document.documentElement.dataset.libraryAssetVariant,model:__libraryDebug.assets.library.url}));
- assert.equal(library.variant,'optimized');record('actual library runtime',library);
+ const library=await page.evaluate(()=>({ready:__libraryDebug.ready,heroReady:__libraryDebug.heroReady,variant:document.documentElement.dataset.libraryAssetVariant,model:__libraryDebug.assets.library.url,runtime:__libraryDebug.runtimeStats}));
+ assert.equal(library.variant,'optimized');assert.ok(library.runtime.frozenNodes>0);record('actual library runtime',library);
  await page.goto(base+'/works/wanyan/',{timeout:90000});
  await page.waitForFunction(()=>document.documentElement.dataset.campusWorkStatus==='runtime_ready'&&window.bookrealmNativeControls,null,{timeout:180000});
- await page.locator('#unity-canvas').click();await page.keyboard.press('Enter');await page.waitForFunction(()=>window.bookrealmNativeControls?.started,null,{timeout:30000});
+ await page.locator('#unity-canvas').click();await page.keyboard.down('Enter');await page.waitForTimeout(120);await page.keyboard.up('Enter');await page.waitForFunction(()=>window.bookrealmNativeControls?.started,null,{timeout:30000});
  await page.waitForTimeout(1000);await page.screenshot({path:path.join(out,'wanyan-game.png')});
- record('actual Unity gameplay',await page.evaluate(()=>({started:bookrealmNativeControls.started,quality:document.documentElement.dataset.wanyanQuality,status:document.documentElement.dataset.campusWorkStatus})));
+ record('actual Unity gameplay',await page.evaluate(()=>({started:bookrealmNativeControls.started,performance:window.campusWanyanPerformance.snapshot(),canvas:[document.getElementById('unity-canvas').width,document.getElementById('unity-canvas').height],quality:document.documentElement.dataset.wanyanQuality,status:document.documentElement.dataset.campusWorkStatus})));
  await page.goto(base+'/works/tasay/',{timeout:90000});await page.waitForTimeout(1200);
  assert.ok((await page.locator('body').innerText()).length>20);await page.screenshot({path:path.join(out,'tasay.png')});
  const build=await api.get(base+'/works/tasay/activity-build.json').then(r=>r.json());assert.equal(build.adapterVersion,2);

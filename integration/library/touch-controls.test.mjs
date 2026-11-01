@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
+import vm from 'node:vm';
 import {WANYAN_PUBLIC_TEXT} from './wanyan-public-text.mjs';
 import {touchVector,movementVector,directionKeys,createTouchKeys,createTouchControls} from './touch-controls.mjs';
 
@@ -97,7 +98,18 @@ test('generated copies use the verified activity Unity build, retain SWF bytes, 
  const library=await readFile(new URL('library/hub/main.mjs',base),'utf8');
  assert(library.includes('campusTouchMove.x'));assert(library.includes("if(id==='book'){updateCamera();inspectBook();if(hovered)openBook(hovered)"));assert(library.includes("if(id==='dodge')startDodge(player,input(),yaw)"));
  const isaac=await readFile(new URL('library/games/isaac/index.html',base),'utf8');assert(isaac.includes('attachIsaacTouch(player, requestMenu)'));assert(isaac.includes('viewport-fit=cover'));
- const unity=await readFile(new URL('wanyan/index.html',base),'utf8');assert(unity.includes('mobile?1.1:2'));assert(unity.includes('wanyan-touch.mjs'));assert(!unity.includes('user-scalable=no'));
+ const unity=await readFile(new URL('wanyan/index.html',base),'utf8');assert.match(unity,/<script id="campus-wanyan-performance-v1" src="\/works\/wanyan\/wanyan-performance\.js"><\/script>/);assert(unity.includes('wanyan-touch.mjs'));assert(!unity.includes('user-scalable=no'));
+ assert(unity.indexOf('wanyan-performance.js')<unity.indexOf('devicePixelRatio: window.bookrealmRenderPixelRatio()'),'budget helper loads before native Unity configuration');
+ const performanceRuntime=await readFile(new URL('wanyan/wanyan-performance.js',base),'utf8');
+ assert.equal(performanceRuntime,await readFile(new URL('./wanyan-performance.js',import.meta.url),'utf8'),'activity pack includes the current actual helper');
+ function budget({width=1280,height=800,dpr=2,mobile=false,cores=8}={}){
+  const sandbox={URLSearchParams,location:{search:''},document:{},innerWidth:width,innerHeight:height,navigator:{maxTouchPoints:mobile?5:0,hardwareConcurrency:cores},matchMedia:()=>({matches:mobile})};sandbox.window=sandbox;
+  vm.runInNewContext(performanceRuntime,sandbox);return sandbox.bookrealmChoosePixelRatio(width,height,dpr);
+ }
+ assert.equal(budget({width:844,height:390,dpr:3,mobile:true}),1,'mobile avoids high-DPI supersampling');
+ const desktopRatio=budget();assert(desktopRatio>1&&desktopRatio<=1.5);assert(1280*800*desktopRatio**2<=1920*1080+1);
+ assert.equal(budget({width:3840,height:2160,dpr:1}),.5,'large native windows obey total physical pixel budget');
+ assert.equal(budget({cores:4}),1,'low-core desktop receives the constrained budget');
  const manifest=JSON.parse(await readFile(new URL('library-manifest.json',base),'utf8'));
  const baseline=JSON.parse(await readFile(new URL('./fixtures/runtime-baseline.json',import.meta.url),'utf8'));
  const unityRuntime=manifest.unityRuntime||baseline.unityRuntime;

@@ -1,7 +1,7 @@
 // Real Chromium traversal A/B. Instrumentation is injected only into a temporary
 // local build; it is never a production global or public route. CPU throttling
 // and a touch viewport are reproducible stress conditions, not physical phones.
-import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,rm,readdir,copyFile} from 'node:fs/promises';
 import {tmpdir,homedir} from 'node:os';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 const arg=(name,fallback)=>{const i=process.argv.indexOf(name);return i<0?fallback:process.argv[i+1];};
 const root=path.resolve(arg('--root','.')),out=path.resolve(arg('--output','artifacts/movement-performance-20261031/browser'));
 const seconds=Number(arg('--seconds','20')),rate=Number(arg('--cpu','4')),mobile=arg('--profile','desktop')==='mobile';
-const modes=arg('--modes','walk,hoverboard').split(','),quality=arg('--quality','smooth'),interactionSmoke=process.argv.includes('--interaction-smoke');
+const modes=arg('--modes','walk,hoverboard').split(','),quality=arg('--quality','smooth'),interactionSmoke=process.argv.includes('--interaction-smoke'),captureCpu=process.argv.includes('--cpu-profile');
 assert.ok(seconds>=5&&seconds<=120&&rate>=1&&rate<=8&&modes.every(m=>['walk','hoverboard','spider','helicopter'].includes(m)));
 const work=await mkdtemp(path.join(tmpdir(),'campus-traversal-')),dist=path.join(work,'dist'),dataDir=path.join(work,'data');
 const {build}=await import(pathToFileURL(path.join(root,'node_modules/vite/dist/node/index.js')));
@@ -28,11 +28,12 @@ globalThis.__campusTraversalQA={
   reset(){frameMetrics.reset();frameMetrics.resetSession();for(const k of Object.keys(qaCosts))delete qaCosts[k];},
   read(){const p=commute.player.state;return {state:{x:p.x,y:p.y,z:p.z,yaw:p.yaw,mode:p.mode,speed:p.speed,grounded:p.grounded,blockedReason:p.blockedReason},frame:frameMetrics.snapshot(),session:frameMetrics.session(),costs:structuredClone(qaCosts),quality:{...qualityBudget},passes:{...lastPasses},dataset:{...canvas.dataset},resources:{...renderer.info.memory},decorations:campus.decorationStats};}
 };`;
-const report={passed:false,root,seconds,cpuThrottle:rate,mobileViewport:mobile,quality,modes,startedAt:new Date().toISOString(),results:[],errors:[],scope:'Installed desktop Chrome, production-mode local temporary build with identical timing probes; synthetic CPU throttle and touch viewport. Real movement keys, original simulation. No physical-phone/GPU-throttle/thermal/remote-network claim.'};
+const report={passed:false,root,seconds,cpuThrottle:rate,mobileViewport:mobile,quality,modes,captureCpu,startedAt:new Date().toISOString(),results:[],errors:[],scope:'Installed desktop Chrome, production-mode local temporary build with identical timing probes; synthetic CPU throttle and touch viewport. Real movement keys, original simulation. No physical-phone/GPU-throttle/thermal/remote-network claim. Optional CPU sampling adds overhead and must not be mixed into an unprofiled FPS comparison.'};
 let app,browser,context;
 await mkdir(out,{recursive:true});
 try{
- await build({root,configFile:path.join(root,'vite.config.js'),logLevel:'warn',build:{outDir:dist,emptyOutDir:true,rollupOptions:{input:{campus:path.join(root,'index.html'),admin:path.join(root,'admin.html'),c118:path.join(root,'c118.html')}}},plugins:[{name:'local-traversal-probe',transform(code,id){if(id===path.join(root,'src/survey.js'))return code+'\n'+injection;}}]});
+ await build({root,configFile:path.join(root,'vite.config.js'),logLevel:'warn',build:{outDir:dist,emptyOutDir:true,sourcemap:captureCpu,rollupOptions:{input:{campus:path.join(root,'index.html'),admin:path.join(root,'admin.html'),c118:path.join(root,'c118.html')}}},plugins:[{name:'local-traversal-probe',transform(code,id){if(id===path.join(root,'src/survey.js'))return code+'\n'+injection;}}]});
+ if(captureCpu){const maps=path.join(out,'cpu-assets');await mkdir(maps,{recursive:true});for(const file of await readdir(path.join(dist,'assets')))if(file.endsWith('.js.map'))await copyFile(path.join(dist,'assets',file),path.join(maps,file));}
  app=await createLiveServer({rootDir:root,distDir:dist,dataDir,password:'local-traversal-only',workEnv:{},initialState:createDefaultLiveState()});
  const address=await app.listen(0),origin='http://127.0.0.1:'+address.port;
  browser=await chromium.launch({headless:true,executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
@@ -43,6 +44,14 @@ try{
  const cdp=await context.newCDPSession(page);await cdp.send('Performance.enable');
  await page.goto(origin+'/?diagnostics=1',{timeout:90000});
  await page.waitForFunction(()=>globalThis.__campusTraversalQA?.ready(),null,{timeout:90000});
+ // Readiness no longer dismisses the cinematic cover. Enter through the real
+ // visitor gesture so inert roots, input focus and cover animation all release
+ // through production logic before measuring movement (never bypass its flag).
+ if(await page.locator('#entry-cover-start').count()){
+   await page.locator('#entry-cover-start').click({timeout:30000});
+   await page.waitForFunction(()=>!document.body.classList.contains('entry-cover-open'),null,{timeout:30000});
+   report.entryCover={clickedStart:true,closed:true};
+ }
  await page.waitForTimeout(2500);
  for(const mode of modes){
    await cdp.send('Emulation.setCPUThrottlingRate',{rate:1});
@@ -50,13 +59,23 @@ try{
    if(mode==='hoverboard'||mode==='helicopter'){await page.keyboard.down('KeyQ');await page.waitForTimeout(9500);await page.keyboard.up('KeyQ');assert.ok((await page.evaluate(()=>__campusTraversalQA.read())).state.y>35,'Flight did not take off');}
    await page.keyboard.down('KeyW');if(mode!=='walk')await page.keyboard.down('ShiftLeft');await page.waitForTimeout(1500);
    await cdp.send('Emulation.setCPUThrottlingRate',{rate});await page.waitForTimeout(1200);
+   if(captureCpu){await cdp.send('Profiler.enable');await cdp.send('Profiler.setSamplingInterval',{interval:1000});await cdp.send('Profiler.start');}
    const start=await page.evaluate(()=>{__campusTraversalQA.reset();return __campusTraversalQA.read();}),samples=[];
    const started=performance.now();
    for(let i=0;i<seconds;i++){await page.waitForTimeout(Math.max(0,started+(i+1)*1000-performance.now()));samples.push(await page.evaluate(()=>{const r=__campusTraversalQA.read();return {state:r.state,frame:r.frame,costs:r.costs,quality:r.quality,dataset:r.dataset};}));}
    const finish=await page.evaluate(()=>__campusTraversalQA.read()),durationMs=performance.now()-started;
+   let cpuProfile;
+   if(captureCpu){
+     const {profile}=await cdp.send('Profiler.stop');await cdp.send('Profiler.disable');
+     const nodes=new Map(profile.nodes.map(n=>[n.id,n])),totals=new Map();
+     for(let i=0;i<(profile.samples?.length||0);i++){const id=profile.samples[i];totals.set(id,(totals.get(id)||0)+(profile.timeDeltas?.[i]||0));}
+     const top=[...totals].map(([id,selfUs])=>({selfMs:selfUs/1000,samples:profile.nodes.find(n=>n.id===id)?.hitCount||0,...nodes.get(id).callFrame})).sort((a,b)=>b.selfMs-a.selfMs).slice(0,60);
+     cpuProfile={file:`cpu-${mode}.cpuprofile`,durationMs:(profile.endTime-profile.startTime)/1000,top};
+     await writeFile(path.join(out,cpuProfile.file),JSON.stringify(profile));await writeFile(path.join(out,`cpu-${mode}-summary.json`),JSON.stringify(cpuProfile,null,2)+'\n');
+   }
    await page.keyboard.up('KeyW');await page.keyboard.up('ShiftLeft');await cdp.send('Emulation.setCPUThrottlingRate',{rate:1});
    const metrics=Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map(m=>[m.name,m.value]));
-   const distance=Math.hypot(finish.state.x-start.state.x,finish.state.z-start.state.z),result={mode,durationMs,distance,start,finish,samples,metrics};
+   const distance=Math.hypot(finish.state.x-start.state.x,finish.state.z-start.state.z),result={mode,durationMs,distance,start,finish,samples,metrics,...(cpuProfile?{cpuProfile}:{})};
    report.results.push(result);await page.screenshot({path:path.join(out,mode+'.png')});
    console.log(JSON.stringify({mode,distance,durationMs,frame:finish.frame,costs:finish.costs,quality:finish.quality}));
    assert.equal(finish.state.mode,mode);assert.ok(distance>(mode==='walk'?10:60),'Traversal was blocked; do not use stationary result as movement benchmark');

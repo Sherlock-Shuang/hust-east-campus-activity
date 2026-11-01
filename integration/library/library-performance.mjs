@@ -4,7 +4,7 @@ const replace=(source,from,to,label)=>{
   return source.replace(from,to);
 };
 export function applyLibraryPerformance(source){
-  if(source.includes('campus-library-assets-v2'))return source;
+  if(source.includes('campus-library-assets-v2'))return applyLibraryRenderPerformance(source);
   let text="import {createLazyAsset,fetchGltf,disposeGltf} from '../library-asset-runtime.mjs';\n"+source;
   text=replace(text,'let mixer,idle,walk,walkWeight=0,cameraDistance=0,viewMode=\'first\';',"let mixer,idle,walk,walkWeight=0,cameraDistance=0,viewMode='first',heroReady=false,heroAssets=null,libraryAssets=null,assetsDisposed=false;",'character readiness');
   text=replace(text,'cameraPose(player,yaw,pitch,viewMode)','cameraPose(player,yaw,pitch,heroReady?viewMode:\'first\')','loading camera');
@@ -51,5 +51,45 @@ function ensureHero(){
   text=text.slice(0,begin)+block+text.slice(end);
   text=replace(text,'get ready(){return ready;},get viewMode()',"get ready(){return ready;},get heroReady(){return heroReady;},get assets(){return assetConfig;},get viewMode()",'asset diagnostics');
   text=replace(text,'dispose(){\n    campusSuspended=true;',"dispose(){\n    assetsDisposed=true;assetsController.abort();heroAssets?.dispose();mixer?.stopAllAction();if(libraryAssets){disposeGltf(libraryAssets);libraryAssets=null;}\n    campusSuspended=true;",'asset disposal');
+  return applyLibraryRenderPerformance(text);
+}
+
+/** Upgrade both a fresh activity build and an existing assets-v2 derivative. */
+export function applyLibraryRenderPerformance(source){
+  if(source.includes('campus-library-render-v3'))return source;
+  let text=`import {freezeStaticLibrary,createLibraryRaycastIndex,createLibraryRayMemo,createLibraryDrawGate} from '../library-render-runtime.mjs';
+// campus-library-render-v3: static work sleeps; movement and story keep their cadence.
+const libraryDrawGate=createLibraryDrawGate(),libraryPickMemo=createLibraryRayMemo(),libraryCameraCache={x:NaN,z:NaN,yaw:NaN,pitch:NaN,view:null};
+let libraryDirty=true,libraryLastNight=NaN,libraryStatic=null,libraryPickIndex=null,libraryPickCacheEnabled=false,libraryCameraUpdates=0;
+`+source;
+  text=replace(text,'hovered=book;for(const [id,mats]','hovered=book;libraryDirty=true;for(const [id,mats]','highlight redraw');
+  text=replace(text,"function updateCamera(){const p=cameraPose(player,yaw,pitch,heroReady?viewMode:'first');",`function updateCamera(){
+ const effectiveView=heroReady?viewMode:'first',c=libraryCameraCache;
+ if(c.x===player.x&&c.z===player.z&&c.yaw===yaw&&c.pitch===pitch&&c.view===effectiveView)return;
+ c.x=player.x;c.z=player.z;c.yaw=yaw;c.pitch=pitch;c.view=effectiveView;libraryCameraUpdates++;libraryDirty=true;
+ const p=cameraPose(player,yaw,pitch,effectiveView);`,'unchanged camera');
+  text=replace(text,'setView(value){viewMode=normalizeView(value);','setView(value){libraryDirty=true;viewMode=normalizeView(value);','view redraw');
+  text=replace(text,'function updateActor(dt){','function updateActor(dt){\n if(!heroReady||!actor.visible||(isTouchLayout()&&phone.active))return;','hidden animation');
+  text=replace(text,'const block=raycaster.intersectObjects(occluders,false)[0];','const block=libraryPickIndex?libraryPickIndex.nearest(raycaster):raycaster.intersectObjects(occluders,false)[0];','exact pick broadphase');
+  const inspectStart=text.indexOf('function inspectBook(){'),inspectEnd=text.indexOf('\nfunction updateAim()',inspectStart);
+  if(inspectStart<0||inspectEnd<0)throw new Error('Unexpected library runtime: book inspection');
+  let inspect=text.slice(inspectStart,inspectEnd);
+  // Snapshot near/far before the occlusion ray narrows far to the book surface.
+  inspect=replace(inspect,' const hit=raycaster.intersectObjects(portals,false)[0];',` if(libraryPickMemo.reuse(raycaster,player.x,player.z,libraryPickCacheEnabled)){highlight(libraryPickMemo.value);return;}
+ const hit=raycaster.intersectObjects(portals,false)[0];`,'static book memo');
+  inspect=inspect.replaceAll('highlight(null);return;','libraryPickMemo.invalidate();highlight(null);return;');
+  inspect=replace(inspect,'highlight(!block||block.distance>=hit.distance-.003?book:null);','const readable=!block||block.distance>=hit.distance-.003?book:null;libraryPickMemo.commit(readable);highlight(readable);','exact book result');
+  text=text.slice(0,inspectStart)+inspect+text.slice(inspectEnd);
+  text=replace(text,'  ready=true;loading.hidden=true;',`  libraryStatic=freezeStaticLibrary(g.scene,{animations:g.animations});
+ libraryPickIndex=createLibraryRaycastIndex(THREE,occluders,libraryStatic.isStatic);libraryPickCacheEnabled=libraryPickIndex.staticOnly&&portals.every(libraryStatic.isStatic);libraryDirty=true;
+  ready=true;loading.hidden=true;`,'static building setup');
+  text=replace(text,'heroReady=true;updateCamera();','heroReady=true;libraryDirty=true;updateCamera();','character redraw');
+  text=replace(text,'fireworks.setPixelRatio(renderer.getPixelRatio());});','fireworks.setPixelRatio(renderer.getPixelRatio());libraryDirty=true;});','resize redraw');
+  text=replace(text,'function updateNight(dt){\n fireworks.update(dt);',`function updateNight(dt){
+ if(!fireworks.active&&fireworks.night===0&&libraryLastNight===0)return;
+ libraryDirty=true;fireworks.update(dt);libraryLastNight=fireworks.night;`,'constant daylight');
+  text=replace(text,'if(!isTouchLayout()||!phone.active)renderer.render(scene,camera);',`if((!isTouchLayout()||!phone.active)&&libraryDrawGate.shouldDraw(now,libraryDirty,active&&(actor.visible||fireworks.active))){renderer.render(scene,camera);libraryDirty=false;}`,'unchanged frame rendering');
+  text=replace(text,'get renderStats(){return {calls:',`get runtimeStats(){return {draw:libraryDrawGate.stats,cameraUpdates:libraryCameraUpdates,frozenNodes:libraryStatic?.count||0,pick:libraryPickIndex?.stats||null,pickMemoHits:libraryPickMemo.hits};},get renderStats(){return {calls:`,'read-only runtime diagnostics');
+  text=replace(text,'assetsDisposed=true;assetsController.abort();','libraryPickIndex?.dispose();libraryStatic?.dispose();assetsDisposed=true;assetsController.abort();','render index disposal');
   return text;
 }

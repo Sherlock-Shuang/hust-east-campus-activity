@@ -607,16 +607,16 @@
     "/works/library/": {
       "chunks": [
         {
-          "url": "/_activity_assets/e7de46ed230ecf5aab4d50cb2ad903cb0c28ca604d9ce338357ed85e7c6bed6b.bin",
+          "url": "/_activity_assets/0a37ce30fdc7c1770cd588d25877fc7ce09ff09399e51f2d0c1a8e2158418b0f.bin",
           "encoding": "gzip",
           "bytes": 4321,
-          "storedBytes": 1869,
-          "sha256": "ec35e0e37bf27a64db2bec7733cbdeeab1db3958fb3550e53aa5fe67d1b3d9cb"
+          "storedBytes": 1874,
+          "sha256": "84ada691d06a425128996a2af45acc94589cad19c793458dc7b5cece43b09b72"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 4321,
-      "sha256": "ec35e0e37bf27a64db2bec7733cbdeeab1db3958fb3550e53aa5fe67d1b3d9cb"
+      "sha256": "84ada691d06a425128996a2af45acc94589cad19c793458dc7b5cece43b09b72"
     },
     "/works/library/activity-adapter.js": {
       "chunks": [
@@ -810,16 +810,16 @@
     "/works/library/hub/main.mjs": {
       "chunks": [
         {
-          "url": "/_activity_assets/0ac40ea79449c333d7bedd514edca6ccfd0663c3a93570bc994d1e158235977f.bin",
+          "url": "/_activity_assets/aa2d8c6c731a27cbf42001957a5ae6f41dd3dd4a9e0958545a81c87cb95e373f.bin",
           "encoding": "gzip",
-          "bytes": 38991,
-          "storedBytes": 12486,
-          "sha256": "648db086e4c30f09bb9b9daaea20007b3852e626e3fb8ca3ffd2c9dd577b29bd"
+          "bytes": 41013,
+          "storedBytes": 13086,
+          "sha256": "7c716eff4fd080899ec1af4a7af08969a00a73827ce6419b723e28a3627d655f"
         }
       ],
       "mime": "text/javascript; charset=utf-8",
-      "bytes": 38991,
-      "sha256": "648db086e4c30f09bb9b9daaea20007b3852e626e3fb8ca3ffd2c9dd577b29bd"
+      "bytes": 41013,
+      "sha256": "7c716eff4fd080899ec1af4a7af08969a00a73827ce6419b723e28a3627d655f"
     },
     "/works/library/hub/phone.css": {
       "chunks": [
@@ -950,16 +950,16 @@
     "/works/library/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/e7de46ed230ecf5aab4d50cb2ad903cb0c28ca604d9ce338357ed85e7c6bed6b.bin",
+          "url": "/_activity_assets/0a37ce30fdc7c1770cd588d25877fc7ce09ff09399e51f2d0c1a8e2158418b0f.bin",
           "encoding": "gzip",
           "bytes": 4321,
-          "storedBytes": 1869,
-          "sha256": "ec35e0e37bf27a64db2bec7733cbdeeab1db3958fb3550e53aa5fe67d1b3d9cb"
+          "storedBytes": 1874,
+          "sha256": "84ada691d06a425128996a2af45acc94589cad19c793458dc7b5cece43b09b72"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 4321,
-      "sha256": "ec35e0e37bf27a64db2bec7733cbdeeab1db3958fb3550e53aa5fe67d1b3d9cb"
+      "sha256": "84ada691d06a425128996a2af45acc94589cad19c793458dc7b5cece43b09b72"
     },
     "/works/library/isaac-source/SWF运行样本/The Binding of Isaac.swf": {
       "chunks": [
@@ -1475,16 +1475,16 @@
     "/works/wanyan/": {
       "chunks": [
         {
-          "url": "/_activity_assets/dbaabdb006f2efcd3505fe8d13dcfebffc0312e7479db7fc647c82aabf5acf04.bin",
+          "url": "/_activity_assets/dfe3e7ccce5e6b4e84bb5f9a893a5f7291a2558921107019e67f0ed8729dba12.bin",
           "encoding": "gzip",
-          "bytes": 12360,
-          "storedBytes": 4363,
-          "sha256": "b0e5affaf8d94d26ba22b90ee930c16bd9705af37c479090b7a238909792a0a4"
+          "bytes": 10800,
+          "storedBytes": 3892,
+          "sha256": "7eb6ee612723dc4eeea6e092995c2d4ce4a570db629a4d5516b4939eee55bab3"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 12360,
-      "sha256": "b0e5affaf8d94d26ba22b90ee930c16bd9705af37c479090b7a238909792a0a4"
+      "bytes": 10800,
+      "sha256": "7eb6ee612723dc4eeea6e092995c2d4ce4a570db629a4d5516b4939eee55bab3"
     },
     "/works/wanyan/activity-adapter.js": {
       "chunks": [
@@ -1615,16 +1615,16 @@
     "/works/wanyan/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/dbaabdb006f2efcd3505fe8d13dcfebffc0312e7479db7fc647c82aabf5acf04.bin",
+          "url": "/_activity_assets/dfe3e7ccce5e6b4e84bb5f9a893a5f7291a2558921107019e67f0ed8729dba12.bin",
           "encoding": "gzip",
-          "bytes": 12360,
-          "storedBytes": 4363,
-          "sha256": "b0e5affaf8d94d26ba22b90ee930c16bd9705af37c479090b7a238909792a0a4"
+          "bytes": 10800,
+          "storedBytes": 3892,
+          "sha256": "7eb6ee612723dc4eeea6e092995c2d4ce4a570db629a4d5516b4939eee55bab3"
         }
       ],
       "mime": "text/html; charset=utf-8",
-      "bytes": 12360,
-      "sha256": "b0e5affaf8d94d26ba22b90ee930c16bd9705af37c479090b7a238909792a0a4"
+      "bytes": 10800,
+      "sha256": "7eb6ee612723dc4eeea6e092995c2d4ce4a570db629a4d5516b4939eee55bab3"
     },
     "/works/wanyan/pointer-lock-compat.js": {
       "chunks": [
@@ -2215,6 +2215,34 @@
       "mime": "text/javascript; charset=utf-8",
       "bytes": 252569,
       "sha256": "1f31c8ac0c0cef9ca9378e3ff4dcababcbb72a041ccef4ff08bb18e6356bca74"
+    },
+    "/works/library/library-render-runtime.mjs": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/9c086dd520ba4544748397c23ae7ec12b8595de09b849409e5b5600d91fbb9be.bin",
+          "encoding": "gzip",
+          "bytes": 3995,
+          "storedBytes": 1631,
+          "sha256": "f9f861b60e6cf922d8940c85016a2bef2146cc46a72a9f5d078e0353efa4417d"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 3995,
+      "sha256": "f9f861b60e6cf922d8940c85016a2bef2146cc46a72a9f5d078e0353efa4417d"
+    },
+    "/works/wanyan/wanyan-performance.js": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/a9e27bc22f73a97b421da081ed5fb109dcaececace10025a11dd51cd7d589329.bin",
+          "encoding": "gzip",
+          "bytes": 7680,
+          "storedBytes": 2932,
+          "sha256": "8b4658518c818fda2b86aa3c2263a441b7ab6e6ada7a67c5d05ddd73fa16a875"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 7680,
+      "sha256": "8b4658518c818fda2b86aa3c2263a441b7ab6e6ada7a67c5d05ddd73fa16a875"
     }
   },
   "spa": [

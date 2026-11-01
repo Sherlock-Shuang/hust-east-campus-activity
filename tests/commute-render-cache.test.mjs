@@ -80,3 +80,23 @@ test('shared flood raises cached moving and parked instances and clearing it res
  actors.forEach((a,i)=>assert.notDeepEqual(matrixFor(body(a.id),a.id).elements,wet[i].elements));
  f.render.setFloodState(null);f.render.update();actors.forEach((a,i)=>assert.deepEqual(matrixFor(body(a.id),a.id).elements,before[i].elements));
 });
+
+test('traffic motion keeps paint buffers stable and returning borrowed traffic safely grows parking batches',t=>{
+  const f=fixture(t);f.render.update();
+  for(const mesh of f.meshes()){mesh.instanceMatrix.clearUpdateRanges();mesh.instanceColor?.clearUpdateRanges();}
+  const actor=f.sim.agents.find(a=>a.kind==='scooter'),body=f.body(actor.id),slot=body.userData.agentIds.indexOf(actor.id);
+  const colorVersion=body.instanceColor.version;actor.x+=.5;f.render.update();
+  assert.deepEqual(body.instanceMatrix.updateRanges,[{start:slot*16,count:16}]);
+  assert.equal(body.instanceColor.version,colorVersion,'ordinary movement does not upload skin/paint again');
+  const item=f.render.scooterTransport.items.find(i=>i.origin==='traffic');
+  const previous=f.meshes().find(m=>m.userData.component==='parked-scooter');
+  const oldCapacity=previous.instanceMatrix.count;
+  assert.equal(f.render.scooterTransport.take(item).ok,true);
+  const pose={x:15,y:.14,z:20,yaw:.7};assert.equal(f.render.scooterTransport.release(item,pose).ok,true);
+  const parked=f.meshes().find(m=>m.userData.component==='parked-scooter'&&m.userData.part==='paint'&&m.userData.joint==='fixed'&&m.userData.agentIds.includes(item.record.id));
+  assert.ok(parked);assert.ok(parked.instanceMatrix.count>oldCapacity,'a returned road vehicle exceeds the authored parking reserve');
+  assert.ok(Math.abs(matrixFor(parked,item.record.id).elements[12]-pose.x)<.0001);
+  assert.ok(parked.instanceMatrix.updateRanges[0].count>=parked.count*16,'replacement buffers receive their complete first upload');
+  const versions=f.meshes().map(m=>[m,m.instanceMatrix.version,m.instanceColor?.version]);f.render.update();
+  for(const [mesh,matrix,color]of versions){assert.equal(mesh.instanceMatrix.version,matrix);assert.equal(mesh.instanceColor?.version,color);}
+});

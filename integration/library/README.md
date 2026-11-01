@@ -117,3 +117,22 @@ node --test integration/library/integration.test.mjs integration/library/touch-c
 ```sh
 node --test integration/library/wanyan-skill-state.test.mjs integration/library/wanyan-runtime.test.mjs integration/library/prepare-wanyan-activity.test.mjs
 ```
+
+## 2026-11-01 晚言活动版渲染与生命周期
+
+`wanyan-performance.js` 在 Unity 配置创建之前加载，替换活动 HTML 中旧的固定 1440p 超采样逻辑。正常桌面最多 DPR 1.5 / 1080p 像素预算；触屏、低核心或低内存设备最多 DPR 1 / 1280×800 预算。原生大窗口也遵守像素总量，而不强制 DPR 至少为 1。地图、角色、材质、碰撞和 Unity 战斗资源不删减。
+
+默认只在真实游戏开始、非暂停/强化/结束画面时采样浏览器帧间隔。连续两段 2 秒窗口低于预算才逐级降低渲染分辨率；至少 20 秒稳定后才提高一档，改变后留有预热时间。单帧编译、恢复、页面切换和短暂卡顿不会立即触发降档。此项降低像素渲染负担，不代表优化了 Unity 原生战斗算法；默认仍使用现有 PC 四文件，未将较大的 ASTC 数据包自动推给手机。
+
+宿主活动暂停、嵌套图书馆菜单及标签页隐藏分别计入暂停原因。当前编译包真实导出的 `Module.pauseMainLoop/resumeMainLoop` 用于停止后台 Unity 帧循环；宿主恢复不会覆盖图书馆仍处于暂停的状态。恢复时保留原 `bookrealmControlsSuspended`，等两次实际 Unity `LateUpdate` 发布新的只读状态对象后才放行输入，避免仅等两个浏览器回调就提前开始移动。原生内部暂停菜单、存档、胜利条件与时间步保持原样。退出会移除本适配器的监听器、帧回调与尺寸定时器；若引擎暂停，先恢复循环供 `Quit()` 清理原生/WebGL 资源。
+
+可比检查参数仅影响分辨率：`?wanyanResolution=original` 使用旧 1440p 固定预算，`?wanyanResolution=fixed` 使用新固定预算，默认使用自适应预算。开发者控制台 `window.campusWanyanPerformance.snapshot()` 提供当前像素比、档位、调整次数及暂停原因；不会改写原生游戏状态。
+
+```sh
+node --test integration/library/wanyan-performance.test.mjs
+node integration/library/verify-wanyan-lifecycle.mjs
+```
+
+实际 Mac Chrome、1280×800 / DPR 2、原 PC Unity 包已验证六项：启动前的宿主暂停、暂停期间无原生帧发布、嵌套暂停理由、恢复零额外位移、保留原暂停菜单并恢复键盘移动，以及暂停时退出。报告位于 `artifacts/performance-20261101/wanyan-lifecycle/`。这不是手机真机、热降频或 Unity 原生重建的性能验收，帧率对照由整场性能验收单独记录。
+
+小范围刷新只需把 `integration/library/wanyan-performance.js` 复制到 `work-assets/wanyan/`，将现有活动 HTML 传入 `applyWanyanPerformance()`，再把这两个运行文件交给 `deploy-assets/update-work-assets.mjs` 更新白名单和 pack；最后执行 `deploy-assets/prepare-local.mjs`。全量 `build.mjs` 已包含同一转换。不能只改 HTML 而遗漏新脚本路由，也不需要修改或重新上传 Unity 四个大文件。

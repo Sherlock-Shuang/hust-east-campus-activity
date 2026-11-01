@@ -116,15 +116,46 @@ test('example SDK reports page and actual runtime separately, authenticates comm
 });
 test('same-origin nested Wanyan and Isaac retain their original control messages',async()=>{
   const html=await readFile(path.join(assets,'wanyan/index.html'),'utf8'),controls=html.match(/<script id="bookrealm-controls">([\s\S]*?)<\/script>/)?.[1];assert(controls);
-  const listeners=[],parent={postMessage(){}},document={hidden:false,hasFocus:()=>true,documentElement:{dataset:{}},getElementById:()=>({focus(){}}),currentScript:{dataset:{work:'wanyan'}},exitPointerLock(){}};
-  const sandbox={URL,URLSearchParams,location:{origin:'https://campus.example',search:''},parent,document,performance:{now:()=>0},focus(){},addEventListener:(name,fn)=>{if(name==='message')listeners.push(fn);}};sandbox.window=sandbox;
-  vm.runInNewContext(controls,sandbox);vm.runInNewContext(await readFile(path.join(here,'activity-adapter.js'),'utf8'),sandbox);
+  const listeners=[],frames=new Map(),parent={postMessage(){}},canvas={clientWidth:1280,clientHeight:800,focus(){}};
+  let frameId=0,nativePaused=false;
+  const document={hidden:false,hasFocus:()=>true,documentElement:{dataset:{}},getElementById:()=>canvas,currentScript:{dataset:{work:'wanyan'}},exitPointerLock(){},addEventListener(){},removeEventListener(){}};
+  const sandbox={URL,URLSearchParams,location:{origin:'https://campus.example',search:'?campusAttempt=nested-one'},parent,document,performance:{now:()=>0},focus(){},
+    innerWidth:1280,innerHeight:800,devicePixelRatio:1,navigator:{hardwareConcurrency:8,maxTouchPoints:0},matchMedia:()=>({matches:false}),
+    requestAnimationFrame:fn=>{const id=++frameId;frames.set(id,fn);return id;},cancelAnimationFrame:id=>frames.delete(id),clearTimeout(){},
+    addEventListener:(name,fn)=>{if(name==='message')listeners.push(fn);},removeEventListener(){}};sandbox.window=sandbox;
+  // Execute the same external helper as the generated document, before the
+  // original inline bridge. Only the native engine scheduling API is stubbed.
+  const context=vm.createContext(sandbox);
+  vm.runInContext(await readFile(path.join(assets,'wanyan/wanyan-performance.js'),'utf8'),context);
+  vm.runInContext(controls,context);vm.runInContext(await readFile(path.join(here,'activity-adapter.js'),'utf8'),context);
+  const receive=event=>listeners.forEach(fn=>fn(event));
+  const nested=(suspended,source=parent,origin='https://campus.example')=>({source,origin,data:{type:'bookrealm:controls',suspended}});
+  const host=paused=>receive({source:parent,origin:'https://campus.example',data:{type:'campus:activity',attemptId:'nested-one',paused}});
+  const nativeFrame=()=>{
+    assert.equal(nativePaused,false);
+    sandbox.bookrealmNativeControls=Object.freeze({started:true,suspended:sandbox.bookrealmControlsSuspended});
+    const queued=[...frames.values()];frames.clear();queued.forEach(fn=>fn(16));
+  };
+  // An initial library menu message may precede createUnityInstance completion.
+  receive(nested(true));
+  const controller=sandbox.bookrealmAttachRenderQuality({Module:{pauseMainLoop(){nativePaused=true;},resumeMainLoop(){nativePaused=false;}},Quit(){}});
+  sandbox.campusWorkAdapter.register(controller);
+  assert.equal(nativePaused,true);assert.equal(sandbox.bookrealmControlsSuspended,true);
+  for(const event of [nested(false,{}),nested(false,parent,'https://evil.example'),nested('false'),{source:parent,origin:'https://campus.example',data:{type:'other',suspended:false}}]){
+    receive(event);assert.equal(controller.snapshot().libraryPaused,true,'untrusted or malformed commands cannot clear library pause');
+  }
+  host(true);host(false);assert.equal(nativePaused,true,'host resume must retain an independent library menu pause');
+  receive(nested(false));assert.equal(sandbox.bookrealmControlsSuspended,true,'real helper waits for native suspension frames');
+  nativeFrame();assert.equal(sandbox.bookrealmControlsSuspended,true);nativeFrame();assert.equal(sandbox.bookrealmControlsSuspended,false);
+  host(true);receive(nested(true));receive(nested(false));
+  assert.equal(nativePaused,true,'closing the library menu must retain independent host pause');
+  host(false);nativeFrame();nativeFrame();assert.equal(sandbox.bookrealmControlsSuspended,false);
+  controller.dispose();
   const events=[{source:parent,origin:'https://campus.example',data:{type:'bookrealm:controls',suspended:true}},{source:parent,origin:'https://evil.example',data:{type:'bookrealm:controls',suspended:false}},{source:parent,origin:'https://campus.example',data:{type:'bookrealm:controls',suspended:false}}];
-  for(const [index,event] of events.entries()){listeners.forEach(fn=>fn(event));assert.equal(sandbox.bookrealmControlsSuspended,index!==2);}
   const isaac=await readFile(path.join(assets,'library/isaac-source/运行验证/gamepad-controller.mjs'),'utf8');
   const onMessage=isaac.match(/this\.onMessage = event => \{[\s\S]*?\n    \};/)?.[0];assert(onMessage);
-  const changes=[],context={win:{parent,location:{origin:'https://campus.example'}},pause:{reasons:new Set()},setSuspended:(...args)=>changes.push(args)};
-  vm.runInNewContext(onMessage,context);events.forEach(event=>context.onMessage(event));
+  const changes=[],isaacContext={win:{parent,location:{origin:'https://campus.example'}},pause:{reasons:new Set()},setSuspended:(...args)=>changes.push(args)};
+  vm.runInNewContext(onMessage,isaacContext);events.forEach(event=>isaacContext.onMessage(event));
   assert.deepEqual(changes,[['parent',true],['parent',false]]);
 });
 test('Unity pointer-lock platform failures are non-fatal, unrelated errors remain fatal',async()=>{

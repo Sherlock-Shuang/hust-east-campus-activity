@@ -1142,7 +1142,9 @@ function render(now) {
   }
   if (liveControl?.tick(now)) needsRender = true;
   if(!needsRender||frozen){lastRenderedAt=NaN;renderCpuAccumulator=0;}
-  if (needsRender && renderCadence.shouldRender(now,qualityBudget.maxFps)) {
+  // A work owns the screen; live DOM announcements still update while the
+  // covered campus keeps its last frame. Closing the portal invalidates it.
+  if (needsRender && !liveControl?.portalOpen && renderCadence.shouldRender(now,qualityBudget.maxFps)) {
     const sceneStart=performance.now();
     renderer.info.reset();gpuTimer.begin();
     // A ground-scale fog cutoff hid the far half of the campus in overview.
