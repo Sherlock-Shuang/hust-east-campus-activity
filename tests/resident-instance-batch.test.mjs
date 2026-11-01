@@ -55,7 +55,7 @@ test('resident forest preserves exact LOD transforms and picking IDs, releases a
   const trees=Array.from({length:300},(_,i)=>({x:(i%20)*30,z:Math.floor(i/20)*30,height:9+(i%5),radius:4,featureId:`t${i}`,seed:(i*.618)%1}));
   const normal=createTreeLayer(THREE,trees,{detail:'forest'}),resident=createTreeLayer(THREE,trees,{detail:'forest',resident:true});
   const camera=new THREE.PerspectiveCamera(65,1.6,.1,1000);
-  const snapshot=layer=>Object.fromEntries(layer.group.children.filter(m=>m.count).map(m=>[m.name,{ids:m.userData.instanceFeatureIds,matrices:Array.from(m.instanceMatrix.array.slice(0,m.count*16))}]));
+  const snapshot=layer=>Object.fromEntries(layer.group.children.filter(m=>m.count).map(m=>[m.name,{instances:m.userData.instanceFeatureIds.map((id,slot)=>({id,matrix:Array.from(m.instanceMatrix.array.slice(slot*16,slot*16+16))})).sort((a,b)=>a.id.localeCompare(b.id))}]));
   try{
     for(const scale of[1,.45,1.3])for(const x of[0,150,400]){camera.position.set(x,14,300);camera.lookAt(x,4,0);camera.updateMatrixWorld();normal.update(camera,{detailDistanceScale:scale});resident.update(camera,{detailDistanceScale:scale});assert.deepEqual(snapshot(resident),snapshot(normal));}
     resident.releaseDecorativeResources();assert.equal(resident.group.children.length,0);resident.update(camera);assert.equal(resident.group.children.length,0);

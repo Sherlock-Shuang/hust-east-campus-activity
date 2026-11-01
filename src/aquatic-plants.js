@@ -1,5 +1,7 @@
 import { waterFootprint } from './water-details.js';
 import { getRoadProfile } from './building-profiles.js';
+import {createStaticInstanceSelection} from './static-instance-lod.js';
+import {createProjectedLeafVisibility} from './projected-leaf-visibility.js';
 
 const LAKE_ID = 'relation/13705236';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -201,13 +203,15 @@ export function* buildAquaticPlants(THREE, { record, footprint, roads = [], maxL
   visibility.fill(1);
   const leafIndices = new Map(layout.leaves.map((leaf, index) => [leaf, index]));
   const thresholds = layout.leaves.map(leaf => random(leaf.x, leaf.z, 53));
+  const selectLeaves=createProjectedLeafVisibility(layout.leaves,thresholds,record?.mesh?.position.y??0);
   const cameraPosition = new THREE.Vector3(), localCamera = new THREE.Vector3();
   const lastCamera = new THREE.Vector3(Infinity, Infinity, Infinity);
   const plantingBounds = new THREE.Box3();
   let lastProjection = NaN, lastViewport = NaN, fullDetail = true;
   function cacheBatch(mesh, leaves) {
-    batches.push({ mesh, indices: leaves.map(leaf => leafIndices.get(leaf)), matrices: mesh.instanceMatrix.array.slice(),
-      colours: mesh.instanceColor?.array.slice(), selected: Int32Array.from(leaves, (_, index) => index) });
+    const data=mesh.instanceMatrix.array.slice(),colours=mesh.instanceColor?.array.slice();
+    const matrices=leaves.map((_,i)=>data.subarray(i*16,i*16+16)),colors=colours&&leaves.map((_,i)=>({r:colours[i*3],g:colours[i*3+1],b:colours[i*3+2]}));
+    batches.push({mesh,indices:leaves.map(leaf=>leafIndices.get(leaf)),colours,visible:[],selection:createStaticInstanceSelection(mesh,{matrices,colors,stableSlots:true})});
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     if (mesh.instanceColor) mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
   }
@@ -293,31 +297,13 @@ export function* buildAquaticPlants(THREE, { record, footprint, roads = [], maxL
       // common dormitory view O(1), rather than visiting all 12,000 leaves.
       const minDistance = plantingBounds.distanceToPoint(localCamera);
       if (minDistance > .21 * projection * viewport / .9) allHidden = true;
-      else for (let index = 0; index < layout.leaves.length; index++) {
-        const leaf = layout.leaves[index];
-        const distance = Math.hypot(localCamera.x - leaf.x, localCamera.y - (record.mesh.position.y + leaf.height), localCamera.z - leaf.z);
-        const pixels = leaf.radius * projection * viewport / Math.max(.01, distance);
-        const t = clamp((pixels - .9) / 1.1, 0, 1), density = t * t * (3 - 2 * t);
-        visibility[index] = density >= 1 || density > thresholds[index] ? 1 : 0;
-      }
+      else selectLeaves(localCamera,projection*viewport,visibility);
     }
     let changed = false;
     for (const batch of batches) {
-      const { mesh, indices, matrices, colours, selected } = batch;
-      let count = 0, dirty = false;
-      for (let index = 0; !allHidden && index < indices.length; index++) {
-        if (!visibility[indices[index]]) continue;
-        if (selected[count] !== index) {
-          for (let k = 0; k < 16; k++) mesh.instanceMatrix.array[count * 16 + k] = matrices[index * 16 + k];
-          if (colours) for (let k = 0; k < 3; k++) mesh.instanceColor.array[count * 3 + k] = colours[index * 3 + k];
-          selected[count] = index; dirty = true;
-        }
-        count++;
-      }
-      changed ||= dirty || mesh.count !== count;
-      mesh.count = count;
-      mesh.visible = count > 0;
-      if (dirty) { mesh.instanceMatrix.needsUpdate = true; if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true; }
+      const {indices,visible,selection}=batch;visible.length=0;
+      if(!allHidden)for(let i=0;i<indices.length;i++)if(visibility[indices[i]])visible.push(i);
+      const dirty=selection.update(visible,{sourceOrder:restore});changed=changed||dirty;
     }
     fullDetail = restore;
     group.userData.visibleLeaves = batches.slice(0, 3).filter(batch => batch.colours).reduce((sum, batch) => sum + batch.mesh.count, 0);

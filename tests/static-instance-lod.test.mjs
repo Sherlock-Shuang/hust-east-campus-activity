@@ -93,3 +93,24 @@ test('cached spatial rectangles match the exact source-order reference across bo
     assert.deepEqual(index.query(position,radius),out,'independent outputs receive the same sorted source indices');
   }
 });
+
+test('opaque stable slots retain exact identities through holes, reorder, export and pending uploads',()=>{
+ const {mesh,matrices,colors,ids}=fixture(),selection=createStaticInstanceSelection(mesh,{matrices,colors,ids,stableSlots:true});
+ const gpu=new Float32Array(mesh.instanceMatrix.array.length);
+ const flush=()=>{for(const r of mesh.instanceMatrix.updateRanges)gpu.set(mesh.instanceMatrix.array.subarray(r.start,r.start+r.count),r.start);mesh.instanceMatrix.clearUpdateRanges();mesh.instanceColor.clearUpdateRanges();};
+ selection.update([0,1,2,3,4]);flush();selection.update([1,2,3,4,5]);
+ assert.deepEqual(mesh.instanceMatrix.updateRanges,[{start:0,count:16},{start:64,count:16}]); // only two changed transforms
+ assert.deepEqual(mesh.userData.instanceFeatureIds,['source/4','source/1','source/2','source/3','source/5']);flush();
+ const version=mesh.instanceMatrix.version;selection.update([5,4,3,2,1]);assert.equal(mesh.instanceMatrix.version,version);
+ for(let step=0;step<200;step++){
+  const indices=Array.from({length:step%71},(_,j)=>(step*7+j*3)%1000);selection.update(indices);
+  if(step%3===0)continue;flush();
+  assert.deepEqual([...mesh.userData.instanceFeatureIds].sort(),indices.map(i=>ids[i]).sort());
+  for(const [slot,id]of mesh.userData.instanceFeatureIds.entries()){const index=Number(id.split('/')[1]);assert.deepEqual(Array.from(gpu.subarray(slot*16,slot*16+16)),Array.from(new Float32Array(matrices[index].elements)));}
+ }
+ selection.update([8,1,2],{sourceOrder:true});assert.deepEqual(mesh.userData.instanceFeatureIds,['source/8','source/1','source/2']);
+});
+test('transparent batches preserve caller order even if stable slots are requested',()=>{
+ const {mesh,matrices}=fixture();mesh.material.transparent=true;const select=createStaticInstanceSelection(mesh,{matrices,ids:matrices.map((_,i)=>i),stableSlots:true});
+ select.update([1,2,3]);select.update([3,2,1]);assert.deepEqual(mesh.userData.instanceFeatureIds,[3,2,1]);
+});

@@ -37,7 +37,8 @@ function bounds(points){return{minX:Math.min(...points.map(p=>p.x)),maxX:Math.ma
 function overlap(a,b,r){return a.minX-r<=b.maxX&&a.maxX+r>=b.minX&&a.minZ-r<=b.maxZ&&a.maxZ+r>=b.minZ;}
 function obstacles(model){const w=createPlayerWorld(model),list=[];for(const o of [...w.buildings,...w.barriers,...w.water]){const rings=o.rings??(o.polygon?[o.polygon]:[]);if(!rings.length||rings[0].length<3)continue;if(w.water.includes(o)||((o.height??0)>.15&&(o.minHeight??0)<2.2))list.push({rings,bounds:bounds(rings.flat())});}return list;}
 function collisionFree(points,radius,corridors,blocks){
-  const local=blocks.filter(b=>overlap(bounds(points),b.bounds,radius+.4));
+  const pathBounds=bounds(points);
+  const local=blocks.filter(b=>overlap(pathBounds,b.bounds,radius+.4));
   for(const p of points){
     for(let i=-1;i<12;i++){const a=i/12*TAU,x=p.x+(i<0?0:Math.cos(a)*(radius+.035)),z=p.z+(i<0?0:Math.sin(a)*(radius+.035));if(!corridors.some(c=>contains(c,x,z)))return false;}
     for(const b of local){const inBlock=contains(b.rings[0],p.x,p.z)&&!b.rings.slice(1).some(r=>contains(r,p.x,p.z));if(inBlock||b.rings.some(r=>edgeDistance(r,p.x,p.z)<radius+.035))return false;}

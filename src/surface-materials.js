@@ -15,6 +15,10 @@ function noise(x,y,period=16) {
   return (h(ix,iy)*(1-u)+h(ix+1,iy)*u)*(1-v)+(h(ix,iy+1)*(1-u)+h(ix+1,iy+1)*u)*v;
 }
 const clamp = x => Math.max(0,Math.min(255,Math.round(x)));
+// All three scene owners request the same authored pixels. Copy their buffers
+// for independent ownership, but do not repeat the procedural generation.
+// Weak references do not retain a disposed world's texture buffers.
+const surfacePixelCache=new Map();
 /** Resolve nearly coplanar road layers under both ordinary and shader-written
  * logarithmic depth. Keep actual geometry and normal depth occlusion intact. */
 export function applySurfaceDepthBias(material,steps) {
@@ -40,9 +44,12 @@ export function* buildSurfaceMaterials(THREE) {
     if(color)t.colorSpace=THREE.SRGBColorSpace;t.needsUpdate=true;textures.push(t);return t;
   }
   function* surface(name,metres,sample,{roughness=.94,bump=.035,metalness=0,roughnessVariation=.025,...rest}={}){
-    const color=new Uint8Array(size*size*4),height=new Uint8Array(size*size*4),finish=new Uint8Array(size*size*4);
+    const key=`${name}/${size}/${roughnessVariation}`,cached=surfacePixelCache.get(key)?.map(ref=>ref.deref());
+    const reuse=cached?.every(Boolean);
+    const [color,height,finish]=reuse?cached.map(data=>data.slice()):Array.from({length:3},()=>new Uint8Array(size*size*4));
     for(let y=0;y<size;y++){
       if(y%32===0)yield {stage:"校园材质像素",material:name,row:y};
+      if(reuse)continue;
       for(let x=0;x<size;x++){
       const p=(y*size+x)*4, [r,g,b,h]=sample(x/size,y/size,x,y);
       color.set([clamp(r),clamp(g),clamp(b),255],p);height.set([clamp(h),clamp(h),clamp(h),255],p);
@@ -50,6 +57,7 @@ export function* buildSurfaceMaterials(THREE) {
       finish.set([matte,matte,matte,255],p);
     }
     }
+    if(!reuse&&typeof WeakRef==='function')surfacePixelCache.set(key,[color,height,finish].map(data=>new WeakRef(data)));
     const m=new THREE.MeshStandardMaterial({name,color:'#ffffff',map:texture(color,metres,true),bumpMap:texture(height,metres),roughnessMap:texture(finish,metres),bumpScale:bump,roughness,metalness,...rest});
     m.userData={materialBasis:'procedural, photo-informed; dimensions and weathering estimated',textureTileMetres:metres};materials.push(m);return m;
   }

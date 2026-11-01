@@ -18,7 +18,7 @@ export function createResidentInstanceBatch(THREE,{parent,name,geometry,material
     mesh=new THREE.InstancedMesh(geometry,material,capacity);mesh.name=name;mesh.frustumCulled=false;
     if(colors?.some(Boolean))mesh.setColorAt(0,new THREE.Color('white'));
     configure(mesh);parent.add(mesh);cacheStaticTransforms(mesh);
-    selection=createStaticInstanceSelection(mesh,{matrices,colors,ids});sourceCount=matrices.length;
+    selection=createStaticInstanceSelection(mesh,{matrices,colors,ids,stableSlots:true});sourceCount=matrices.length;
     stats.residentCapacity=capacity;stats.residentBytes=mesh.instanceMatrix.array.byteLength+(mesh.instanceColor?.array.byteLength||0);stats.allocations++;overcapacitySince=null;
   }
   return{stats,get mesh(){return mesh;},update(indices,{reserve=indices.length,forceFull=false,selectionUnchanged=false}={}){
@@ -32,6 +32,6 @@ export function createResidentInstanceBatch(THREE,{parent,name,geometry,material
     if(reallocated)allocate(target);
     // A cached camera selection still maintains its residency timers, but only
     // a fresh allocation needs to copy that unchanged selection again.
-    if(reallocated||!selectionUnchanged)selection.update(indices);
+    if(reallocated||!selectionUnchanged)selection.update(indices,{sourceOrder:forceFull});
   },release,dispose(){if(disposed)return;release();disposed=true;}};
 }
