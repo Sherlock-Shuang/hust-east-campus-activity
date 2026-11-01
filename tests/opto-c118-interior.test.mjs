@@ -71,6 +71,20 @@ test('both short stage stairways remain climbable and connect laterally to the s
   }
 });
 
+test('front stairs join the audience aisle to the piano and allow walking back down',()=>{
+  const m=motion(),aisle=plan.aisles.find(a=>a.id==='left-main');
+  assert.equal(m.placeWalker({x:(aisle.x0+aisle.x1)/2,z:plan.crossAisle.z,yaw:0}).ok,true);
+  const waypoints=[{x:m.state.x,z:plan.viewpoints.front.z},plan.viewpoints.front,
+    {x:0,z:plan.stage.front-.75},{x:plan.piano.x-1.65,z:plan.stage.front-.75},
+    {x:plan.piano.x-1.65,z:plan.piano.z+.2}];
+  for(const waypoint of waypoints){const walk=travel(m,waypoint,1);assert.ok(walk.maxRise<=.181);m.suspend();}
+  close(m.state.y,plan.stage.height);
+  assert.equal(m.placeWalker({x:plan.piano.x,z:plan.piano.z,yaw:0}).ok,false,'piano remains solid');
+  for(const waypoint of waypoints.slice(0,-1).reverse()){travel(m,waypoint,1);m.suspend();}
+  close(m.state.y,plan.config.floorY);
+  assert.equal(m.placeWalker({x:0,z:plan.bounds.minZ,yaw:0}).ok,false,'backstage wall remains solid');
+});
+
 test('front and mid-side return doors require the correct side, width and platform height',()=>{
   for(const door of plan.doors){const m=motion(),start={x:door.x-door.side*.9,z:door.z,yaw:0};assert.equal(m.placeWalker(start).ok,true);close(m.state.y,door.y);
     travel(m,{x:door.x+door.side*.5,z:door.z},.3);assert.equal(crossedC118Door(plan,m.state),true,door.id);
@@ -97,6 +111,11 @@ test('rendered aisle treads match navigation height; video surface and new photo
     const x=(s.polygon[0].x+s.polygon[2].x)/2,z=(s.polygon[0].z+s.polygon[2].z)/2;
     const ray=new THREE.Raycaster(new THREE.Vector3(x,s.surfaceY+.2,z),new THREE.Vector3(0,-1,0));
     const hit=ray.intersectObject(hall.group,true)[0];assert.ok(hit);close(hit.point.y,s.surfaceY,.003);
+  }
+  for(const s of hall.plan.stairs.filter(s=>s.id.startsWith('c118-stage-front-stair-'))){
+    const z=(s.polygon[0].z+s.polygon[2].z)/2;
+    const ray=new THREE.Raycaster(new THREE.Vector3(0,s.surfaceY+.2,z),new THREE.Vector3(0,-1,0));
+    close(ray.intersectObject(hall.group,true)[0].point.y,s.surfaceY,.003);
   }
   assert.equal(hall.videoScreen.name,'c118-video-screen');assert.equal(hall.videoScreen.visible,false);close(hall.videoScreen.geometry.parameters.width,9.8);close(hall.videoScreen.geometry.parameters.height,6);
   for(const name of['c118-grand-piano-case','c118-middle-aisle-wood-guard','c118-side-light-strip','c118-ceiling-low-beams','c118-seat-headrests'])assert.ok(hall.group.getObjectByName(name),name);
