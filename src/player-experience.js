@@ -80,12 +80,38 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   const on=(el,type,fn,options)=>{if(!el)return;const handler=e=>{if(suspended&&actionEvents.has(type))return;return fn(e);};el.addEventListener(type,handler,options);listeners.push(()=>el.removeEventListener(type,handler,options));};
   const editing=target=>target?.closest?.('input,select,textarea,[contenteditable="true"],dialog[open]');
   const inputBlocked=()=>suspended||document.hidden||!!document.querySelector('dialog[open]');
+  let middleMousePressed=false,pointerLockNotice='';
+  function focusCanvas(){try{canvas.focus?.({preventScroll:true});}catch{try{canvas.focus?.();}catch{}}}
+  function pointerLockExplanation(error){
+    if(error?.name==='PointerLockTimeoutError')return '浏览器尚未确认鼠标锁定。若有授权提示请先处理，也可点击按钮重试。';
+    const wechat=/MicroMessenger/i.test(window.navigator?.userAgent||'');
+    if(error?.name==='NotSupportedError'||!pointerLock.supported)return `当前${wechat?'微信内置浏览器':'浏览器'}不支持鼠标锁定，请在系统浏览器打开；仍可移动鼠标环视。`;
+    if(wechat)return '微信内置浏览器未允许锁定，可点击“锁定鼠标”重试；若仍失败，在系统浏览器打开。仍可移动鼠标环视。';
+    if(error?.name==='NotAllowedError'||error?.name==='SecurityError')return '浏览器未允许锁定鼠标，可点击“锁定鼠标”重试；若仍失败，在系统浏览器打开。仍可移动鼠标环视。';
+    return '暂未锁定鼠标，可点击“锁定鼠标”重试；仍可移动鼠标环视。';
+  }
   const pointerLock=createPlayerPointerLock({canvas,document,canLock:()=>active&&!disposed&&!inputBlocked(),
-    onChange(locked){clearInput();if(!locked)escapeReleaseUntil=performance.now()+300;updateUI();invalidate();},
-    onError(){const fallback='移动鼠标环视';notify(pointerLock.supported?`暂未锁定鼠标：请在游戏画面内按中键或 L 重试；仍可${fallback}。`:`当前浏览器不支持鼠标锁定，仍可${fallback}。`);},
+    onChange(locked){clearInput(true);if(locked)pointerLockNotice='';else escapeReleaseUntil=performance.now()+300;updateUI();invalidate();},
+    onPendingChange(pending){if(pending)pointerLockNotice='';updateUI();invalidate();},
+    onError(error){pointerLockNotice=pointerLockExplanation(error);notify(pointerLockNotice);updateUI();invalidate();},
   });
+  function togglePointerLock(){
+    if(!active||disposed||inputBlocked())return;
+    // Keep focus and the request inside the user's activation, including older
+    // embedded browsers whose focus() does not accept an options argument.
+    focusCanvas();
+    if(!pointerLock.locked&&!pointerLock.pending)pointerLockNotice='';
+    pointerLock.toggle();updateUI();
+  }
+  function pressMiddleMouse(e){
+    if(e.button!==1||!active||inputBlocked())return;
+    e.preventDefault();
+    if(middleMousePressed)return;
+    middleMousePressed=true;togglePointerLock();
+  }
+  function releaseMiddleMouse(e){if(e.type==='pointercancel'||e.type==='lostpointercapture'||e.button===1||typeof e.buttons==='number'&&!(e.buttons&4))middleMousePressed=false;}
   function releaseLookContact(){const previous=drag;drag=null;mouseLook=null;if(previous)try{if(canvas.hasPointerCapture?.(previous.id))canvas.releasePointerCapture(previous.id);}catch{}}
-  function clearInput(){spiderRequest=null;if(!suspended)motion.clearActionInputs?.();keys.clear();held.clear();mobileHeld.clear();waterControls?.reset();mobileAxes={forward:0,sideways:0};mobileControls?.reset();pulses.clear();cruise=false;liftTarget=null;landing=false;releaseLookContact();held.delete('mouse-swing');webAudio.setActive(false);}
+  function clearInput(preserveMiddle=false){if(!preserveMiddle)middleMousePressed=false;spiderRequest=null;if(!suspended)motion.clearActionInputs?.();keys.clear();held.clear();mobileHeld.clear();waterControls?.reset();mobileAxes={forward:0,sideways:0};mobileControls?.reset();pulses.clear();cruise=false;liftTarget=null;landing=false;releaseLookContact();held.delete('mouse-swing');webAudio.setActive(false);}
   function waitForSpider(run,key){
     if(spiderPrepared)return run();
     if(spiderRequest?.key===key)return {ok:false,pending:true};
@@ -177,11 +203,25 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     });
     updateElement('player-mode-label',{textContent:s.mode==='walk'&&s.waterMode!=='dry'?({swim:'游泳',board:'冲浪板',surf:'冲浪'}[s.waterMode]||modeNames[s.mode]):modeNames[s.mode]});
     updateElement('pointer-lock-hint',{hidden:!active||!pointerLock.locked});
+    const lockState=pointerLock.locked?'locked':pointerLock.pending?'pending':!pointerLock.supported?'unsupported':pointerLockNotice?'error':'idle';
+    const lockButton=$('player-mouse-toggle');
+    if(lockButton){
+      lockButton.textContent=pointerLock.locked?'释放鼠标':pointerLock.pending?'取消锁定请求':'锁定鼠标';
+      lockButton.disabled=!active||inputBlocked();
+      lockButton.setAttribute('aria-pressed',String(pointerLock.locked));lockButton.setAttribute('aria-busy',String(pointerLock.pending));
+      lockButton.dataset.state=lockState;
+    }
+    const lockStatus=$('player-mouse-status');
+    if(lockStatus){
+      lockStatus.textContent=pointerLock.locked?'鼠标已锁定，按 Esc 或点击“释放鼠标”退出。':pointerLock.pending?'正在请求鼠标锁定，请处理浏览器的授权提示。':pointerLockNotice||(!pointerLock.supported?pointerLockExplanation({name:'NotSupportedError'}):'');
+      lockStatus.hidden=!active||!lockStatus.textContent;
+      lockStatus.dataset.state=lockState;lockStatus.dataset.errorName=pointerLock.error?.name||'';
+    }
     updateElement('player-look-reticle',{hidden:!active||inputBlocked()||suitView||!(pointerLock.locked||comfortableCamera)});
     $('viewport').classList.toggle('pointer-locked',active&&pointerLock.locked);
     const hud=$('player-hud');
     if(hud)Object.assign(hud.dataset,{
-      pointerLockSupported:String(pointerLock.supported),pointerLocked:String(pointerLock.locked),comfortableCamera:String(comfortableCamera),
+      pointerLockSupported:String(pointerLock.supported),pointerLocked:String(pointerLock.locked),pointerLockPending:String(pointerLock.pending),comfortableCamera:String(comfortableCamera),
       mode:s.mode,waterMode:s.waterMode??'dry',view,inspect:String(suitView),suspended:String(suspended),spiderPreparation:preparationState,
     });
     updateElement('web-target-status',{hidden:!active||!spider});
@@ -288,30 +328,31 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     $('player-hud').hidden=true;document.body.classList.remove('campus-playing');$('viewport').classList.remove('playing','spider-playing','drive-playing');updateUI();invalidate();onModeChange('walk');
   }
   on(window,'keydown',e=>{
-    if(!active||e.metaKey||e.ctrlKey||e.altKey||editing(e.target)||inputBlocked()||!codes.has(e.code))return;
+    const code=(!e.code||e.code==='Unidentified')&&/^[lL]$/.test(e.key||'')?'KeyL':e.code;
+    if(!active||e.isComposing||e.keyCode===229||e.metaKey||e.ctrlKey||e.altKey||editing(e.target)||inputBlocked()||!codes.has(code))return;
     // Ignore a key held across an administrative pause or focus loss.
-    if(e.repeat&&!keys.has(e.code))return;
+    if(e.repeat&&!keys.has(code))return;
     // A focused toolbar/touch button owns Space; the canvas owns game actions.
-    if(e.code==='Space'&&e.target?.closest?.('button'))return;
+    if(code==='Space'&&e.target?.closest?.('button'))return;
     e.preventDefault();
-    if(suitView&&!['Escape','KeyV','KeyC'].includes(e.code))stopSuitView();
-    if(e.code==='Escape'){if(e.repeat)return;if(pointerLock.locked||pointerLock.pending){pointerLock.release();return;}if(performance.now()<escapeReleaseUntil)return;exit();return;}
-    if(e.code==='KeyL'){if(!e.repeat){pointerLock.toggle();updateUI();}return;}
-    if(e.code==='KeyV'){if(!e.repeat)setView(view==='third'?'first':'third');return;}
-    if(e.code==='KeyG'&&motion.state.mode==='walk'&&motion.state.waterMode!=='dry'){if(!e.repeat)catchWave();return;}
-    if(e.code==='KeyG'&&motion.state.mode==='spider'){if(!e.repeat){pulses.set('point',.12);}return;}
-    if(e.code==='KeyF'){if(!e.repeat){if((interaction||motion.state.waterMode!=='dry')&&(motion.state.mode!=='spider'||motion.state.grounded)){interact();updateUI();}else if(motion.state.mode==='spider'){pulses.set('zip',.12);}else toggleFlight();}return;}
-    if(e.code==='KeyC'&&!(motion.state.mode==='walk'&&motion.state.waterMode!=='dry')){recenter(false,true);return;}
-    if(e.code==='Space'){cruise=false;liftTarget=null;landing=false;if(motion.state.mode==='spider'){if(!e.repeat)queueJump();return;}}
-    if(e.code==='KeyQ'||e.code==='KeyE'){
+    if(suitView&&!['Escape','KeyV','KeyC'].includes(code))stopSuitView();
+    if(code==='Escape'){if(e.repeat)return;if(pointerLock.locked||pointerLock.pending){pointerLock.release();return;}if(performance.now()<escapeReleaseUntil)return;exit();return;}
+    if(code==='KeyL'){if(!e.repeat)togglePointerLock();return;}
+    if(code==='KeyV'){if(!e.repeat)setView(view==='third'?'first':'third');return;}
+    if(code==='KeyG'&&motion.state.mode==='walk'&&motion.state.waterMode!=='dry'){if(!e.repeat)catchWave();return;}
+    if(code==='KeyG'&&motion.state.mode==='spider'){if(!e.repeat){pulses.set('point',.12);}return;}
+    if(code==='KeyF'){if(!e.repeat){if((interaction||motion.state.waterMode!=='dry')&&(motion.state.mode!=='spider'||motion.state.grounded)){interact();updateUI();}else if(motion.state.mode==='spider'){pulses.set('zip',.12);}else toggleFlight();}return;}
+    if(code==='KeyC'&&!(motion.state.mode==='walk'&&motion.state.waterMode!=='dry')){recenter(false,true);return;}
+    if(code==='Space'){cruise=false;liftTarget=null;landing=false;if(motion.state.mode==='spider'){if(!e.repeat)queueJump();return;}}
+    if(code==='KeyQ'||code==='KeyE'){
       liftTarget=null;landing=false;
-      if(e.code==='KeyQ'&&motion.state.mode==='roadster'){
+      if(code==='KeyQ'&&motion.state.mode==='roadster'){
         if(e.repeat&&!keys.has('KeyQ'))return;
         if(!e.repeat&&!armRoadsterJet())return;
       }
     }
-    if(['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))landing=false;
-    keys.add(e.code);
+    if(['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(code))landing=false;
+    keys.add(code);
   });
   on(window,'keyup',e=>{keys.delete(e.code);});
   const loseFocus=()=>{clearInput();pointerLock.release();};
@@ -320,8 +361,8 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   on(canvas,'pointerenter',e=>{if(active&&!inputBlocked()&&!pointerLock.locked&&e.pointerType==='mouse')seedMouse(e);});
   on(canvas,'pointerdown',e=>{
     if(!active||inputBlocked())return;
-    if(e.pointerType==='mouse'&&e.button===1){e.preventDefault();canvas.focus({preventScroll:true});pointerLock.toggle();updateUI();return;}
-    canvas.focus({preventScroll:true});
+    if(e.pointerType==='mouse'&&e.button===1){pressMiddleMouse(e);return;}
+    focusCanvas();
     if(e.pointerType==='mouse'){
       const wasLooking=!!mouseLook?.looking;seedMouse(e);mouseLook.looking=wasLooking;
       if(motion.state.mode==='spider'&&e.button===0&&!suitView){held.add('mouse-swing');}
@@ -350,7 +391,8 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   });
   // Pointer Lock guarantees MouseEvents; some engines omit PointerEvents.
   on(document,'mousedown',e=>{if(pointerLock.locked&&active&&!inputBlocked()&&motion.state.mode==='spider'&&e.button===0&&!suitView){held.add('mouse-swing');}});
-  on(document,'mouseup',e=>{if(e.button===0)held.delete('mouse-swing');});
+  on(document,'mouseup',e=>{releaseMiddleMouse(e);if(e.button===0)held.delete('mouse-swing');});
+  on(window,'mouseup',releaseMiddleMouse);on(canvas,'mouseup',releaseMiddleMouse);
   on(canvas,'pointermove',e=>{
     if(!active||inputBlocked()){mouseLook=null;return;}
     if(pointerLock.locked)return;
@@ -367,16 +409,16 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(mouse)mouseLook.looking=true;
     applyLook(dx,dy,!mouse);
   });
-  const releasePointer=e=>{if(e.pointerType!=='mouse'){if(drag?.id===e.pointerId)releaseLookContact();return;}mouseLook=null;held.delete('mouse-swing');};
-  on(canvas,'pointerup',e=>{if(e.pointerType==='mouse')held.delete('mouse-swing');else releasePointer(e);});
+  const releasePointer=e=>{if(e.pointerType!=='mouse'){if(drag?.id===e.pointerId)releaseLookContact();return;}releaseMiddleMouse(e);mouseLook=null;held.delete('mouse-swing');};
+  on(canvas,'pointerup',e=>{if(e.pointerType==='mouse'){releaseMiddleMouse(e);held.delete('mouse-swing');}else releasePointer(e);});
   on(canvas,'pointercancel',releasePointer);on(canvas,'lostpointercapture',releasePointer);
   on(window,'pointerup',releasePointer);on(window,'pointercancel',releasePointer);
   on(canvas,'pointerleave',e=>{if(e.pointerType==='mouse'&&!pointerLock.locked){mouseLook=null;held.delete('mouse-swing');}});
   on(canvas,'wheel',e=>{if(!active)return;e.preventDefault();if(suitView){suitDistance=Math.max(1.8,Math.min(6,suitDistance*Math.exp(e.deltaY*.001)));return;}const base=motion.state.mode==='helicopter'?18:motion.state.mode==='roadster'?9.4:motion.state.mode==='hoverboard'?8.8:motion.state.mode==='spider'?6.6:motion.state.mode==='scooter'?8.8:6.4;distance=Math.max(2,Math.min(35,(distance??base)*Math.exp(e.deltaY*.001)));},{passive:false});
   on(canvas,'contextmenu',e=>{if(active)e.preventDefault();});
   on(canvas,'auxclick',e=>{if(active&&e.button===1)e.preventDefault();});
-  on(canvas,'mousedown',e=>{if(active&&e.button===1)e.preventDefault();});
-  on($('player-mouse-toggle'),'click',()=>{pointerLock.toggle();updateUI();});
+  on(canvas,'mousedown',pressMiddleMouse);
+  on($('player-mouse-toggle'),'click',togglePointerLock);
   on($('look-sensitivity'),'input',e=>{const value=Number(e.target.value);if(Number.isFinite(value))preferences.set({sensitivity:value});});
   document.querySelectorAll('[data-player-mode]').forEach(b=>on(b,'click',()=>enter(b.dataset.playerMode)));
   on($('transport-interact'),'click',()=>{if(active){interact();canvas.focus({preventScroll:true});updateUI();}});

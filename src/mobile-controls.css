@@ -245,6 +245,10 @@ body.touch-controls {
 .touch-controls #map-canvas { touch-action: none; }
 .touch-controls #pointer-lock-hint,
 .touch-controls #transport-interact { display: none !important; }
+@media (any-pointer: coarse) and (any-hover: none) {
+  .touch-controls #player-mouse-toggle,
+  .touch-controls #player-mouse-status { display: none !important; }
+}
 .touch-controls.transport-layout #player-hud,
 .touch-controls.transport-layout #player-hud[data-mode="walk"] {
   top: max(60px, calc(env(safe-area-inset-top) + 48px));

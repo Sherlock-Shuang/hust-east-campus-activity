@@ -1208,6 +1208,14 @@
       "continue": true
     },
     {
+      "src": "^/works/tasay/assets/index-DZ2OsQsv\\.js$",
+      "headers": {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
       "src": "^/works/library/library-render-runtime\\.mjs$",
       "headers": {
         "Content-Type": "text/javascript; charset=utf-8",

@@ -41,7 +41,7 @@ class Element {
 // mobile buttons below and retain this separate legacy fixture solely to
 // exercise the older embedding host's supported input paths.
 const LEGACY_CONTROL_IDS = [
-  'player-mouse-toggle','look-sensitivity','look-sensitivity-value','player-side-view',
+  'look-sensitivity','look-sensitivity-value','player-side-view',
   'exit-player','player-recenter','walk-controls','player-cruise','player-flight-toggle',
   'player-auto-swing','web-immersive','web-controls','web-suit','web-audio','web-comfort',
   'drive-immersive','drive-comfort','drive-controls','player-takeoff','player-land','player-reset',
@@ -52,7 +52,7 @@ const REMOVED_HUD_IDS = new Set([
   'web-phase','web-length','web-chain','web-actions','web-release-hint','web-zip-status',
   'web-maneuvers','web-point-status','web-trick-status','web-launch-meter','web-launch-fill','web-launch-hint',
 ]);
-function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePointer=false,roadSurfaces=[],spiderPreparation,storage,classicControls=true,joystickRect={left:24,top:190,width:120,height:120}}={}){
+function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePointer=false,roadSurfaces=[],spiderPreparation,storage,userAgent='',classicControls=true,joystickRect={left:24,top:190,width:120,height:120}}={}){
   const previous={document:globalThis.document,window:globalThis.window};
   const doc=new Element(),win=new Element(),ids=new Map(),html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const fromHTML=(tag,attributes)=>{
@@ -82,6 +82,7 @@ function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePo
   doc.querySelector=selector=>selector==='dialog[open]'?doc.body.children.find(el=>el.open)||null:selector==='[data-player-input=brake]'?inputs.find(el=>el.dataset.playerInput==='brake'):null;
   const coarseMedia=Object.assign(new Element(),{matches:coarsePointer}),landscapeMedia=Object.assign(new Element(),{matches:true}),reducedMedia=Object.assign(new Element(),{matches:false});
   win.matchMedia=query=>query.includes('coarse')?coarseMedia:query.includes('orientation')?landscapeMedia:reducedMedia;
+  win.navigator={userAgent};
   // Existing controls regressions exercise an explicitly saved classic profile.
   // Fresh-visit comfort tests opt out below and run with empty storage.
   win.localStorage=storage??(classicControls?{getItem:()=>JSON.stringify({comfortableCamera:false,sensitivity:1})}:undefined);win.innerWidth=844;win.innerHeight=390;win.screen={orientation:new Element()};win.visualViewport=new Element();
@@ -1319,11 +1320,120 @@ test('middle mouse toggles pointer lock without swinging, zooming or changing mo
   const before=f.experience.captureActivityPose();let focused=0;f.canvas.focus=()=>{focused++;};
   const press=f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4});
   assert.equal(press.defaultPrevented,true);assert.equal(focused,1);assert.equal(f.doc.pointerLockElement,f.canvas);
+  f.canvas.emit('mousedown',{button:1,buttons:4});
+  assert.equal(focused,1,'the compatibility MouseEvent of the same press cannot toggle the lock twice');
+  assert.equal(f.doc.pointerLockElement,f.canvas);
   assert.equal(f.el('player-hud').dataset.pointerLocked,'true');assert.equal(f.experience.state.mode,'walk');
   assert.equal(f.canvas.emit('auxclick',{button:1}).defaultPrevented,true);
   assert.equal(f.experience.captureActivityPose().distance,before.distance);
+  f.canvas.emit('pointerup',{pointerType:'mouse',button:1,buttons:0});
   f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4});assert.equal(f.doc.pointerLockElement,null);
   f.experience.setSuspended(true);f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4});assert.equal(f.doc.pointerLockElement,null);
+});
+
+test('MouseEvent-only middle presses lock, deduplicate, and recover after button release or blur',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});enablePointerLock(f);f.experience.enter('spider');
+  let requests=0;const request=f.canvas.requestPointerLock;f.canvas.requestPointerLock=()=>{requests++;return request();};
+  f.canvas.emit('pointerdown',{button:0,buttons:1});
+  const press=f.canvas.emit('mousedown',{button:1,buttons:5});
+  assert.equal(press.defaultPrevented,true);assert.equal(requests,1);assert.equal(f.doc.pointerLockElement,f.canvas,'middle may only produce mousedown when the left button is already held');
+  f.canvas.emit('mousedown',{button:1,buttons:5});f.canvas.emit('auxclick',{button:1});
+  assert.equal(requests,1);assert.equal(f.doc.pointerLockElement,f.canvas);
+  f.doc.emit('mouseup',{button:1,buttons:1});f.canvas.emit('mousedown',{button:1,buttons:5});assert.equal(f.doc.pointerLockElement,null);
+  f.win.emit('mouseup',{button:1,buttons:0});f.canvas.emit('mousedown',{button:1,buttons:4});assert.equal(requests,2);assert.equal(f.doc.pointerLockElement,f.canvas);
+  f.win.emit('blur');assert.equal(f.doc.pointerLockElement,null);
+  f.canvas.emit('mousedown',{button:1,buttons:4});assert.equal(requests,3);assert.equal(f.doc.pointerLockElement,f.canvas,'focus loss clears the middle press latch');
+  f.canvas.emit('pointercancel',{button:-1,buttons:4});f.canvas.emit('mousedown',{button:1,buttons:4});
+  assert.equal(f.doc.pointerLockElement,null,'cancellation clears the latch even if the last event still reports a pressed button');
+});
+
+test('lock shortcut accepts missing-code L keys without intercepting composition or other physical keys',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});enablePointerLock(f);f.experience.enter('walk');
+  for(const values of [{code:'',key:'l'},{code:'Unidentified',key:'L'},{code:'KeyL',key:'l'}]){
+    const before=f.camera.quaternion.clone();
+    f.win.emit('keydown',{...values,isComposing:true,target:f.canvas});assert.equal(f.doc.pointerLockElement,null);
+    f.win.emit('keydown',{...values,keyCode:229,target:f.canvas});assert.equal(f.doc.pointerLockElement,null);
+    f.win.emit('keydown',{...values,repeat:true,target:f.canvas});assert.equal(f.doc.pointerLockElement,null);
+    f.win.emit('keydown',{...values,target:f.canvas});assert.equal(f.doc.pointerLockElement,f.canvas);
+    assert.ok(before.angleTo(f.camera.quaternion)<1e-7,'locking does not rotate the view');
+    f.key('Escape');assert.equal(f.doc.pointerLockElement,null);
+  }
+  f.win.emit('keydown',{code:'KeyJ',key:'l',target:f.canvas});assert.equal(f.doc.pointerLockElement,null,'a real physical code takes priority over the key fallback');
+});
+
+test('real lock button focuses with a legacy fallback, reports WeChat rejection and supports explicit retry',async t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,userAgent:'Mozilla/5.0 Windows MicroMessenger/4.0'});enablePointerLock(f);f.experience.enter('walk');
+  const button=f.el('player-mouse-toggle'),status=f.el('player-mouse-status'),order=[];let requests=0;
+  assert.equal(button.getAttribute('type'),'button');assert.equal(status.getAttribute('role'),'status');
+  f.canvas.focus=options=>{if(options){order.push('focus-options');throw new TypeError('options unavailable');}order.push('focus-legacy');};
+  f.canvas.requestPointerLock=()=>{order.push('request');requests++;if(requests===1)return Promise.reject(Object.assign(new Error('denied'),{name:'NotAllowedError'}));f.doc.pointerLockElement=f.canvas;f.doc.emit('pointerlockchange');};
+  button.emit('click');await Promise.resolve();await Promise.resolve();
+  assert.deepEqual(order,['focus-options','focus-legacy','request']);assert.equal(requests,1);
+  assert.equal(f.doc.pointerLockElement,null);assert.equal(button.getAttribute('aria-pressed'),'false');assert.equal(button.textContent,'锁定鼠标');
+  assert.equal(status.hidden,false);assert.match(status.textContent,/微信内置浏览器未允许锁定/);assert.match(status.textContent,/点击“锁定鼠标”重试/);assert.match(status.textContent,/系统浏览器/);
+  assert.equal(f.el('pointer-lock-hint').hidden,true);assert.equal(f.el('viewport').classList.contains('pointer-locked'),false);
+  const explanation=status.textContent;f.tick(5);assert.equal(status.textContent,explanation);assert.equal(requests,1,'no automatic retry loop');
+  button.emit('click');
+  assert.deepEqual(order.slice(3),['focus-options','focus-legacy','request']);assert.equal(requests,2);assert.equal(f.doc.pointerLockElement,f.canvas);
+  assert.equal(button.textContent,'释放鼠标');assert.equal(button.getAttribute('aria-pressed'),'true');assert.doesNotMatch(status.textContent,/未允许|重试/);
+  button.emit('click');assert.equal(f.doc.pointerLockElement,null);assert.equal(button.getAttribute('aria-pressed'),'false');
+});
+
+test('lock button reflects a real pending request and cancels without claiming success',async t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});enablePointerLock(f);f.experience.enter('walk');
+  let requests=0;f.canvas.requestPointerLock=()=>{requests++;return Promise.resolve();};
+  const button=f.el('player-mouse-toggle'),status=f.el('player-mouse-status');
+  button.emit('click');await Promise.resolve();
+  assert.equal(button.textContent,'取消锁定请求');assert.equal(button.getAttribute('aria-busy'),'true');assert.equal(button.getAttribute('aria-pressed'),'false');
+  assert.equal(status.hidden,false);assert.match(status.textContent,/等待|请求|确认/);assert.equal(f.el('pointer-lock-hint').hidden,true);
+  button.emit('click');assert.equal(button.textContent,'锁定鼠标');assert.equal(button.getAttribute('aria-busy'),'false');assert.equal(requests,1);
+  f.doc.pointerLockElement=f.canvas;f.doc.emit('pointerlockchange');assert.equal(f.doc.pointerLockElement,null,'a late cancelled grant must not be advertised as locked');
+  assert.equal(button.getAttribute('aria-pressed'),'false');
+});
+
+test('every lock gesture focuses synchronously before requesting, even with legacy focus()',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});enablePointerLock(f);f.experience.enter('walk');
+  let focused=false,requests=0;const request=f.canvas.requestPointerLock;
+  f.canvas.focus=options=>{if(options)throw new TypeError('legacy focus');focused=true;};
+  f.canvas.requestPointerLock=()=>{assert.equal(focused,true,'focus must occur within the same gesture before the browser request');focused=false;requests++;return request();};
+  const gestures=[()=>f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4}),()=>f.canvas.emit('mousedown',{button:1,buttons:4}),()=>f.key('KeyL'),()=>f.el('player-mouse-toggle').emit('click')];
+  for(const gesture of gestures){gesture();assert.equal(f.doc.pointerLockElement,f.canvas);f.win.emit('blur');assert.equal(f.doc.pointerLockElement,null);}
+  assert.equal(requests,4);
+});
+
+test('WeChat lock timeout stays an unconfirmed request and a later real permission grant clears it',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false,userAgent:'Windows MicroMessenger/4.0'});enablePointerLock(f);f.experience.enter('walk');
+  t.mock.timers.enable({apis:['setTimeout']});
+  let requests=0;f.canvas.requestPointerLock=()=>{requests++;};
+  const button=f.el('player-mouse-toggle'),status=f.el('player-mouse-status');button.emit('click');
+  assert.equal(button.textContent,'取消锁定请求');t.mock.timers.tick(3000);
+  assert.equal(requests,1);assert.equal(button.getAttribute('aria-pressed'),'false');assert.equal(button.textContent,'锁定鼠标');
+  assert.equal(status.hidden,false);assert.match(status.textContent,/尚未确认/);assert.match(status.textContent,/授权提示/);assert.doesNotMatch(status.textContent,/未允许|拒绝/);
+  assert.equal(status.dataset.errorName,'PointerLockTimeoutError');
+  f.doc.pointerLockElement=f.canvas;f.doc.emit('pointerlockchange');
+  assert.equal(f.doc.pointerLockElement,f.canvas);assert.equal(button.getAttribute('aria-pressed'),'true');assert.equal(button.textContent,'释放鼠标');
+  assert.doesNotMatch(status.textContent,/尚未确认/);assert.equal(requests,1);
+});
+
+test('unsupported pointer lock stays visibly unsupported and never advertises success',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter('walk');
+  const button=f.el('player-mouse-toggle'),status=f.el('player-mouse-status');
+  assert.equal(status.hidden,false);assert.match(status.textContent,/不支持/);assert.equal(button.getAttribute('aria-pressed'),'false');assert.equal(status.dataset.state,'unsupported');
+  button.emit('click');assert.equal(f.el('viewport').classList.contains('pointer-locked'),false);assert.match(status.textContent,/不支持/);
+  assert.equal(button.textContent,'锁定鼠标');assert.equal(f.el('pointer-lock-hint').hidden,true);assert.equal(status.dataset.state,'unsupported');
+});
+
+test('all lock entry points respect inactive, pause, hidden document and editing guards',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});enablePointerLock(f);let requests=0;
+  const request=f.canvas.requestPointerLock;f.canvas.requestPointerLock=()=>{requests++;return request();};
+  const attempt=()=>{f.el('player-mouse-toggle').emit('click');f.canvas.emit('pointerdown',{pointerType:'mouse',button:1,buttons:4});f.canvas.emit('mousedown',{button:1,buttons:4});f.key('KeyL');};
+  attempt();assert.equal(requests,0);f.experience.enter('walk');
+  f.experience.setSuspended(true);attempt();assert.equal(requests,0);assert.equal(f.el('player-mouse-toggle').disabled,true);
+  f.experience.setSuspended(false);f.doc.hidden=true;attempt();assert.equal(requests,0);f.doc.hidden=false;
+  const dialog=new Element('dialog');dialog.open=true;f.doc.body.append(dialog);attempt();assert.equal(requests,0);dialog.close();
+  f.win.emit('keydown',{code:'KeyL',key:'l',target:new Element('input')});assert.equal(requests,0);
+  f.win.emit('keydown',{code:'',key:'l',target:new Element('textarea')});assert.equal(requests,0);
+  f.el('player-mouse-toggle').emit('click');assert.equal(requests,1);assert.equal(f.doc.pointerLockElement,f.canvas,'a blocked gesture must not poison the next deliberate request');
 });
 
 
