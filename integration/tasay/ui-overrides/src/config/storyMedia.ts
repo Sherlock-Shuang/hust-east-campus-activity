@@ -1,4 +1,4 @@
-import auditoriumImage from "../assets/opto-c118-audience-v1.jpg";
+import auditoriumImage from "../assets/opto-c118-audience-v2.jpg";
 import campusMap from "../assets/opto-location-map.svg";
 
 // Resolve at render time too: older saves may contain the previous image URL.
