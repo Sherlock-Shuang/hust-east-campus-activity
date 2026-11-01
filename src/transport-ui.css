@@ -125,6 +125,12 @@ body.transport-layout.campus-playing > header,
   border:0;box-shadow:none;backdrop-filter:none;pointer-events:none;
 }
 .transport-layout .audience-badge {top:22px;right:24px;}
+.transport-layout #player-hud #player-mouse-toggle {pointer-events:auto;margin:8px 6px 0 0;padding:7px 11px;border:1px solid #ffffff70;border-radius:7px;background:#244f45e8;color:#f6fff8;font-size:12px;cursor:pointer;}
+.transport-layout #player-hud #player-mouse-toggle:hover {background:#366b5e;}
+.transport-layout #player-hud #player-mouse-toggle:focus-visible {outline:2px solid #fff;outline-offset:3px;}
+.transport-layout #player-hud #player-mouse-toggle[aria-pressed="true"] {background:#e6f2df;color:#234b3b;}
+.transport-layout #player-mouse-status {margin:8px 0 0;font-size:11px;line-height:1.6;text-align:left;color:#f3faf2;pointer-events:auto;}
+#player-mouse-status[hidden],#player-mouse-toggle[hidden] {display:none;}
 .transport-layout #web-target-status {top:24px;max-width:calc(100% - 460px);}
 .world-interaction {
   position:absolute;z-index:8;left:50%;bottom:110px;transform:translateX(-50%);
