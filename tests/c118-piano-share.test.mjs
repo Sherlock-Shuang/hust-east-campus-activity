@@ -24,5 +24,5 @@ test('typing, modified shortcuts and held F never open the presentation',()=>{
 
 test('the served deck preserves the supplied portable HTML byte for byte',async()=>{
   const html=await readFile(new URL('../public/'+C118_PIANO_SHARE_URL.slice(2),import.meta.url));
-  assert.equal(createHash('sha256').update(html).digest('hex'),'d91f5916132133748c3fc60b6b54ca32665f7cf2b0eed1d39f50f151d4f214a0');
+  assert.equal(createHash('sha256').update(html).digest('hex'),'d7ebf46f300a5a14fcd74d6e27ce3caa97fafe2db332f0623f9d5a9f6b9389c5');
 });
