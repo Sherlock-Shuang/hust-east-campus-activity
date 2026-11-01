@@ -5,13 +5,16 @@
     <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
     <meta name="theme-color" content="#e9eeeb" />
     <link rel="preload" as="image" href="/images/entry-cover/east-campus-sunset-v1.webp" fetchpriority="high" />
+    <link rel="preload" as="font" href="/fonts/entry-brush-v1.woff2" type="font/woff2" crossorigin />
     <style>
+      @font-face{font-family:CampusBrush;src:url("/fonts/entry-brush-v1.woff2") format("woff2");font-weight:400;font-display:block}
       #campus-entry-cover{position:fixed;inset:0;z-index:1000;overflow:hidden;background:#2c2638;color:#fff4df}
-      #campus-entry-cover[hidden]{display:none!important}
+      #campus-entry-cover[hidden],#entry-cover-start[hidden],#entry-cover-status[hidden]{display:none!important}
       body.entry-cover-open>header,body.entry-cover-open>#viewport{visibility:hidden;pointer-events:none}
       .entry-cover-art{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+      .entry-cover-film{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;pointer-events:none}
       .entry-cover-content{position:absolute;inset:35% 0 auto;text-align:center;font-family:system-ui,sans-serif}
-      .entry-cover-heading{font-size:clamp(40px,6vw,86px);font-weight:500;letter-spacing:.13em;margin:0}
+      .entry-cover-heading{font-family:CampusBrush,cursive;font-size:clamp(64px,8vw,120px);font-weight:400;letter-spacing:.13em;margin:0}
       .entry-cover-online{font-size:.4em;letter-spacing:.02em;font-weight:300}
       .entry-cover-actions{position:absolute;bottom:max(12%,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);text-align:center}
       #entry-cover-start{font:500 17px/1.5 system-ui,sans-serif;letter-spacing:.3em;color:inherit;white-space:nowrap;padding:16px 44px;border:1px solid #fff3d980;background:#24202c55;cursor:pointer}
@@ -27,15 +30,14 @@
     <section id="campus-entry-cover" role="dialog" aria-modal="true" aria-labelledby="entry-cover-title" data-state="loading">
       <div class="entry-cover-scene" aria-hidden="true">
         <img class="entry-cover-art" src="/images/entry-cover/east-campus-sunset-v1.webp" alt="" width="1672" height="941" fetchpriority="high" decoding="async" />
-        <div class="entry-cover-light"></div>
+        <video id="entry-cover-film" class="entry-cover-film" data-src="/media/entry-cover/east-campus-sunset-v2.mp4" muted loop playsinline preload="none" disablepictureinpicture tabindex="-1"></video>
       </div>
       <div class="entry-cover-shade" aria-hidden="true"></div>
-      <canvas id="entry-cover-particles" aria-hidden="true"></canvas>
       <div class="entry-cover-content">
-        <h1 id="entry-cover-title" class="entry-cover-heading">东校区<span class="entry-cover-online">online</span></h1>
+        <h1 id="entry-cover-title" class="entry-cover-heading" aria-label="东校区 online"><span class="entry-cover-word" aria-hidden="true"><span class="entry-cover-glyph" style="--glyph:0;--tilt:-5deg"><span>东</span></span><span class="entry-cover-glyph" style="--glyph:1;--tilt:2deg"><span>校</span></span><span class="entry-cover-glyph" style="--glyph:2;--tilt:-3deg"><span>区</span></span></span><span class="entry-cover-online" aria-hidden="true">online</span></h1>
       </div>
       <div class="entry-cover-actions">
-        <button id="entry-cover-start" type="button"><span>开始体验</span></button>
+        <button id="entry-cover-start" type="button" hidden disabled><span>开始体验</span></button>
         <span id="entry-cover-status" role="status" aria-live="polite">正在准备校园</span>
       </div>
     </section>
