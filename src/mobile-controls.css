@@ -311,13 +311,13 @@ body.touch-controls {
 .touch-controls .live-announcement,
 .touch-controls .is-paused .live-announcement {
   top: max(64px, calc(env(safe-area-inset-top) + 50px));
-  width: min(500px, calc(100% - 120px));
+  width: min(440px, calc(100% - 120px));
   max-height: calc(100% - 125px);
-  padding: 15px 22px;
+  padding: 14px 18px 16px;
   overflow: auto;
   box-sizing: border-box;
 }
-.touch-controls .live-announcement h2 { margin: 7px 0 6px; font-size: clamp(20px, 3.2vw, 27px); }
+.touch-controls .live-announcement h2 { margin: 7px 24px 6px 0; font-size: clamp(18px, 2.4vw, 22px); }
 .touch-controls .live-announcement p { font-size: 13px; line-height: 1.65; margin: 0; max-height: 23vh; }
 .touch-controls .live-announcement-time { margin-top: 8px; }
 .touch-controls .live-pause { padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }

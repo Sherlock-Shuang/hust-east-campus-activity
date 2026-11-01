@@ -11,22 +11,21 @@ body:has(.live-portal-view:not([hidden])) #viewport {z-index:30;}
 .live-pause>span {font-size:clamp(22px,3vw,34px);font-weight:500;letter-spacing:.1em;}
 .live-pause p {font-size:16px;line-height:1.8;margin:15px 0 28px;max-width:600px;white-space:pre-wrap;overflow-wrap:anywhere;}
 .live-pause small {font-size:11px;opacity:.65;}
-.live-announcement {position:absolute;z-index:5;left:50%;top:112px;transform:translateX(-50%);width:min(660px,calc(100% - 48px));box-sizing:border-box;padding:24px 34px 26px;background:#163f3ce8;border:1px solid #c8efde70;border-radius:18px;color:#f6fffa;box-shadow:0 16px 60px #0b292c30;backdrop-filter:blur(18px);text-align:center;pointer-events:none;}
-.live-announcement-close {position:absolute;right:6px;top:6px;display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font-family:inherit;font-size:28px;line-height:1;cursor:pointer;pointer-events:auto;touch-action:manipulation;}
-.live-announcement-close:hover {background:#ffffff18;}
-.live-announcement-close:focus-visible {outline:2px solid #bdeed9;outline-offset:-5px;}
+.live-announcement {position:absolute;z-index:5;left:50%;top:96px;transform:translateX(-50%);width:min(520px,calc(100% - 48px));box-sizing:border-box;padding:18px 22px 20px;background:#fafaf7f0;border:1px solid #eaeaea;border-radius:10px;color:#2f3432;text-align:left;pointer-events:none;}
+.live-announcement-close {position:absolute;right:4px;top:4px;display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;border-radius:6px;background:transparent;color:#777d78;font-family:inherit;font-size:22px;font-weight:400;line-height:1;cursor:pointer;pointer-events:auto;touch-action:manipulation;}
+.live-announcement-close:hover {background:#272e2608;color:#2f3432;}
+#live-experience .live-announcement-close:focus-visible {outline:2px solid #68766b;outline-offset:-6px;}
 
-.live-announcement-tag {font-size:11px;letter-spacing:.16em;color:#9fe5c8;}
-.live-announcement h2 {margin:12px 0 9px;font-size:clamp(24px,3.2vw,38px);line-height:1.35;font-weight:600;letter-spacing:.03em;overflow-wrap:anywhere;}
-.live-announcement p {margin:0;font-size:15px;line-height:1.85;color:#dcefe8;white-space:pre-wrap;overflow-wrap:anywhere;max-height:28vh;overflow:auto;pointer-events:auto;}
-.live-announcement-time {display:block;font-size:10px;opacity:.55;margin-top:12px;}
+.live-announcement-tag {font-family:"SFMono-Regular",Consolas,monospace;font-size:10px;line-height:1.4;letter-spacing:.08em;color:#737972;}
+.live-announcement h2 {margin:8px 24px 7px 0;font-size:clamp(20px,2.1vw,25px);line-height:1.4;font-weight:600;letter-spacing:0;overflow-wrap:anywhere;}
+.live-announcement p {margin:0;font-size:14px;line-height:1.75;color:#59615b;white-space:pre-wrap;overflow-wrap:anywhere;max-height:28vh;overflow:auto;pointer-events:auto;}
+.live-announcement p:empty {display:none;}
+.live-announcement-time {display:block;font-size:10px;line-height:1.5;color:#7a8079;margin-top:10px;}
 .live-announcement-time:empty {display:none;}
-.live-announcement[data-tone=celebrate] {background:#234251ed;border-color:#cfe8f4a0;}
-.live-announcement[data-tone=celebrate] .live-announcement-tag {color:#b9e6ff;}
-.live-announcement[data-tone=urgent] {background:#513933ed;border-color:#f4c8a590;}
-.live-announcement[data-tone=urgent] .live-announcement-tag {color:#ffe0bd;}
+.live-announcement[data-tone=celebrate] .live-announcement-tag {color:#45674d;}
+.live-announcement[data-tone=urgent] .live-announcement-tag {color:#995444;}
 .live-pause:focus {outline:none;}
-.is-paused .live-announcement {top:112px;}
+.is-paused .live-announcement {top:96px;}
 .is-paused:has(.live-announcement:not([hidden])) .live-pause {padding-top:250px;}
 .live-map-label {position:absolute;transform:translate(-50%,-100%);padding:6px 11px;border:1px solid var(--beacon-color,#a6e5ca);border-radius:8px;background:#143a40dc;color:#f5fffc;font-family:inherit;font-size:11px;white-space:nowrap;box-shadow:0 2px 14px #17342a24;}
 .live-map-label.is-portal {pointer-events:auto;cursor:pointer;}
@@ -47,7 +46,7 @@ body:has(.live-portal-view:not([hidden])) #viewport {z-index:30;}
 .live-portal-frame {min-width:0;overscroll-behavior:contain;}
 .live-portal-frame iframe {width:100%;height:100%;border:0;display:block;background:#f3f7f4;}
 #live-experience button:focus-visible {outline:3px solid #a1e9ce;outline-offset:4px;}
-@media(max-width:600px){.live-announcement{top:78px;padding:20px;width:calc(100% - 24px);}.live-announcement p{font-size:13px;}.live-connection{left:15px;bottom:110px;font-size:9px;}.live-portal-prompt{bottom:155px;gap:10px;padding:12px;max-width:calc(100% - 24px);width:max-content;}.live-portal-prompt span{display:none;}.live-portal-view{inset:8px;}.live-portal-bar{padding:10px;}.live-pause p{font-size:14px;}}
+@media(max-width:600px){.live-announcement{top:78px;padding:16px 18px;width:calc(100% - 24px);}.live-announcement p{font-size:13px;}.live-connection{left:15px;bottom:110px;font-size:9px;}.live-portal-prompt{bottom:155px;gap:10px;padding:12px;max-width:calc(100% - 24px);width:max-content;}.live-portal-prompt span{display:none;}.live-portal-view{inset:8px;}.live-portal-bar{padding:10px;}.live-pause p{font-size:14px;}}
 
 /* Embedded games own the available screen, while the host's return control
    remains visible. Also applies to narrow browsers without touch emulation. */
