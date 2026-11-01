@@ -138,10 +138,10 @@ test('playlist accepts only trusted IDs and nonnegative integer revisions, with 
   f.player.dispose();
 });
 
-test('inactive selections load only their poster; entering downloads only the latest selected film',()=>{
-  const f=fixture(),promo=getC118Media('club-promo');
-  assert.equal(f.player.selectMedia({mediaId:'club-promo',revision:1}),true);
-  assert.equal(f.state().mediaId,'club-promo');assert.equal(f.state().title,'AI 俱乐部宣传片');
+for(const mediaId of ['club-promo','ai-dream-plan'])test(`inactive ${mediaId} selection loads only its poster; entering downloads only the latest selected film`,()=>{
+  const f=fixture(),promo=getC118Media(mediaId);
+  assert.equal(f.player.selectMedia({mediaId,revision:1}),true);
+  assert.equal(f.state().mediaId,mediaId);assert.equal(f.state().title,promo.title);
   assert.equal(f.state().duration,promo.duration);assert.equal(f.state().time,0);
   assert.deepEqual(f.video.srcWrites,[]);assert.equal(f.video.loadCalls,0);assert.equal(f.video.attempts.length,0);
   assert.equal(f.loads.at(-1).url,promo.poster);

@@ -1,5 +1,5 @@
 // Only trusted bundled media can be selected by the host. No client URL input.
-export const C118_SCREEN_MEDIA_IDS=Object.freeze(['vibe-coding','club-promo','codex']);
+export const C118_SCREEN_MEDIA_IDS=Object.freeze(['vibe-coding','club-promo','ai-dream-plan','codex']);
 export function createDefaultC118Screen(){return {mediaId:'vibe-coding',revision:0};}
 export function normalizeC118Screen(value){
   if(value==null)return createDefaultC118Screen();

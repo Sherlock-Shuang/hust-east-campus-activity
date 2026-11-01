@@ -75,9 +75,10 @@ test('host selects multiple activities, starts beacons and admission together, a
   for(const id of ['point-library','point-tasay'])f.$('activity-choices').querySelector(`input[value="${id}"]`).click();
   assert.ok(f.state.portals.every(p=>!p.enabled),'checkboxes only edit a draft');
   await f.submit('activity-launch-form');
-  assert.deepEqual(f.state.portals.map(p=>p.enabled),[true,false,true,true]);
-  assert.equal(f.$('portal-count').textContent,'3');
-  assert.match(f.$('activity-launch-status').textContent,/3 个活动开放/);
+  // The analysis activity is independent and was not selected in this draft.
+  assert.deepEqual(f.state.portals.map(p=>p.enabled),[true,false,true,false]);
+  assert.equal(f.$('portal-count').textContent,'2');
+  assert.match(f.$('activity-launch-status').textContent,/2 个活动开放/);
   f.$('close-all-activities').click();await settle();
   assert.ok(f.state.portals.every(p=>!p.enabled));assert.equal(f.state.phase.id,'explore');
   assert.match(f.$('activity-launch-status').textContent,/等待主持人/);

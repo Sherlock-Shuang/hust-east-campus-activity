@@ -35,7 +35,7 @@ let pauseMessageDirty = false, pauseMessageBase = '';
 let phaseDirty=false, phaseBase='', audienceData=null, audiencePending=false, selectedAudienceId=null, selectedAudience=null, detailLimit=100, searchTimer, detailRequest=0;
 let launchDirty=false, launchBase='', launchSelection=new Set();
 let skyQrReady = false,screenSelectionDirty=false,codexDraftDirty=false;
-const screenTitles={'vibe-coding':'Vibe Coding 成果展示','club-promo':'AI 俱乐部宣传片','codex':'Codex 页面'};
+const screenTitles={'vibe-coding':'Vibe Coding 成果展示','club-promo':'AI 俱乐部宣传片','ai-dream-plan':'AI圆梦计划','codex':'Codex 页面'};
 const defaultPauseMessage = '请稍候，活动即将继续';
 let selection = { x: 58.2, z: 17.6, label: '东九 B/C 前场' };
 const NS = 'http://www.w3.org/2000/svg';

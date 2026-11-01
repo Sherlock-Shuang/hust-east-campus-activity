@@ -39,18 +39,18 @@ async function fixture(t){
   return {clock,dbs,read,put,save,headers,stream,restart(){handlers=dbs.map(db=>createActivityHandler({env,db,streamClock:clock}));}};
 }
 
-test('screen commands reach independent handlers and SSE viewers, survive restart, and preserve old-client saves',{timeout:10000},async t=>{
+for(const mediaId of ['club-promo','ai-dream-plan'])test(`screen commands for ${mediaId} reach independent handlers and SSE viewers, survive restart, and preserve old-client saves`,{timeout:10000},async t=>{
   const f=await fixture(t),initial=await f.read(),a=await f.stream(0),b=await f.stream(1);
   await Promise.all([a.next(),b.next()]);
   assert.deepEqual(initial.c118Screen,{mediaId:'vibe-coding',revision:0});
-  const selected=await f.save({...initial,c118Screen:{mediaId:'club-promo',revision:1}});
+  const selected=await f.save({...initial,c118Screen:{mediaId,revision:1}});
   await f.clock.advance(1500);
   for(const snapshot of await Promise.all([a.next(),b.next()]))assert.deepEqual(snapshot.state.c118Screen,selected.c118Screen);
   const {c118Screen,...legacy}=selected;
   const ordinary=await f.save({...legacy,paused:true},1);
   assert.deepEqual(ordinary.c118Screen,c118Screen);
   const repeated=await f.save({...ordinary,c118Screen:{...c118Screen,revision:2}},1);
-  assert.deepEqual(repeated.c118Screen,{mediaId:'club-promo',revision:2});
+  assert.deepEqual(repeated.c118Screen,{mediaId,revision:2});
   const updated=await f.save({...repeated,paused:false});assert.deepEqual(updated.c118Screen,repeated.c118Screen);
   f.restart();const late=await f.stream(1);
   assert.deepEqual((await late.next()).state.c118Screen,repeated.c118Screen);

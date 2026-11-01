@@ -11,6 +11,11 @@ export const C118_MEDIA_CATALOG=Object.freeze([
     src:'./media/c118-club-promo-720p-v1.mp4',
     poster:'./media/c118-club-promo-poster-v1.jpg',duration:97.533333,
   }),
+  Object.freeze({
+    id:'ai-dream-plan',title:'AI圆梦计划',
+    src:'./media/c118-ai-dream-plan-720p-v1.mp4',
+    poster:'./media/c118-ai-dream-plan-poster-v1.jpg',duration:193.75,
+  }),
 ]);
 
 export function getC118Media(id){return C118_MEDIA_CATALOG.find(item=>item.id===id)||null;}
