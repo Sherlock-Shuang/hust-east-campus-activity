@@ -102,7 +102,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     onMusicStateChange({registered:!!audienceUI?.registered,experience:opened?(opened.workId||opened.kind||opened.id):null,
       tsunamiId:client?.state.c118Flood?.id||null,
       // Keep the score under the civilization end card; host pauses still
-      // silence it, as do the cover and any foreground room video.
+      // silence it, as does the cover. The tsunami score takes audio priority.
       paused:entryCoverOpen()||!!client?.state.paused,foregroundAudio:!!opened?.foregroundAudio});
     if(frozen!==lastFrozen){
       lastFrozen=frozen;

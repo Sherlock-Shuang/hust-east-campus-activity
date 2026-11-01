@@ -12,11 +12,11 @@ export const CAMPUS_TRACKS=Object.freeze({
 });
 export function campusBackground({atmosphere}={}){return atmosphere==='sunset'||atmosphere==='night'?'evening':'campus';}
 export function selectCampusTrack(scene={}){
+  if(scene.tsunamiId)return 'tsunami';
   if(scene.experience==='tasay')return 'tasay';
   if(scene.experience==='opto-c118')return 'opto';
   // Other works retain their own soundtrack and sound effects.
   if(scene.experience)return null;
-  if(scene.tsunamiId)return 'tsunami';
   if(scene.mode==='spider')return 'spider';
   if(scene.mode==='roadster')return 'vehicle';
   return campusBackground(scene);
@@ -43,7 +43,7 @@ export function createCampusMusic({tracks=CAMPUS_TRACKS,storage=defaultStorage()
   const listeners=new Set();
   function requested(){return selectCampusTrack(scene);}
   function target(){const key=requested();if(!key)return null;if(tracks[key]?.url&&!failed.has(key))return key;const fallback=campusBackground(scene);return tracks[fallback]?.url&&!failed.has(fallback)?fallback:null;}
-  function allowed(){return scene.ready&&scene.registered&&!scene.paused&&!scene.hidden&&!scene.foregroundAudio&&!muted&&volume>0;}
+  function allowed(){return scene.ready&&scene.registered&&!scene.paused&&!scene.hidden&&(!scene.foregroundAudio||!!scene.tsunamiId)&&!muted&&volume>0;}
   function snapshot(){const key=target(),playing=active?.key===key&&!active?.audio.paused&&allowed();return {muted,volume,unlocked,blocked,trackId:key,requestedTrackId:requested(),title:tracks[key]?.title||'',playing,
     status:!scene.ready||!scene.registered?'waiting':muted||volume===0?'muted':!unlocked?'locked':blocked?'blocked':!allowed()||!key?'paused':playing?'playing':'loading'};}
   function emit(){const state=snapshot(),signature=JSON.stringify(state);if(signature===lastState)return;lastState=signature;onState(state);for(const listener of listeners)listener(state);}

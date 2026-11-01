@@ -31,13 +31,12 @@ test('scene priorities select all six requested songs, with indoor/game preceden
     for(const experience of ['library','wanyan','she-love-me'])assert.equal(selectCampusTrack({experience,mode:'spider'}),null);
   }
 });
-test('outdoor tsunami overrides every vehicle and atmosphere, while rooms keep their own score',()=>{
+test('tsunami has highest priority over every vehicle, atmosphere, room and work',()=>{
   for(const atmosphere of ['day','sunset','night'])for(const mode of ['walk','scooter','roadster','spider','boat']){
     const scene={atmosphere,mode,tsunamiId:'wave-1'};
     assert.equal(selectCampusTrack(scene),'tsunami');
-    assert.equal(selectCampusTrack({...scene,experience:'opto-c118'}),'opto');
-    assert.equal(selectCampusTrack({...scene,experience:'tasay'}),'tasay');
-    assert.equal(selectCampusTrack({...scene,experience:'wanyan'}),null);
+    for(const experience of ['opto-c118','tasay','library','wanyan','she-love-me'])
+      assert.equal(selectCampusTrack({...scene,experience}),'tsunami');
   }
 });
 test('tsunami switches once, survives indoor visits and pauses, then restores outdoor music on reset',async()=>{
@@ -47,16 +46,39 @@ test('tsunami switches once, survives indoor visits and pauses, then restores ou
   const song=f.forTrack('tsunami');song.currentTime=38;
   f.music.update({tsunamiId:'wave-1',mode:'roadster'});await flush();
   assert.equal(song.currentTime,38);assert.equal(f.playing().length,1);
-  for(const property of ['paused','hidden','foregroundAudio']){
+  for(const property of ['paused','hidden']){
     f.music.update({[property]:true});assert.equal(f.playing().length,0);
     f.music.update({[property]:false});await flush();f.advance(900);assert.equal(f.forTrack('tsunami').currentTime,38);
   }
-  f.music.update({experience:'opto-c118'});await flush();f.advance(900);assert.equal(f.music.state.trackId,'opto');
-  f.music.update({experience:'tasay'});await flush();f.advance(900);assert.equal(f.music.state.trackId,'tasay');
+  const plays=song.plays;
+  for(const experience of ['opto-c118','tasay','library','wanyan','she-love-me']){
+    f.music.update({experience,foregroundAudio:true});await flush();f.advance(900);
+    assert.equal(f.music.state.trackId,'tsunami');assert.equal(f.playing().length,1);
+    assert.equal(f.playing()[0],song);assert.equal(song.currentTime,38);assert.equal(song.plays,plays);
+  }
+  f.music.update({foregroundAudio:false});
   f.music.update({experience:null});await flush();f.forTrack('tsunami').handlers.get('loadedmetadata')();f.advance(900);
   assert.equal(f.music.state.trackId,'tsunami');assert.equal(f.forTrack('tsunami').currentTime,38);assert.equal(f.playing().length,1);
   f.music.update({tsunamiId:null});await flush();f.advance(900);
   assert.equal(f.music.state.trackId,'vehicle');assert.equal(f.playing().length,1);f.music.dispose();
+});
+test('tsunami takes over an audible room video, and reset restores ordinary audio focus',async()=>{
+  const f=setup();await f.start();f.music.update({experience:'opto-c118',foregroundAudio:true});
+  assert.equal(f.playing().length,0);
+  f.music.update({tsunamiId:'wave-1'});await flush();f.advance(900);
+  assert.equal(f.music.state.trackId,'tsunami');assert.equal(f.playing().length,1);
+  f.music.setMuted(true);assert.equal(f.playing().length,0);
+  f.music.setMuted(false);await flush();f.advance(900);assert.equal(f.playing().length,1);
+  f.music.update({tsunamiId:null});assert.equal(f.music.state.trackId,'opto');assert.equal(f.playing().length,0);
+  f.music.update({foregroundAudio:false});await flush();f.advance(900);
+  assert.equal(f.music.state.trackId,'opto');assert.equal(f.playing().length,1);f.music.dispose();
+});
+test('a late room playback promise cannot displace the tsunami score',async()=>{
+  const f=setup({deferred:true});await f.start();f.music.update({experience:'opto-c118'});
+  const room=f.forTrack('opto'),old=room.requests.shift();
+  f.music.update({tsunamiId:'wave-1',foregroundAudio:true});const song=f.forTrack('tsunami'),latest=song.requests.shift();
+  latest.resolve();await flush();f.advance(900);old.resolve();await flush();
+  assert.equal(f.music.state.trackId,'tsunami');assert.equal(f.playing().length,1);assert.equal(f.playing()[0],song);f.music.dispose();
 });
 test('each new tsunami starts from the beginning, even after eviction or while muted',async()=>{
   const f=setup();await f.start();f.music.update({tsunamiId:'wave-1'});await flush();f.advance(900);
