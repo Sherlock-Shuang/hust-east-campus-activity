@@ -1391,16 +1391,16 @@
     "/works/tasay/": {
       "chunks": [
         {
-          "url": "/_activity_assets/28501009fb103f7dded4b2992d6c7dcd00feb7ef0414d8e24b447bfa20cc2187.bin",
+          "url": "/_activity_assets/728278794a188fd9aaa4d420cd529c0f8826be6daf2a6205edb217f09896f5c9.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 331,
-          "sha256": "689d63c9f8ee4207f14b890344abede4521a2b32e83a8dd6371795a4c50b2c2f"
+          "storedBytes": 329,
+          "sha256": "d5c37d9da25b8c87c83d481254d9e7c508f115f6437f2fde79590ad41bc55bed"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "689d63c9f8ee4207f14b890344abede4521a2b32e83a8dd6371795a4c50b2c2f"
+      "sha256": "d5c37d9da25b8c87c83d481254d9e7c508f115f6437f2fde79590ad41bc55bed"
     },
     "/works/tasay/assets/66c8ec9cf7b1f1e882d92c7f0c2e8d73-B7Cr3f9M.png": {
       "chunks": [
@@ -1461,16 +1461,16 @@
     "/works/tasay/index.html": {
       "chunks": [
         {
-          "url": "/_activity_assets/28501009fb103f7dded4b2992d6c7dcd00feb7ef0414d8e24b447bfa20cc2187.bin",
+          "url": "/_activity_assets/728278794a188fd9aaa4d420cd529c0f8826be6daf2a6205edb217f09896f5c9.bin",
           "encoding": "gzip",
           "bytes": 483,
-          "storedBytes": 331,
-          "sha256": "689d63c9f8ee4207f14b890344abede4521a2b32e83a8dd6371795a4c50b2c2f"
+          "storedBytes": 329,
+          "sha256": "d5c37d9da25b8c87c83d481254d9e7c508f115f6437f2fde79590ad41bc55bed"
         }
       ],
       "mime": "text/html; charset=utf-8",
       "bytes": 483,
-      "sha256": "689d63c9f8ee4207f14b890344abede4521a2b32e83a8dd6371795a4c50b2c2f"
+      "sha256": "d5c37d9da25b8c87c83d481254d9e7c508f115f6437f2fde79590ad41bc55bed"
     },
     "/works/wanyan/": {
       "chunks": [
@@ -2369,6 +2369,34 @@
       "mime": "text/javascript; charset=utf-8",
       "bytes": 7680,
       "sha256": "8b4658518c818fda2b86aa3c2263a441b7ab6e6ada7a67c5d05ddd73fa16a875"
+    },
+    "/works/tasay/assets/index-CmAdouoQ.js": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/3e627c83c789e445f920ba56f0e9eb0e1486cfa3666f92b2cdcb1eea3daef999.bin",
+          "encoding": "gzip",
+          "bytes": 254097,
+          "storedBytes": 82359,
+          "sha256": "1245c1e7382839150d36961df04a0400033cd4fee7bf77a167c0436e4a3302e8"
+        }
+      ],
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 254097,
+      "sha256": "1245c1e7382839150d36961df04a0400033cd4fee7bf77a167c0436e4a3302e8"
+    },
+    "/works/tasay/assets/opto-c118-audience-v4-photo-DNBEKv-u.jpg": {
+      "chunks": [
+        {
+          "url": "/_activity_assets/01d3b26a382c844c7d93dccf8514634aed36c5181554f2733991918468fc79d2.bin",
+          "encoding": "gzip",
+          "bytes": 358150,
+          "storedBytes": 357996,
+          "sha256": "b84c40387e8c3bb8aceae2818af925652d06206159ef4c0ffa5a693c33f19989"
+        }
+      ],
+      "mime": "image/jpeg",
+      "bytes": 358150,
+      "sha256": "b84c40387e8c3bb8aceae2818af925652d06206159ef4c0ffa5a693c33f19989"
     }
   },
   "spa": [

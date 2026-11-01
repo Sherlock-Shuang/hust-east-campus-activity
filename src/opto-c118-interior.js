@@ -1,6 +1,6 @@
 import {connectOptoFoyer,createOptoFoyer} from './opto-foyer.js';
 /**
- * C118 report hall, revised against two participant-provided rear/side photographs.
+ * C118 report hall, revised against participant-provided rear, audience and stage photographs.
  * Colours and stage silhouette are photo observations; dimensions/row count are
  * configurable visual estimates, not a survey or a fire-safety seating plan.
  * Local metres: +Y up, stage -Z, photo-visible left audience door -X/-Z.
@@ -15,7 +15,8 @@ export const OPTO_C118_EVIDENCE = Object.freeze({
     'https://news.hust.edu.cn/info/1002/52408.htm',
     'https://wnlo.hust.edu.cn/info/1374/4231.htm',
   ],
-  userPhotos: ['1b8b1c3442a8711b934a2e634b1be7f9.jpg','94265c4171b52d79ee3dccdb4556c114.jpg'],
+  userPhotos: ['1b8b1c3442a8711b934a2e634b1be7f9.jpg','94265c4171b52d79ee3dccdb4556c114.jpg',
+    '7083237bbc220b0da94a7996e18cdc9c.jpg','a11fe978cc18a3c088a69562dc5da361.jpg','7995a11ac449d47e5235fdaa262fbbba.jpg'],
   observed: [
     '实拍后部明显阶梯升高，前后席区之间有横向过道和浅木矮挡板',
     '中部高平台侧向双扇门，灰墙深竖框、蓝白竖向灯槽，低深灰横梁顶棚',
@@ -23,7 +24,9 @@ export const OPTO_C118_EVIDENCE = Object.freeze({
     '浅金木饰面舞台框与弧形前缘、两侧短阶梯',
     '台后中央大屏、上部长条信息屏、左右悬吊白色阵列音箱',
     '浅灰侧墙、前部两侧双扇门、舞台后侧小门',
-    '木质椅背与深红软垫、前排长桌、嵌入式顶灯',
+    '红色与深紫色软垫不规则交错、浅木扶手；前排长桌有连续暖棕木挡板',
+    '浅木舞台侧边下沉短阶梯、细木地板和嵌入式地插；黑色闭盖三角钢琴横置于左侧',
+    '从舞台看观众席，后墙为浅木竖条，双门之间有黑色长方形显示屏',
   ],
   uncertain: [
     '房间尺寸、准确排数和座位数、各排高差及中部门位仍按照片比例估算，未取得测绘资料',
@@ -119,10 +122,10 @@ export function planOptoC118Interior(options = {}) {
     wallSegments.push({side,z0:from,z1:back,y0:c.floorY,y1:c.floorY+c.height});solid(`c118-side-rear-${side}`,rect(x-.15,from,x+.15,back),c.floorY,c.floorY+c.height);
   }
   const fascia=stagePolygon.slice(2).map(p=>({...p}));solid('c118-stage-front',[...fascia,...fascia.slice().reverse().map(p=>({x:p.x,z:p.z-.12}))],c.floorY,c.floorY+c.stageHeight);
-  const lectern={x:-1.4,z:stageFront-1.65},piano={x:-4.8,z:stageFront-3.1};
+  const lectern={x:-1.4,z:stageFront-1.65},piano={x:-4.8,z:stageFront-3.1,yaw:-Math.PI/2};
   solid('c118-lectern',rect(lectern.x-.38,lectern.z-.33,lectern.x+.38,lectern.z+.33),c.floorY+c.stageHeight,c.floorY+c.stageHeight+1.12);
-  solid('c118-grand-piano',rect(piano.x-1.05,piano.z-1.2,piano.x+1.05,piano.z+.62),c.floorY+c.stageHeight,c.floorY+c.stageHeight+1.3,'三角钢琴');
-  solid('c118-piano-bench',rect(piano.x-.44,piano.z+.9,piano.x+.44,piano.z+1.36),c.floorY+c.stageHeight,c.floorY+c.stageHeight+.6,'琴凳');
+  solid('c118-grand-piano',rect(piano.x-1.05,piano.z-.93,piano.x+1.8,piano.z+.93),c.floorY+c.stageHeight,c.floorY+c.stageHeight+1.3,'三角钢琴');
+  solid('c118-piano-bench',rect(piano.x-1.63,piano.z-.44,piano.x-1.23,piano.z+.44),c.floorY+c.stageHeight,c.floorY+c.stageHeight+.6,'琴凳');
   solid('c118-stage-stool',rect(1.35,stageFront-2.25,2.05,stageFront-1.75),c.floorY+c.stageHeight,c.floorY+c.stageHeight+.4,'舞台低凳');
   const entryDoor=doors.find(d=>d.tier==='middle'&&d.side===-1),legacyDoor=doors.find(d=>d.tier==='front'&&d.side===-1);
   const spawn={x:-halfW+1.05,y:entryDoor.y,z:entryDoor.z,yaw:-.5,pitch:-.18};
@@ -134,10 +137,13 @@ export function planOptoC118Interior(options = {}) {
   const exits=doors.map(d=>({id:`${d.id}-return`,doorId:d.id,x:d.x+d.side*.15,y:d.y,z:d.z,radius:1.15,polygon:rect(d.side<0?-halfW-1.5:halfW-.15,d.z-1.1,d.side<0?-halfW+.15:halfW+1.5,d.z+1.1)}));
   const exit={...exits.find(e=>e.doorId===legacyDoor.id),id:'c118-return'};
   const plan={id:'opto-c118',config:c,evidence:OPTO_C118_EVIDENCE,dimensions:'photo-estimate',bounds:{minX:-halfW-1.6,maxX:halfW+1.6,minZ:front,maxZ:back,minY:c.floorY,maxY:c.floorY+c.height},
+    screen:{width:12,height:6.75,x:0,y:c.floorY+c.stageHeight+.75+6.75/2,z:front+.43},
     stage:{polygon:stagePolygon,front:stageFront,back:stageBack,halfWidth:stageHalfW,height:c.floorY+c.stageHeight},
     doors,seats,seatRows,blocks,aisles,stairs,audienceSteps,terraces,crossAisle,rearLanding,guards,wallSegments,lectern,piano,colliders,walkSurfaces,spawn,exit,exits,
     viewpoints:{entry:{...spawn},westEntry:{...spawn},eastEntry:{x:halfW-1.05,y:c.floorY,z:legacyDoor.z,yaw:.5,pitch:.06},rearEntry,middle:{x:(centreHalf+sideInner)/2,y:crossAisle.y,z:crossAisle.z,yaw:0,pitch:-.19},
-      front:{x:0,y:c.floorY,z:stageFront+1.9,yaw:0,pitch:.14},frontDoor:{x:-halfW+1.05,y:c.floorY,z:legacyDoor.z,yaw:-1.1,pitch:.06},
+      front:{x:0,y:c.floorY,z:stageFront+1.9,yaw:0,pitch:.14},
+      audience:{x:.8,y:c.floorY+c.stageHeight,z:stageFront-4.6,yaw:Math.PI,pitch:.1},
+      piano:{x:piano.x-2.35,y:c.floorY+c.stageHeight,z:piano.z+2.2,yaw:-.8,pitch:-.12},frontDoor:{x:-halfW+1.05,y:c.floorY,z:legacyDoor.z,yaw:-1.1,pitch:.06},
       rear:{x:(centreHalf+sideInner)/2,y:rearY,z:lastRow+1,yaw:0,pitch:-.25}},seatCount:seats.length,layoutEstimated:true};
   return options.withFoyer?connectOptoFoyer(plan):plan;
 }
@@ -152,9 +158,10 @@ export function createOptoC118Interior(THREE,options={}) {
   const geometries=new Set(),materials=new Set(),textures=new Set(),batches=new Map();
   const ownGeo=g=>(geometries.add(g),g),ownMat=m=>(materials.add(m),m);
   const mat=(color,roughness=.8,more={})=>ownMat(new THREE.MeshStandardMaterial({color,roughness,...more}));
-  const wood=mat('#c6a36d'),lightWood=mat('#d6b784'),darkWood=mat('#745439'),woodJoint=mat('#b69a6d');
-  const wall=mat('#a8adac'),wallPanel=mat('#bac1c0'),ceiling=mat('#777b75'),carpet=mat('#878a78');
-  const red=mat('#6f2032'),seatRed=mat('#8d2a40'),metal=mat('#52545a',.65,{metalness:.3});
+  const wood=mat('#b68b5c'),lightWood=mat('#d8bd94'),darkWood=mat('#795239'),woodJoint=mat('#baa384');
+  const wall=mat('#b7b8b2'),wallPanel=mat('#c7c9c2'),ceiling=mat('#a5a7a1'),carpet=mat('#939187');
+  const red=mat('#b52e51'),seatRed=mat('#533649'),metal=mat('#52545a',.65,{metalness:.3});
+  const pianoLacquer=mat('#20252b',.26,{metalness:.06}),brass=mat('#ac8b4a',.35,{metalness:.65});
   const white=mat('#deded5'),black=mat('#171d21'),screen=mat('#343c43',.8,{emissive:'#222a30',emissiveIntensity:.12});
   const glow=mat('#fff2cf',.4,{emissive:'#fff1d6',emissiveIntensity:2});
   const stripGlow=mat('#bddce3',.45,{emissive:'#a2cfdf',emissiveIntensity:.65}),redLED=mat('#ad1625',.6,{emissive:'#e31322',emissiveIntensity:1.1});
@@ -162,7 +169,7 @@ export function createOptoC118Interior(THREE,options={}) {
   // Tiny deterministic material maps: authored grain, never downloaded photo textures.
   // DataTexture works in node tests and requires no document or canvas.
   const grainTexture=(kind)=>{
-    const size=128,data=new Uint8Array(size*size*4);let seed=kind==='wood'?851:kind==='fabric'?411:97;
+    const size=kind==='floor'?512:128,data=new Uint8Array(size*size*4);let seed=kind==='wood'?851:kind==='fabric'?411:97;
     const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
     const woodColumns=Array.from({length:size},()=>rand()-.5);
     for(let y=0;y<size;y++)for(let x=0;x<size;x++){
@@ -172,6 +179,9 @@ export function createOptoC118Interior(THREE,options={}) {
         // turning into waves when viewed from the rear of the auditorium.
         const grain=(woodColumns[(x+size-1)%size]+2*woodColumns[x]+woodColumns[(x+1)%size])/4;
         v=243+grain*5+(noise-.5)*2;
+      }else if(kind==='floor'){
+        const row=Math.floor(y/42),joint=y%42===0||(x+(row%3)*170)%512<2;
+        v=joint?218:244+Math.sin(row*4.3)*3+(noise-.5)*2+Math.sin(x*.06+y*.31);
       }else if(kind==='fabric')v=219+(noise-.5)*20+((x+y)%2)*12;
       else v=229+(noise-.5)*19-((x%8===0&&y%8===0)?19:0);
       data[i]=data[i+1]=data[i+2]=Math.max(0,Math.min(255,v));data[i+3]=255;
@@ -181,6 +191,9 @@ export function createOptoC118Interior(THREE,options={}) {
     t.colorSpace=THREE.SRGBColorSpace;t.needsUpdate=true;textures.add(t);return t;
   };
   const woodMap=grainTexture('wood'),wallMap=grainTexture('acoustic'),clothMap=grainTexture('fabric');
+  const stageWood=lightWood.clone();materials.add(stageWood);
+  const floorMap=grainTexture('floor');floorMap.repeat.set(1/2.4,1/2.4);floorMap.anisotropy=4;
+  stageWood.map=floorMap;stageWood.bumpMap=floorMap;stageWood.bumpScale=.001;
   woodMap.repeat.set(5,2);wallMap.repeat.set(10,8);clothMap.repeat.set(12,12);
   for(const material of [wood,lightWood,darkWood]){material.map=woodMap;material.bumpMap=woodMap;material.bumpScale=.003;}
   for(const material of [wall,wallPanel,ceiling]){material.map=wallMap;material.bumpMap=wallMap;material.bumpScale=.0015;}
@@ -209,7 +222,7 @@ export function createOptoC118Interior(THREE,options={}) {
   };
   const W=c.width/2,D=c.depth/2,top=c.floorY+c.height;
   const floor=mesh('c118-floor',new THREE.BoxGeometry(c.width,.16,c.depth),carpet);floor.position.y=c.floorY-.08;
-  const stage=mesh('c118-curved-stage',shape(plan.stage.polygon,c.stageHeight),lightWood);stage.position.y=c.floorY;
+  const stage=mesh('c118-curved-stage',shape(plan.stage.polygon,c.stageHeight),stageWood);stage.position.y=c.floorY;
   for(const s of plan.stairs){const [a,,b]=s.polygon;box('c118-stage-stairs',lightWood,(a.x+b.x)/2,(c.floorY+s.surfaceY)/2,(a.z+b.z)/2,b.x-a.x,s.surfaceY-c.floorY,b.z-a.z);
     box('c118-step-nosings',wood,(a.x+b.x)/2,s.surfaceY+.012,b.z-.025,b.x-a.x,.024,.05);}
   for(const platform of [...plan.terraces,...plan.audienceSteps,plan.rearLanding,{polygon:plan.crossAisle.polygon,surfaceY:plan.crossAisle.y}]){
@@ -231,7 +244,7 @@ export function createOptoC118Interior(THREE,options={}) {
     for(let j=0;j<7;j++)box('c118-stage-panel-joints',woodJoint,sign*(plan.stage.halfWidth-.015),c.floorY+c.height/2,plan.stage.back+j*.9,.014,c.height,.012);
   }
   // Large screen; no event portrait, slogan or photo reuse.
-  const screenZ=-D+.31,screenW=9.8,screenH=6,screenY=plan.stage.height+.75+screenH/2;
+  const screenZ=plan.screen.z-.12,screenW=plan.screen.width,screenH=plan.screen.height,screenY=plan.screen.y;
   box('c118-screen-frame',black,0,screenY,screenZ,screenW+.16,screenH+.16,.12);
   box('c118-led-screen',screen,0,screenY,screenZ+.072,screenW,screenH,.025);
   // The viewer owns media; building this surface performs no network requests.
@@ -284,6 +297,16 @@ export function createOptoC118Interior(THREE,options={}) {
   const rearY=plan.seatRows.at(-1).y;
   if(!plan.foyer)box('c118-rear-wall',wall,0,(c.floorY+top)/2,D,.18+c.width,c.height,.18);
   if(!plan.foyer)for(let i=0;i<12;i++)box('c118-rear-acoustic-panels',wallPanel,-W+.95+i*(c.width-1.9)/11,(rearY+top)/2,D-.13,1.58,top-rearY-.5,.06);
+  const rearDoors=plan.foyer?.doors||plan.aisles.filter(a=>a.id.endsWith('main')).map(a=>({x:(a.x0+a.x1)/2,width:2.6,height:2.85}));
+  for(let x=-W+.14;x<W;x+=.28){
+    const door=rearDoors.find(d=>Math.abs(x-d.x)<d.width/2+.18),base=rearY+(door?door.height+.12:0);
+    if(top-base>.04)box('c118-middle-aisle-guard-panels',lightWood,x,(base+top)/2,D-.17,.245,top-base,.045);
+  }
+  box('c118-banner-black',black,0,rearY+2.2,D-.22,4.1,.86,.08);
+  for(const d of rearDoors){
+    box('c118-exit-marker',black,d.x,rearY+3.04,D-.23,.48,.19,.06);
+    box('c118-exit-marker-glow',green,d.x,rearY+3.04,D-.27,.31,.08,.018);
+  }
   box('c118-ceiling',ceiling,0,top+.06,0,c.width,.12,c.depth);
   for(let iz=0;iz<8;iz++){
     const z=-D+2+iz*(c.depth-4)/7;
@@ -295,13 +318,15 @@ export function createOptoC118Interior(THREE,options={}) {
       pole('c118-recessed-downlights',glow,x,top-.582,z,.095,.014);
     }
   }
-  for(let i=0;i<18;i++)box('c118-stage-wood-floor-joints',woodJoint,-stageWidth/2+i*(stageWidth/17),plan.stage.height+.005,(plan.stage.back+plan.stage.front)/2,.01,.008,plan.stage.front-plan.stage.back);
+  // Flush floor sockets visible in the new stage-edge photo.
+  for(const x of[-3.6,3.9]){box('c118-piano-brass',brass,x,plan.stage.height+.008,plan.stage.front-.5,.22,.016,.18);box('c118-stage-floor-socket-insets',metal,x,plan.stage.height+.018,plan.stage.front-.5,.16,.006,.12);}
   // Seats share one geometry per component and one instanced draw per material.
   for(const s of plan.seats){
     const x=s.x,y=s.y,z=s.z;
+    const seatFabric=((Math.imul(s.row+7,73856093)^Math.imul(s.column+19,19349663)^s.block.length*83492791)>>>0)%100<58?red:seatRed;
     batch('c118-seat-wood-backs',roundedSeat,lightWood,x,y+.73,z+.22,.49,.7,.09,-.08);
-    batch('c118-seat-back-cushions',roundedSeat,red,x,y+.76,z+.155,.435,.56,.065,-.08);
-    box('c118-seat-cushions',seatRed,x,y+.46,z-.045,.46,.095,.4);
+    batch('c118-seat-back-cushions',roundedSeat,seatFabric,x,y+.76,z+.155,.435,.56,.065,-.08);
+    box('c118-seat-cushions',seatFabric,x,y+.46,z-.045,.46,.095,.4);
     box('c118-seat-underpan',darkWood,x,y+.4,z-.045,.47,.045,.4);
     for(const sign of [-1,1]){
       box('c118-seat-side-panels',wood,x+sign*.255,y+.38,z,.045,.61,.41);
@@ -309,13 +334,15 @@ export function createOptoC118Interior(THREE,options={}) {
       box('c118-seat-foot-brackets',metal,x+sign*.17,y+.13,z+.03,.05,.25,.05);
     }
     // Chair rear number plate is geometry only, preserving correct human scale.
-    batch('c118-seat-headrests',roundedSeat,(s.column+s.row)%5===0?red:seatRed,x,y+1.065,z+.223,.46,.11,.1,-.08);
+    batch('c118-seat-headrests',roundedSeat,seatFabric,x,y+1.065,z+.223,.46,.11,.1,-.08);
     box('c118-seat-number-plates',metal,x,y+.99,z+.277,.07,.026,.012);
   }
   // The first-row conference tables visible in the source photo.
   for(const b of plan.blocks){
     const z=plan.seatRows[0].z-.67,width=b.x1-b.x0;
-    box('c118-front-row-tables',darkWood,(b.x0+b.x1)/2,c.floorY+.74,z,width,.065,.42);
+    box('c118-front-row-tables',darkWood,(b.x0+b.x1)/2,c.floorY+.78,z,width,.07,.52);
+    box('c118-middle-aisle-wood-guard',wood,(b.x0+b.x1)/2,c.floorY+.39,z-.22,width,.74,.09);
+    for(let x=b.x0;x<b.x1-.02;x+=1.8)box('c118-table-legs',darkWood,x,c.floorY+.39,z-.27,.014,.73,.012);
     for(let x=b.x0+.2;x<b.x1;x+=1.8)box('c118-table-legs',darkWood,x,c.floorY+.35,z,.055,.7,.055);
   }
   const lx=plan.lectern.x,lz=plan.lectern.z,sy=plan.stage.height;
@@ -324,14 +351,29 @@ export function createOptoC118Interior(THREE,options={}) {
   pole('c118-lectern-microphone',metal,lx+.18,sy+1.25,lz-.16,.012,.35,0,-.3);
   box('c118-lectern-mark',white,lx,sy+.7,lz+.306,.34,.18,.01);
   const px=plan.piano.x,pz=plan.piano.z;
-  const pianoOutline=[{x:px-.9,z:pz+.58},{x:px+.9,z:pz+.58},{x:px+.9,z:pz-.25},{x:px+.65,z:pz-.83},{x:px+.05,z:pz-1.08},{x:px-.6,z:pz-.95},{x:px-.9,z:pz-.48}];
-  const pianoBody=mesh('c118-grand-piano-case',shape(pianoOutline,.23),black);pianoBody.position.y=sy+.76;
-  const pianoLid=mesh('c118-grand-piano-lid',shape(pianoOutline,.055),black);pianoLid.position.y=sy+1.02;
-  for(const [dx,dz]of[[-.72,.38],[.72,.38],[.02,-.83]])pole('c118-piano-legs',black,px+dx,sy+.39,pz+dz,.055,.78);
-  box('c118-piano-keyboard',white,px,sy+.82,pz+.66,1.65,.055,.28);
-  for(let i=0;i<23;i++)box('c118-piano-black-keys',black,px-.77+i*.07,sy+.87,pz+.59,.035,.04,.17);
-  box('c118-piano-bench',black,px,sy+.49,pz+1.13,.8,.12,.4);
-  for(const dx of[-.3,.3])for(const dz of[-.14,.14])box('c118-piano-bench-legs',black,px+dx,sy+.22,pz+1.13+dz,.045,.44,.045);
+  // Keyboard faces the left wing, the curved tail extends across the stage.
+  // One continuous curve replaces the old angular polygon; the lid stays shut.
+  const pianoPath=new THREE.Shape();
+  pianoPath.moveTo(-.83,.77);pianoPath.lineTo(.83,.77);pianoPath.lineTo(.83,-.48);
+  pianoPath.bezierCurveTo(.83,-1.14,.52,-1.64,-.08,-1.66);
+  pianoPath.bezierCurveTo(-.58,-1.68,-.84,-1.15,-.83,-.45);pianoPath.closePath();
+  const pianoPoint=(x,z)=>({x:px-z,z:pz+x});
+  const outline=pianoPath.getPoints(lowDetail?6:12).map(p=>pianoPoint(p.x,p.y));
+  const pianoBody=mesh('c118-grand-piano-case',shape(outline,.29),pianoLacquer);pianoBody.position.y=sy+.73;
+  const pianoLid=mesh('c118-grand-piano-lid',shape(outline,.045),pianoLacquer);pianoLid.position.y=sy+1.04;
+  const pianoBox=(name,m,x,y,z,w,h,d)=>{const p=pianoPoint(x,z);box(name,m,p.x,sy+y,p.z,w,h,d,0,plan.piano.yaw);};
+  for(const [dx,dz]of[[-.7,.56],[.7,.56],[.05,-1.38]]){
+    pianoBox('c118-piano-lacquer-details',pianoLacquer,dx,.39,dz,.095,.78,.095);
+    pianoBox('c118-piano-brass',brass,dx,.065,dz,.12,.08,.14);
+  }
+  pianoBox('c118-piano-lacquer-details',pianoLacquer,0,.79,.86,1.67,.14,.32);
+  const keyWidth=1.5/52;
+  for(let i=0;i<52;i++)pianoBox('c118-piano-white-keys',white,-.75+(i+.5)*keyWidth,.875,.91,keyWidth-.0015,.045,.3);
+  for(let i=0;i<51;i++)if(![2,6].includes((i+5)%7))pianoBox('c118-piano-lacquer-details',pianoLacquer,-.75+(i+1)*keyWidth,.91,.845,.018,.045,.17);
+  pianoBox('c118-piano-brass',brass,0,.29,.38,.065,.45,.06);
+  for(const x of[-.1,0,.1])pianoBox('c118-piano-brass',brass,x,.07,.51,.055,.035,.21);
+  pianoBox('c118-piano-bench',pianoLacquer,0,.49,1.43,.8,.12,.4);
+  for(const dx of[-.3,.3])for(const dz of[-.14,.14])pianoBox('c118-piano-lacquer-details',pianoLacquer,dx,.22,1.43+dz,.055,.44,.055);
   box('c118-stage-low-stool',black,1.7,sy+.32,plan.stage.front-2,.65,.09,.45);
   for(const dx of[-.24,.24])for(const dz of[-.15,.15])box('c118-stage-stool-legs',black,1.7+dx,sy+.15,plan.stage.front-2+dz,.035,.3,.035);
   // Non-shadowed local lights avoid making hundreds of seats cast expensive shadows.

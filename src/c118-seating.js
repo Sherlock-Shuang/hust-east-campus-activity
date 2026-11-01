@@ -10,7 +10,8 @@ export function c118SeatedFov(view,aspect){
 /** Fit the complete 16:9 programme at 90% of the limiting viewport dimension. */
 export function c118CinemaFov(view,aspect){
   const ratio=Number.isFinite(aspect)&&aspect>0?aspect:16/9;
-  return 2*Math.atan(Math.max(9.8/ratio,9.8*9/16)/(2*view.distance*.90))*180/Math.PI;
+  const width=view.screenWidth||9.8;
+  return 2*Math.atan(Math.max(width/ratio,width*9/16)/(2*view.distance*.90))*180/Math.PI;
 }
 const finitePose=p=>p&&['x','y','z'].every(k=>Number.isFinite(p[k]));
 const inside=(p,polygon)=>{let hit=false;for(let i=0,j=polygon.length-1;i<polygon.length;j=i++){
@@ -37,13 +38,15 @@ export function createC118Seating(plan){
     return score(a)-score(b)||a.column-b.column;
   })[0];
   const getSeat=id=>byId.get(typeof id==='string'?id:id?.id)||null;
-  const target={x:0,y:plan.stage.height+3.75,z:-plan.config.depth/2+.43};
+  const screenWidth=plan.screen?.width||9.8;
+  const target=plan.screen||{x:0,y:plan.stage.height+3.75,z:-plan.config.depth/2+.43};
+  const seatedFov=2*Math.atan(Math.tan(38*Math.PI/360)*screenWidth/9.8)*180/Math.PI;
   function viewFor(id){
     const s=getSeat(id);if(!s)return null;
     // A seated adult's eyes stay below the room's standing camera and above
     // the previous terrace's audience. A tighter lens enlarges the screen without cropping its edges.
     const x=s.x,y=s.y+1.30,z=s.z-.025,dx=target.x-x,dz=target.z-z;
-    return {x,y,z,yaw:Math.atan2(-dx,-dz),pitch:Math.atan2(target.y-y,Math.hypot(dx,dz)),fov:38,seatId:s.id,label:s.label};
+    return {x,y,z,yaw:Math.atan2(-dx,-dz),pitch:Math.atan2(target.y-y,Math.hypot(dx,dz)),fov:seatedFov,seatId:s.id,label:s.label};
   }
   function nearest(position,maxDistance=2.4){
     if(!finitePose(position)||!Number.isFinite(maxDistance)||maxDistance<0)return null;
@@ -54,7 +57,7 @@ export function createC118Seating(plan){
   function focusViewFor(id){
     const s=getSeat(id);if(!s)return null;
     // This is an optional viewing lens; the player's body remains in its chair.
-    return {x:target.x,y:target.y,z:target.z+9,yaw:0,pitch:0,distance:9,seatId:s.id,label:s.label};
+    return {x:target.x,y:target.y,z:target.z+9,yaw:0,pitch:0,distance:9,screenWidth,seatId:s.id,label:s.label};
   }
   function exitPoseFor(id,preferredPose){
     if(safeStandingPose(plan,preferredPose))return {...preferredPose};
