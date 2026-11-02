@@ -1,7 +1,8 @@
 // Audience domain state is deliberately independent of HTTP, Node and storage.
 // Only the HTTP adapter can associate a private identity hash with a visitor.
+import {LEARNING_BOARD} from '../src/activity-catalog.js';
 export const PRESENCE_TTL = 65000;
-const TYPES = new Set(['visit','opening','opened','open_failed','returned']);
+const TYPES = new Set(['visit','opening','opened','open_failed','returned','learning_request']);
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const copy = value => structuredClone(value);
 const fail = (message, status=400) => { throw Object.assign(new Error(message),{status}); };
@@ -15,11 +16,17 @@ export function normalizeNickname(value) {
   if(!name||[...name].length>24||/[\u0000-\u001f\u007f]/.test(name))fail('昵称需为 1 至 24 个字符');
   return name;
 }
+export function normalizeLearningRequest(value) {
+  if(typeof value!=='string')fail('请填写留言内容');
+  const text=value.replace(/\r\n?/g,'\n').trim();
+  if(!text||[...text].length>300||/[\u0000-\u0008\u000b-\u001f\u007f]/.test(text))fail('留言需为 1 至 300 个字符');
+  return text;
+}
 export function createAudienceData(){return {schemaVersion:1,audiences:{}};}
 export function createAudienceRecord({id,identityHash,nickname},now){
   validId(id,'观众标识');
   if(typeof identityHash!=='string'||!/^[a-f0-9]{64}$/.test(identityHash))fail('身份凭据无效');
-  return {id,identityHash,nickname:normalizeNickname(nickname),joinedAt:now,lastSeenAt:now,visits:{},attempts:{},tabs:{},events:[],seenEvents:{}};
+  return {id,identityHash,nickname:normalizeNickname(nickname),joinedAt:now,lastSeenAt:now,visits:{},attempts:{},tabs:{},events:[],seenEvents:{},learningRequests:[]};
 }
 export function validateAudienceData(input){
   if(input?.schemaVersion!==1||!input.audiences||typeof input.audiences!=='object'||Array.isArray(input.audiences))fail('观众数据格式无效');
@@ -27,8 +34,18 @@ export function validateAudienceData(input){
     if(record.id!==id)fail('观众数据标识不一致');
     createAudienceRecord(record,record.joinedAt);
     if(!finite(record.joinedAt)||!finite(record.lastSeenAt)||!record.visits||!record.attempts||!record.tabs||!record.seenEvents||!Array.isArray(record.events))fail('观众记录损坏');
+    if(record.learningRequests!==undefined){
+      if(!Array.isArray(record.learningRequests)||record.learningRequests.length>20)fail('留言记录损坏');
+      const ids=new Set();
+      for(const message of record.learningRequests){
+        validId(message?.id,'留言标识');normalizeLearningRequest(message.text);
+        if(!finite(message.createdAt)||ids.has(message.id))fail('留言记录损坏');
+        ids.add(message.id);
+      }
+    }
   }
-  return copy(input);
+  const next=copy(input);for(const record of Object.values(next.audiences))record.learningRequests??=[];
+  return next;
 }
 function pointFor(points,pointId){
   const point=points.find(p=>p.id===pointId);
@@ -57,6 +74,20 @@ export function applyAudienceEvent(record,event,{points=[],paused=false,now=Date
   if(Object.keys(record.seenEvents).length>=20000)fail('本场事件数量已达到上限',429);
   if(record.events.length>=10000)fail('本场体验记录已达到上限',429);
   let next=touchAudience(record,event.tabId,now);
+  if(event.type==='learning_request'){
+    if(paused)fail('活动已暂停，请恢复后再留言',409);
+    const text=normalizeLearningRequest(event.text),position=event.position;
+    if(!position||!finite(position.x)||!finite(position.y)||!finite(position.z))fail('缺少有效的留言位置');
+    if(position.y<LEARNING_BOARD.y-1||position.y>LEARNING_BOARD.maxPlayerY||Math.hypot(position.x-LEARNING_BOARD.x,position.z-LEARNING_BOARD.z)>LEARNING_BOARD.radius+.25)fail('请走到操场中央的留言板旁留言',403);
+    const messages=next.learningRequests??=[];
+    if(messages.length>=20)fail('本场每人最多留下 20 条留言',409);
+    const latest=messages.at(-1);
+    if(latest&&now-latest.createdAt<5000)fail('留言太快了，请稍等几秒再提交',429);
+    messages.push({id:event.eventId,text,createdAt:now});next.learningRequests=messages;
+    next.events.push({eventId:event.eventId,tabId:event.tabId,type:event.type,pointId:LEARNING_BOARD.id,at:now});
+    next.seenEvents[event.eventId]=now;
+    return {record:next,duplicate:false};
+  }
   validId(event.pointId,'点位标识');
   const normalized={eventId:event.eventId,tabId:event.tabId,type:event.type,pointId:event.pointId,at:now};
   if(event.type==='visit'||event.type==='opening'){
@@ -115,7 +146,15 @@ export function summarizeAudience(record,{now=Date.now()}={}){
   const last=record.events.at(-1);
   return {id:record.id,nickname:record.nickname,joinedAt:record.joinedAt,lastSeenAt:record.lastSeenAt,online:liveTabs.length>0,visitedPoints:Object.values(record.visits),openedWorks:[...opened.values()],currentExperiences,lastStatus:currentExperiences.length?'experiencing':last?.status||last?.type||'exploring'};
 }
-export function audienceDetail(record,options){return {...summarizeAudience(record,options),events:copy(record.events),attempts:copy(Object.values(record.attempts))};}
+export function audienceLearningRequests(record){
+  return (record.learningRequests||[]).map(({id,text,createdAt})=>({id,text,createdAt})).sort((a,b)=>b.createdAt-a.createdAt||a.id.localeCompare(b.id));
+}
+export function aggregateLearningRequests(records,{query=''}={}){
+  const all=records.flatMap(record=>audienceLearningRequests(record).map(message=>({...message,audienceId:record.id,nickname:record.nickname})));
+  const search=query.trim().toLocaleLowerCase();
+  return {total:all.length,participants:new Set(all.map(message=>message.audienceId)).size,messages:all.filter(message=>!search||message.nickname.toLocaleLowerCase().includes(search)||message.text.toLocaleLowerCase().includes(search)).sort((a,b)=>b.createdAt-a.createdAt||a.id.localeCompare(b.id))};
+}
+export function audienceDetail(record,options){return {...summarizeAudience(record,options),events:copy(record.events),attempts:copy(Object.values(record.attempts)),learningRequests:audienceLearningRequests(record)};}
 export function aggregateAudiences(records,{points=[],works=[],now=Date.now(),query=''}={}){
   const participants=records.map(record=>summarizeAudience(record,{now}));
   const pointMap=new Map(points.map(p=>[p.id,{id:p.id,label:p.label,visitors:0}]));
@@ -158,6 +197,7 @@ export function createAudienceStore({initial=createAudienceData(),persist=async(
     },
     async event(id,event,context){return transact(next=>{const result=applyAudienceEvent(requireRecord(next,id),event,{...(typeof context==='function'?context():context),now:now()});next.audiences[id]=result.record;return {duplicate:result.duplicate,audience:summarizeAudience(result.record,{now:now()})};});},
     statistics(options){return aggregateAudiences(Object.values(data.audiences),{...options,now:now()});},
+    learningRequests(options){return aggregateLearningRequests(Object.values(data.audiences),options);},
     detail(id){return audienceDetail(requireRecord(data,id),{now:now()});},
     async flush(){clearPresenceTimer();await flushPresence();},
   };

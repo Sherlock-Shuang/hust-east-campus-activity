@@ -44,7 +44,7 @@
       <div id="admin-notice" class="admin-notice" role="status" aria-live="polite" hidden></div>
       <div class="workspace">
         <section class="control-workspace">
-          <nav class="tabs" aria-label="控制内容" role="tablist"><button id="tab-announcement" role="tab" aria-selected="true" aria-controls="panel-announcement" data-tab="announcement">公告</button><button id="tab-marker" role="tab" aria-selected="false" aria-controls="panel-marker" data-tab="marker">集合光柱 <span id="marker-count">0</span></button><button id="tab-portal" role="tab" aria-selected="false" aria-controls="panel-portal" data-tab="portal">活动 <span id="portal-count">0</span></button><button id="tab-audience" role="tab" aria-selected="false" aria-controls="panel-audience" data-tab="audience">观众记录 <span id="audience-count">0</span></button></nav>
+          <nav class="tabs" aria-label="控制内容" role="tablist"><button id="tab-announcement" role="tab" aria-selected="true" aria-controls="panel-announcement" data-tab="announcement">公告</button><button id="tab-marker" role="tab" aria-selected="false" aria-controls="panel-marker" data-tab="marker">集合光柱 <span id="marker-count">0</span></button><button id="tab-portal" role="tab" aria-selected="false" aria-controls="panel-portal" data-tab="portal">活动 <span id="portal-count">0</span></button><button id="tab-audience" role="tab" aria-selected="false" aria-controls="panel-audience" data-tab="audience">观众记录 <span id="audience-count">0</span></button><button id="tab-learning" role="tab" aria-selected="false" aria-controls="panel-learning" data-tab="learning">操场留言 <span id="learning-count">0</span></button></nav>
           <section id="panel-announcement" class="editor-panel" role="tabpanel" aria-labelledby="tab-announcement">
             <div class="section-heading"><div><h2>发布公告</h2><p>公告会显示在玩家画面前方，暂停时也能接收。</p></div><span id="announcement-status" class="status-pill">暂无公告</span></div>
             <div class="announcement-composer"><form id="announcement-form">
@@ -75,6 +75,15 @@
             <div class="audience-aggregate"><section><h3>点位到访人数</h3><div id="point-statistics"></div></section><section><h3>作品体验人数</h3><div id="work-statistics"></div><p class="field-note">按独立观众去重；当前体验仅计已打开且在线的窗口。</p></section></div>
             <form id="audience-search-form" class="audience-search"><label for="audience-search">查找观众</label><input id="audience-search" type="search" maxlength="100" placeholder="昵称或观众 ID"><button class="secondary small" type="submit">查找</button></form>
             <div class="audience-grid"><div class="audience-table-scroll"><table class="audience-table"><thead><tr><th scope="col">观众</th><th scope="col">到访与作品</th><th scope="col">当前状态</th></tr></thead><tbody id="audience-list"></tbody></table><p id="audience-empty" class="empty-list">还没有参与记录。观众填写昵称后会出现在这里。</p></div><aside id="audience-detail" class="audience-detail" aria-label="观众个人记录" aria-live="polite"><p class="empty-list">选择一位观众，查看到访和体验时间线。</p></aside></div>
+          </section>
+          <section id="panel-learning" class="editor-panel" role="tabpanel" aria-labelledby="tab-learning" hidden>
+            <div class="section-heading"><div><h2>操场留言</h2><p>来自操场留言板的问题、建议和想法，都汇集在这里。</p></div><button id="refresh-learning" class="secondary small" type="button">刷新留言</button></div>
+            <div class="learning-summary" aria-label="操场留言统计"><div><strong id="learning-total">—</strong><span>条留言</span></div><div><strong id="learning-participants">—</strong><span>位观众留言</span></div><p>仅管理员可查看全场留言</p></div>
+            <form id="learning-search-form" class="audience-search"><label for="learning-search">查找留言</label><input id="learning-search" type="search" maxlength="100" placeholder="昵称或留言内容"><button class="secondary small" type="submit">查找</button></form>
+            <div class="learning-list-heading"><p id="learning-results" class="field-note">按最新留言排序</p><p id="learning-sync-note" class="field-note" role="status" aria-live="polite">正在读取操场留言…</p></div>
+            <div id="learning-list" class="learning-list" aria-label="操场留言列表"></div>
+            <p id="learning-empty" class="empty-list" hidden>还没有留言。可以邀请大家到东操场中央留下问题、建议或想法。</p>
+            <button id="learning-more" class="secondary small" type="button" hidden>显示更多留言</button>
           </section>
         </section>
         <aside class="map-workspace" aria-label="校园选点地图"><div class="section-heading"><div><h2>活动地点</h2><p id="map-instruction">选择地点，或直接在地图上点击。</p></div><span class="north-mark" aria-hidden="true">↑ N</span></div><label class="sr-only" for="location-preset">快捷地点</label><select id="location-preset"><option value="">加载地点…</option></select>

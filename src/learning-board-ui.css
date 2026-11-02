@@ -1,0 +1,52 @@
+body:has(.learning-board-overlay:not([hidden])) #viewport {z-index:30;}
+.learning-board-marker {pointer-events:auto;cursor:pointer;background:#f8f2dfee;color:#344b3d;border-color:#bba66e;}
+.learning-board-prompt {background:#f6f0ddf5;color:#2d4b3c;border-color:#c4b282;}
+.learning-board-prompt span {color:#626e53;}
+.learning-board-prompt small {border-color:#495b3c30;}
+.learning-board-overlay {position:absolute;inset:0;z-index:3;display:grid;place-items:center;padding:24px;overflow:auto;box-sizing:border-box;pointer-events:auto;background:#20382c70;backdrop-filter:blur(5px);color:#253f32;}
+.learning-board-dialog {position:relative;width:min(480px,100%);max-height:calc(100dvh - 48px);overflow:auto;box-sizing:border-box;background:#faf7ee;padding:34px 36px 22px;border:1px solid #ffffffb0;border-radius:16px;box-shadow:0 18px 65px #1a322d35;}
+.learning-board-close {position:absolute;right:13px;top:10px;width:36px;height:36px;background:transparent;border:0;font-size:28px;color:#66715b;cursor:pointer;}
+.learning-board-close {min-width:44px;min-height:44px;touch-action:manipulation;}
+.learning-board-eyebrow {font-size:11px;letter-spacing:.15em;color:#7b7c5b;}
+.learning-board-dialog h2 {margin:13px 0 10px;font-size:32px;line-height:1.25;font-weight:650;letter-spacing:-.03em;}
+.learning-board-intro {margin:0 0 24px;font-size:13px;color:#6c7565;line-height:1.7;}
+.learning-board-dialog label {display:block;font-size:12px;font-weight:600;margin-bottom:9px;}
+.learning-board-dialog textarea {box-sizing:border-box;width:100%;min-height:125px;max-height:240px;resize:vertical;padding:13px 14px;border:1px solid #c9cdbd;border-radius:8px;background:#fffdf8;color:#233f32;font-family:inherit;font-size:15px;line-height:1.75;outline-offset:2px;}
+.learning-board-dialog textarea:focus {outline:2px solid #73967a;border-color:transparent;}
+.learning-board-dialog textarea:read-only {background:#f0efe5;}
+.learning-board-dialog textarea::placeholder {color:#919789;font-size:13px;}
+.learning-board-meta {display:flex;justify-content:space-between;gap:12px;margin:7px 0 0;font-size:10px;color:#777f6f;}
+.learning-board-nickname {overflow-wrap:anywhere;}
+#learning-board-count {white-space:nowrap;}
+#learning-board-count[data-exceeded=true] {color:#a44732;}
+#learning-board-visibility {font-size:10px;color:#8b8e7f;margin:8px 0 16px;}
+.learning-board-submit {display:flex;justify-content:space-between;width:100%;padding:12px 16px;background:#315b46;color:#fffdf3;font-family:inherit;font-size:13px;font-weight:600;border:0;border-radius:8px;cursor:pointer;}
+.learning-board-submit:hover {background:#244c39;}
+.learning-board-submit:disabled {opacity:.5;cursor:default;}
+.learning-board-status {font-size:12px;line-height:1.7;min-height:20px;margin:9px 0 12px;color:#2e7050;overflow-wrap:anywhere;}
+.learning-board-status[data-error=true] {color:#a34e37;}
+.learning-board-history {border-top:1px solid #deded0;padding-top:14px;color:#62725f;}
+.learning-board-history summary {font-size:12px;cursor:pointer;}
+.learning-board-history-list {max-height:180px;overflow:auto;}
+.learning-board-history-list article {padding:12px 0;border-bottom:1px solid #e6e5da;}
+.learning-board-history-list p {font-size:12px;line-height:1.75;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;}
+.learning-board-history-list time {display:block;font-size:10px;color:#999d8d;margin-top:5px;}
+.learning-board-dialog footer {font-size:10px;text-align:center;color:#989b8b;margin-top:20px;}
+@media(max-width:600px), (max-height:600px){
+  .learning-board-overlay {padding:12px max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left));}
+  .learning-board-dialog {max-height:calc(100dvh - 24px);padding:23px 22px 16px;}
+  .learning-board-dialog h2 {font-size:27px;}
+  .learning-board-intro {margin-bottom:16px;}
+  .learning-board-dialog textarea {font-size:16px;min-height:100px;}
+  .learning-board-dialog footer {margin-top:14px;}
+}
+@media(pointer:coarse) and (orientation:landscape){.learning-board-prompt{bottom:max(24px,env(safe-area-inset-bottom));}.learning-board-prompt small{display:none;}}
+@media(max-width:700px),(max-width:1100px) and (max-height:600px){
+  .learning-board-overlay {position:fixed;inset:auto 0 auto 0;top:var(--campus-visible-top,0px);height:var(--campus-visible-height,100dvh);overscroll-behavior:contain;}
+  .learning-board-dialog {max-height:100%;}
+  .learning-board-dialog h2 {padding-right:20px;}
+  .learning-board-submit {min-height:44px;touch-action:manipulation;}
+  .learning-board-history summary {min-height:44px;display:flex;align-items:center;}
+}
+
+body:has(.learning-board-overlay:not([hidden])) #campus-music{visibility:hidden}

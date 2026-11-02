@@ -1,6 +1,8 @@
+import {LEARNING_BOARD} from './activity-catalog.js';
 import {GOMOKU_POINT} from './gomoku-rules.js';
 // Explicit shared tour links only. The normal URL still starts at 韵苑食堂.
 export function campusLandmarkArrival(campus,place){
+  if(place==='message-board'&&campus)return {x:LEARNING_BOARD.x+Math.sin(LEARNING_BOARD.yaw)*8,y:.14,z:LEARNING_BOARD.z+Math.cos(LEARNING_BOARD.yaw)*8,yaw:LEARNING_BOARD.yaw,pitch:0};
   if(place==='gomoku'&&campus)return {x:GOMOKU_POINT.x,y:.14,z:GOMOKU_POINT.z+6,yaw:0,pitch:-.16};
   if(place==='life-science'&&campus?.lifeScienceViewpoints?.exterior)return {...campus.lifeScienceViewpoints.exterior};
   if(place==='life-science-entrance'&&campus?.lifeScienceViewpoints?.entrance)return {...campus.lifeScienceViewpoints.entrance};

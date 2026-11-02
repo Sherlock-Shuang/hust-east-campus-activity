@@ -34,6 +34,7 @@ let presets = [], mapReady = false, mapView = null, defaultMapView = null, pollI
 let pauseMessageDirty = false, pauseMessageBase = '';
 let phaseDirty=false, phaseBase='', audienceData=null, audiencePending=false, selectedAudienceId=null, selectedAudience=null, detailLimit=100, searchTimer, detailRequest=0;
 let launchDirty=false, launchBase='', launchSelection=new Set();
+let learningData=null,learningPending=false,learningSession=0,learningLimit=100,learningSearchTimer;
 let skyQrReady = false,screenSelectionDirty=false,codexDraftDirty=false;
 const screenTitles={'vibe-coding':'Vibe Coding 成果展示','club-promo':'AI 俱乐部宣传片','ai-dream-plan':'AI圆梦计划','codex':'Codex 页面'};
 const defaultPauseMessage = '请稍候，活动即将继续';
@@ -43,6 +44,7 @@ const now = () => Date.now() + serverOffset;
 const id = prefix => `${prefix}-${crypto.randomUUID()}`;
 const clone = value => structuredClone(value);
 const dateLabel = value => new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(value);
+const learningDateLabel=value=>new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}).format(value);
 
 function eventStatus(item) {
   if (!item || item.enabled === false) return { text: '已关闭', type: 'off' };
@@ -116,6 +118,7 @@ function showLogin(message = '') {
   skyQrReady = false; renderSkyQr();renderC118Flood();renderC118Screen();
   launchDirty=false;launchBase='';launchSelection.clear();delete $('activity-choices').dataset.signature;
   audienceData=null;selectedAudienceId=null;selectedAudience=null;detailRequest++;$('audience-list').replaceChildren();$('audience-detail').replaceChildren();delete $('audience-list').dataset.signature;delete $('audience-detail').dataset.signature;
+  clearLearningRequests();
   $('login-error').textContent = message;
 }
 function showDashboard() {
@@ -139,7 +142,7 @@ function applySnapshot(data) {
 async function refresh() {
   if (!loggedIn || pollInFlight || busy) return;
   pollInFlight = true;
-  try { const [live]=await Promise.all([request('/api/live/state'),refreshAudience()]);applySnapshot(live); }
+  try { const [live]=await Promise.all([request('/api/live/state'),refreshAudience(),refreshLearningRequests()]);applySnapshot(live); }
   catch { connection(false); }
   finally { pollInFlight = false; }
 }
@@ -324,10 +327,11 @@ function workLabel(workId) {
   return ACTIVITY_WORKS.find(work => work.id === workId)?.name || audienceData?.summary.works.find(work => work.id === workId)?.label || workId;
 }
 function pointLabel(pointId) {
+  if(pointId==='sports-learning-board')return '东操场留言板';
   return snapshot?.state.portals.find(point => point.id === pointId)?.label || audienceData?.summary.points.find(point => point.id === pointId)?.label || pointId;
 }
 function recordStatus(status) {
-  return ({ exploring:'校园探索中', visit:'已到访点位', opening:'正在加载', opened:'已打开', experiencing:'体验中', returned:'已返回校园', cancelled:'加载前返回', failed:'加载失败', open_failed:'加载失败', interrupted:'体验已中断' })[status] || status;
+  return ({ exploring:'校园探索中', visit:'已到访点位', opening:'正在加载', opened:'已打开', experiencing:'体验中', returned:'已返回校园', cancelled:'加载前返回', failed:'加载失败', open_failed:'加载失败', interrupted:'体验已中断', learning_request:'已留言' })[status] || status;
 }
 function readableTime(value) { return Number.isFinite(value) ? dateLabel(value) : '—'; }
 function currentStatus(person) {
@@ -430,6 +434,10 @@ function renderAudienceDetail() {
   for (const event of [...person.events].reverse().slice(0, detailLimit)) {
     const row=element('li');
     row.append(element('time',readableTime(event.at)),element('span',`${recordStatus(event.status || event.type)} · ${event.workId ? workLabel(event.workId) : pointLabel(event.pointId)}`));
+    if(event.type==='learning_request'){
+      const message=person.learningRequests?.find(item=>item.id===event.eventId);
+      if(message)row.append(element('p',message.text,'learning-timeline-text'));
+    }
     if(event.reason)row.append(element('small',event.reason));
     timeline.append(row);
   }
@@ -440,16 +448,60 @@ function renderAudienceDetail() {
     more.addEventListener('click',()=>{detailLimit+=100;renderAudienceDetail();});host.append(more);
   }
 }
+function clearLearningRequests(){
+  learningSession++;learningData=null;learningPending=false;learningLimit=100;clearTimeout(learningSearchTimer);
+  $('learning-list').replaceChildren();delete $('learning-list').dataset.signature;
+  $('learning-search').value='';$('learning-count').textContent='0';$('learning-total').textContent='—';$('learning-participants').textContent='—';
+  $('learning-empty').hidden=true;$('learning-more').hidden=true;$('learning-list').removeAttribute('aria-busy');
+  $('learning-results').textContent='按最新留言排序';$('learning-sync-note').textContent='登录后可查看操场留言';delete $('learning-sync-note').dataset.error;
+}
+function renderLearningRequests(){
+  if(!learningData)return;
+  const {total,participants,messages}=learningData,list=$('learning-list'),query=$('learning-search').value.trim();
+  $('learning-total').textContent=String(total);$('learning-count').textContent=String(total);$('learning-participants').textContent=String(participants);
+  $('learning-results').textContent=`${query?`找到 ${messages.length} 条留言`:`全部 ${messages.length} 条留言`} · 最新在前`;
+  $('learning-empty').hidden=messages.length>0;
+  $('learning-empty').textContent=query?'没有匹配的留言。试试昵称的一部分或其他关键词。':'还没有留言。可以邀请大家到东操场中央留下问题、建议或想法。';
+  $('learning-more').hidden=messages.length<=learningLimit;
+  $('learning-more').textContent=`显示更多留言（已显示 ${Math.min(learningLimit,messages.length)} / ${messages.length} 条）`;
+  const visible=messages.slice(0,learningLimit),signature=JSON.stringify(visible);
+  if(list.dataset.signature===signature)return;
+  list.dataset.signature=signature;list.replaceChildren();
+  for(const message of visible){
+    const card=element('article',null,'learning-message'),header=element('header',null,'learning-message-header');
+    const nickname=element('strong',message.nickname);nickname.title=`观众 ${message.audienceId}`;
+    const time=element('time',Number.isFinite(message.createdAt)?`${learningDateLabel(message.createdAt)} · 北京时间`:'时间未知');
+    if(Number.isFinite(message.createdAt))time.dateTime=new Date(message.createdAt).toISOString();
+    header.append(nickname,time);card.append(header,element('p',message.text,'learning-message-text'));list.append(card);
+  }
+}
+async function refreshLearningRequests(){
+  if(!loggedIn||learningPending)return;
+  const query=$('learning-search').value.trim(),session=learningSession;learningPending=true;$('learning-list').setAttribute('aria-busy','true');
+  if(!learningData)$('learning-sync-note').textContent='正在读取操场留言…';
+  try{
+    const result=await request(`/api/admin/learning-requests${query?`?q=${encodeURIComponent(query)}`:''}`);
+    if(!loggedIn||session!==learningSession||query!==$('learning-search').value.trim())return;
+    if(!Array.isArray(result.messages)||!Number.isFinite(result.total)||!Number.isFinite(result.participants))throw new Error('留言数据未完整返回，请重试。');
+    learningData=result;renderLearningRequests();
+    $('learning-sync-note').textContent=`每 5 秒自动刷新 · 最近同步 ${learningDateLabel(Date.now())}（北京时间）`;delete $('learning-sync-note').dataset.error;
+  }catch(error){
+    if(loggedIn&&session===learningSession){$('learning-sync-note').textContent=`留言同步失败：${error.message}${learningData?' · 正在显示上次读取的内容':''}`;$('learning-sync-note').dataset.error='true';}
+  }finally{
+    if(session===learningSession){learningPending=false;$('learning-list').removeAttribute('aria-busy');if(loggedIn&&query!==$('learning-search').value.trim())refreshLearningRequests();}
+  }
+}
 function activateTab(name, focus = false) {
   document.querySelectorAll('[role=tab][data-tab]').forEach(button => {
     const active = button.dataset.tab === name; button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1;
     if (active && focus) button.focus();
   });
-  for (const type of ['announcement', 'marker', 'portal','audience']) $(`panel-${type}`).hidden = type !== name;
-  document.querySelector('.workspace').classList.toggle('show-audience',name==='audience');
+  for (const type of ['announcement', 'marker', 'portal','audience','learning']) $(`panel-${type}`).hidden = type !== name;
+  document.querySelector('.workspace').classList.toggle('show-audience',['audience','learning'].includes(name));
   document.querySelector('.workspace').classList.toggle('with-map',['marker','portal'].includes(name));
   document.querySelector('.map-workspace').hidden=!['marker','portal'].includes(name);
   if(name==='audience')refreshAudience();
+  if(name==='learning'){cueSidebar?.setOpen(false);refreshLearningRequests();}
   document.querySelector('.map-workspace').dataset.tab = name;
   $('map-instruction').textContent = name === 'announcement' ? '查看当前地图事件与体验入口。' : `点击地图，为${name === 'marker' ? '光柱' : '入口'}选择位置。`;
 }
@@ -572,6 +624,10 @@ $('load-activity-portals').addEventListener('click',()=>mutate(state=>{
 $('audience-search-form').addEventListener('submit',event=>{event.preventDefault();clearTimeout(searchTimer);refreshAudience();});
 $('audience-search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(refreshAudience,250);});
 $('refresh-audience').addEventListener('click',refreshAudience);
+$('learning-search-form').addEventListener('submit',event=>{event.preventDefault();clearTimeout(learningSearchTimer);learningLimit=100;refreshLearningRequests();});
+$('learning-search').addEventListener('input',()=>{clearTimeout(learningSearchTimer);learningLimit=100;learningSearchTimer=setTimeout(refreshLearningRequests,250);});
+$('refresh-learning').addEventListener('click',refreshLearningRequests);
+$('learning-more').addEventListener('click',()=>{learningLimit+=100;renderLearningRequests();});
 $('login-form').addEventListener('submit', async event => {
   event.preventDefault(); const button = $('login-button'); button.disabled = true; $('login-error').textContent = '';
   try {
@@ -653,7 +709,7 @@ document.querySelectorAll('[data-clear-form]').forEach(button => button.addEvent
 document.querySelectorAll('[role=tab][data-tab]').forEach(button => {
   button.addEventListener('click', () => activateTab(button.dataset.tab));
   button.addEventListener('keydown', event => {
-    const names = ['announcement', 'marker', 'portal','audience']; const at = names.indexOf(button.dataset.tab);
+    const names = ['announcement', 'marker', 'portal','audience','learning']; const at = names.indexOf(button.dataset.tab);
     if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
       event.preventDefault(); const index = event.key === 'Home' ? 0 : event.key === 'End' ? names.length-1 : (at + (event.key === 'ArrowRight' ? 1 : names.length-1)) % names.length;
       activateTab(names[index], true);
@@ -684,7 +740,7 @@ $('map-reset').addEventListener('click', () => { if (defaultMapView) { mapView =
 function populateInitialForms() {
   if (!snapshot) return;
   syncPauseMessage(true);
-  phaseDirty=false;syncPhase();refreshAudience();
+  phaseDirty=false;syncPhase();refreshAudience();refreshLearningRequests();
   const a = snapshot.state.announcement;
   if (a) {
     $('announcement-title').value = a.title; $('announcement-body').value = a.body;
@@ -693,7 +749,7 @@ function populateInitialForms() {
   }
   previewAnnouncement();
 }
-activateTab('announcement'); setSelection(selection.x, selection.z, selection.label); loadMap();
+activateTab(new URLSearchParams(location.search).get('tab')==='messages'?'learning':'announcement'); setSelection(selection.x, selection.z, selection.label); loadMap();
 try {
   const session = await request('/api/admin/session');
   if (session.authenticated) { csrfToken = session.csrfToken; showDashboard(); applySnapshot(await request('/api/live/state')); populateInitialForms(); }

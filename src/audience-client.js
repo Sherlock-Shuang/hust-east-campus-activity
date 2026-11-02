@@ -94,5 +94,5 @@ export function createAudienceClient({onIdentity=()=>{},onError=()=>{},fetchImpl
   scheduleHeartbeat();
   const resume=()=>{if(!document.hidden){heartbeat();drain();}};document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
   ready.then(()=>{heartbeat();drain();});
-  return {ready,join,event,gomoku:body=>request('/api/audience/gomoku',body),flush:drain,get identity(){return audience;},get tabId(){return tabId;},dispose(){disposed=true;clearTimeout(interval);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);}};
+  return {ready,join,event,gomoku:body=>request('/api/audience/gomoku',body),learningRequests:()=>request('/api/audience/learning-requests'),flush:drain,get identity(){return audience;},get tabId(){return tabId;},dispose(){disposed=true;clearTimeout(interval);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);}};
 }

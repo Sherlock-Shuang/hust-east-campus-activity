@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {createDefaultLiveState, validateLiveState} from '../src/live-state.js';
 import {reconcileC118Flood} from '../src/c118-flood-state.js';
 import {reconcileC118Screen} from '../src/c118-screen-state.js';
-import {createAudienceStore,createAudienceData,validateAudienceData,summarizeAudience} from './audience-store.mjs';
+import {createAudienceStore,createAudienceData,validateAudienceData,summarizeAudience,audienceLearningRequests} from './audience-store.mjs';
 import {createWorkRouter} from '../integration/work-router.mjs';
 import {ACTIVITY_WORKS,activityPortals} from '../src/activity-catalog.js';
 import {createGomokuStore} from './gomoku-store.mjs';
@@ -138,6 +138,14 @@ export async function createLiveServer(options={}) {
       const record=requireAudience(req),body=await readJson(req);
       json(res,200,await audiences.event(record.id,body,()=>({points:state.portals,paused:state.paused})));return;
     }
+    if(req.method==='GET'&&url.pathname==='/api/audience/learning-requests'){
+      const record=audienceFor(req);if(!record)throw httpError(401,'请先输入昵称加入活动');
+      json(res,200,{messages:audienceLearningRequests(record)});return;
+    }
+    if(req.method==='GET'&&url.pathname==='/api/admin/learning-requests'){
+      if(!sessionFor(req))throw httpError(401,'请先登录控制台');
+      json(res,200,audiences.learningRequests({query:(url.searchParams.get('q')||'').slice(0,300)}));return;
+    }
     if(req.method==='GET'&&(url.pathname==='/api/admin/audience'||url.pathname.startsWith('/api/admin/audience/'))){
       if(!sessionFor(req))throw httpError(401,'请先登录控制台');
       if(url.pathname==='/api/admin/audience'){json(res,200,audiences.statistics({points:state.portals,works:options.works||[],query:(url.searchParams.get('q')||'').slice(0,100)}));return;}
@@ -181,6 +189,8 @@ export async function createLiveServer(options={}) {
       // Serialize the revision check and durable write; concurrent edits never silently overwrite.
       const operation=queue.then(async()=>{
         if(body.expectedRevision!==state.revision){json(res,409,{error:'状态已被其他管理员修改，请载入最新状态',...snapshot()});return;}
+        // An older console may omit this new field while saving unrelated work.
+        // Only explicit null resets the room; timeline stamps come from this server.
         if(!Object.hasOwn(body.state,'c118Flood'))next.c118Flood=state.c118Flood;
         next.c118Flood=reconcileC118Flood(state,next,now());
         if(!Object.hasOwn(body.state,'c118Screen'))next.c118Screen=state.c118Screen;

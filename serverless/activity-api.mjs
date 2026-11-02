@@ -6,7 +6,7 @@ import {reconcileC118Screen} from '../src/c118-screen-state.js';
 import {ACTIVITY_WORKS,activityPortals} from '../src/activity-catalog.js';
 import {createPublicStateCache} from './public-state-cache.mjs';
 import {createSharedActivityStream} from './shared-activity-stream.mjs';
-import {createAudienceRecord,touchAudience,applyAudienceEvent,summarizeAudience,audienceDetail,aggregateAudiences,normalizeNickname,validId,PRESENCE_TTL} from '../server/audience-store.mjs';
+import {createAudienceRecord,touchAudience,applyAudienceEvent,summarizeAudience,audienceDetail,aggregateAudiences,normalizeNickname,validId,PRESENCE_TTL,audienceLearningRequests,aggregateLearningRequests} from '../server/audience-store.mjs';
 import {createGomokuStore} from '../server/gomoku-store.mjs';
 
 const ADMIN_COOKIE='campus_admin',AUDIENCE_COOKIE='campus_audience';
@@ -257,7 +257,16 @@ export async function handleActivityAPI(request,env){
     }
     if(request.method==='POST'&&path==='/api/audience/events'){
       const record=await requireAudience(request,env),input=await body(request);
-      return json(await mutateAudience(env,record.id,(record,live)=>applyAudienceEvent(record,input,{points:live?.portals||[],paused:live?.paused||false,now:Date.now()}),{guardActivity:['visit','opening'].includes(input.type)}));
+      return json(await mutateAudience(env,record.id,(record,live)=>applyAudienceEvent(record,input,{points:live?.portals||[],paused:live?.paused||false,now:Date.now()}),{guardActivity:['visit','opening','learning_request'].includes(input.type)}));
+    }
+    if(request.method==='GET'&&path==='/api/audience/learning-requests'){
+      const record=await authenticatedAudience(request,env);if(!record)throw error(401,'请先输入昵称加入活动');
+      return json({messages:audienceLearningRequests(record)});
+    }
+    if(request.method==='GET'&&path==='/api/admin/learning-requests'){
+      await requireAdmin(request,env);
+      const rows=await allRows(env.DB.prepare('SELECT payload FROM activity_audiences'));
+      return json(aggregateLearningRequests(rows.map(row=>JSON.parse(row.payload)),{query:(url.searchParams.get('q')||'').slice(0,100)}));
     }
     if(request.method==='GET'&&path==='/api/admin/audience'){
       await requireAdmin(request,env);const records=await allRows(env.DB.prepare('SELECT payload FROM activity_audiences')),live=JSON.parse((await stateRow(env)).payload);
