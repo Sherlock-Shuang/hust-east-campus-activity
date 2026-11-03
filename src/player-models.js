@@ -3,6 +3,7 @@ import { createSpiderModel } from './spider-model.js';
 import { createHoverboardModel } from './hoverboard-model.js';
 import { createRoadsterModel } from './roadster-model.js';
 import {createActorLibrary} from './commute-actors.js';
+import {refineWalkingLegPose,refineWalkingUpperBodyPose} from './player-walking-pose.js';
 
 // Original, metre-scale player assets. The helicopter is an exploration vehicle,
 // not a claim about aircraft operating at HUST. All resources belong to this rig.
@@ -172,13 +173,15 @@ export function createPlayerModels(THREE){
     root.updateMatrixWorld=function(force){if(this.visible)return updateWorld.call(this,force);};
   }
   let rotorAngle=0,disposed=false,walkProgress=0,previousWalkDistance=null,previousWalkSpeed=0;
+  const walkingHandRotation=new THREE.Matrix4();
+  const walkingHeadTransform=new THREE.Matrix4(),walkingHeadOrigin=new THREE.Matrix4().makeTranslation(0,-1.385,-.052);
   function ensureMode(mode){
     if(disposed)return false;
     if(mode==='spider'&&!spider){spider=createSpiderModel(THREE);spider.group.name='spider-rig';spiderRoot.add(spider.group);spiderRoot.userData=spider.group.userData;}
     return !!modeGroups[mode];
   }
-  // Keep the original leg/arm poses and their pre-speed-up cadence. Travel is
-  // faster now, but that must not fast-forward the familiar walking animation.
+  // Keep the original foot contacts and pre-speed-up cadence. Articulation is
+  // refined separately without fast-forwarding the familiar walking rhythm.
   const walkingAnimationSpeed=speed=>speed<=3.2?speed*2.2/3.2:2.2+(Math.min(speed,5.2)-3.2)*1.6/2;
   function update(state={},dt=0){
     if(disposed)return;
@@ -196,6 +199,7 @@ export function createPlayerModels(THREE){
     if(mode==='roadster')roadster.update(state,dt);
     if(mode==='boat')boat.update(state,dt);
     const speed=Math.abs(finite(state.speed));
+    const bodySpeed=mode==='walk'&&finite(dt)<=0&&previousWalkDistance!==null?previousWalkSpeed:speed;
     if(mode==='walk'){
       const distance=finite(state.distance);
       if(previousWalkDistance!==null&&distance>=previousWalkDistance){
@@ -210,6 +214,13 @@ export function createPlayerModels(THREE){
       const agent={...character,speed:mode==='walk'?walkingAnimationSpeed(speed):speed,progress:mode==='walk'?walkProgress:finite(state.distance),steeringAngle:finite(state.steeringAngle),lean:finite(state.lean),footDown:clamp(1-speed/.75,0,1)};
       const pose=library.samplePose(agent,mode);
       const wet=mode==='walk'&&state.waterMode&&state.waterMode!=='dry';
+      if(mode==='walk'&&!wet){
+        refineWalkingLegPose(pose,agent.speed);
+        refineWalkingUpperBodyPose(pose,{speed:walkingAnimationSpeed(bodySpeed),progress:walkProgress});
+        // Straightening the authored torso must not tip the face toward the
+        // sky. Let the head retain a level gaze around the neck attachment.
+        walkingHeadTransform.makeTranslation(0,1.385,.052).multiply(walkingHandRotation.makeRotationX(-pose.pitch-.015)).multiply(walkingHeadOrigin);
+      }
       walker.rotation.y=wet&&state.waterMode!=='swim'?Math.PI/2:0;
       if(wet){
         const boarding=state.waterMode!=='swim',phase=finite(state.elapsed)*3;
@@ -223,7 +234,15 @@ export function createPlayerModels(THREE){
         }
       }
 
-      for(const {mesh,part}of mode==='walk'?walkingParts:ridingParts){library.partMatrix(part,agent,pose,mesh.matrix);mesh.matrixWorldNeedsUpdate=true;}
+      for(const {mesh,part}of mode==='walk'?walkingParts:ridingParts){
+        library.partMatrix(part,agent,pose,mesh.matrix);
+        if(mode==='walk'&&!wet){
+          if(part.joint==='torso'||!part.joint)mesh.matrix.elements[14]+=pose.bodyOffsetZ;
+          if(part.joint==='torso'&&(part.name==='skin'||part.name==='hair'))mesh.matrix.multiply(walkingHeadTransform);
+          if(part.joint==='hand')mesh.matrix.multiply(walkingHandRotation.makeRotationX(pose.handRotation[part.anchor]));
+        }
+        mesh.matrixWorldNeedsUpdate=true;
+      }
     }
     const power=clamp(finite(state.rotorPower,mode==='helicopter'?1:0),0,1);
     rotorAngle=(rotorAngle+clamp(finite(dt),0,.10)*power*36)%(Math.PI*2);

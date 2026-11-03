@@ -28,6 +28,7 @@ function player(name='player'){
   const calls=[];
   return {name,calls,active:true,state:{x:0,y:.14,z:0},gate:undefined,
     setSkyQrVisible(value){this.gate=value;calls.push({kind:'gate',value});},
+    setFloodState(value){this.flood=value;},
     captureActivityPose(){return {mode:'spider',view:'third',pitch:-1.5,skyQrVisible:true,state:{x:0,y:.14,z:0,yaw:0}};},
     restoreActivityPose(pose){calls.push({kind:'restore',gate:this.gate,pose});return true;}};
 }
@@ -39,7 +40,16 @@ function fixture(t,{initialState={},initialPlayer=player(),savedPose,registered=
   window.sessionStorage=sessionStorage;
   if(savedPose)sessionStorage.setItem('campus-return-pose',JSON.stringify({audienceId:'audience-test',pose:savedPose}));
   let clientOptions,audienceOptions,currentPlayer=initialPlayer;
-  const records=[],suspended=[],music=[],waves=[],civilizations=[],skyUpdates=[],notices=[];
+  const records=[],suspended=[],music=[],waves=[],civilizations=[],skyUpdates=[],notices=[],announcements=[],invalidations=[],wallProjections=[];
+  // Only the panel/effect boundaries are controlled here. The coordinator's
+  // open-change callbacks, host snapshots and actual beacon tick run unchanged.
+  const panels={};
+  function mountPanel(name,options){
+    const panel={isOpen:false,nearby:false,ticks:0,refresh(){},tick(){this.ticks++;},dispose(){},
+      setOpen(value){this.isOpen=value;options.onOpenChange();}};
+    panels[name]=panel;return panel;
+  }
+  const tsunami={active:false,resident:false,sample:null,update(value){waves.push(value);this.sample=value.event?{elapsed:12,phase:'wash',waterY:0}:null;return false;},setQuality:()=>false,releaseResources(){},dispose(){}};
   const civilization={active:false,update:value=>civilizations.push(value),continueExploring:()=>false};
   const client={state:{...createDefaultLiveState(),...initialState},connected:true,now:()=>Date.now(),dispose(){}};
   const audience={registered,client:{identity:{id:'audience-test'},event:async(type,details)=>{records.push({type,details});return {};}},phase(){},dispose(){}};
@@ -48,19 +58,19 @@ function fixture(t,{initialState={},initialPlayer=player(),savedPose,registered=
     setInterval:fn=>{const id=++timerId;timers.set(id,fn);return id;},clearInterval:id=>timers.delete(id),setTimeout:()=>++timerId,clearTimeout(){},
     createClientId:()=> 'attempt-test',preflightExperience:async()=>({ok:true}),
     createLiveClient:options=>{clientOptions=options;return client;},
-    mountAnnouncementNotice:()=>({update(){},dispose(){}}),projectWallTextRects:()=>[],avoidWallText:()=>0,isEventActive:()=>activePortals,
+    mountAnnouncementNotice:()=>({update:value=>announcements.push(value),dispose(){}}),projectWallTextRects:(...args)=>{wallProjections.push(args);return [];},avoidWallText:()=>0,isEventActive:()=>activePortals,
     mountAudienceUI:(_root,options)=>{audienceOptions=options;return audience;},ACTIVITY_WORKS:[],mountMobileViewport:()=>()=>{},
-    createLearningBoardExperience:()=>({isOpen:false,nearby:false,refresh(){},tick(){},dispose(){}}),
-    createGomokuExperience:()=>({isOpen:false,nearby:false,refresh(){},tick(){},dispose(){}}),
-    createSkyQrExperience:()=>({isOpen:false,refresh:value=>skyUpdates.push(value),dispose(){}}),
+    createLearningBoardExperience:options=>mountPanel('learning',options),
+    createGomokuExperience:options=>mountPanel('gomoku',options),
+    createSkyQrExperience:options=>Object.assign(mountPanel('sky',options),{refresh:value=>skyUpdates.push(value)}),
     nearbyInterior:()=>interior?entry:null,crossedInteriorDoor:()=>crossedInterior?entry:null,interiorReturnSnapshot:pose=>pose,interiorExitEntry:()=>entry,
-    createActivityBridgeMessage:()=>({}),createCampusTsunami:()=>({active:false,resident:false,update:value=>{waves.push(value);return false;},setQuality:()=>false,releaseResources(){},dispose(){}}),
+    createActivityBridgeMessage:()=>({}),createCampusTsunami:()=>tsunami,
     mountCampusTsunamiNotice:()=>({update:value=>notices.push(value),dispose(){}}),campusEffectBudget:()=>({level:2}),getC118FloodElapsed:()=>null,
     createCivilizationPause:()=>civilization,CIVILIZATION_PAUSE_MESSAGE:'paused',CIVILIZATION_CONTINUE_LABEL:'continue'});
   vm.runInContext(source,context,{filename:'src/live-experience.js'});
-  const live=context.createLiveExperience({THREE,scene:new THREE.Scene(),camera:new THREE.PerspectiveCamera(),canvas,container,getPlayer:()=>currentPlayer,getInteriors:()=>interior?[entry]:[],setSuspended:value=>suspended.push(value),onMusicStateChange:value=>music.push(value),invalidate(){},notify(){}});
+  const live=context.createLiveExperience({THREE,scene:new THREE.Scene(),camera:new THREE.PerspectiveCamera(),canvas,container,getPlayer:()=>currentPlayer,getInteriors:()=>interior?[entry]:[],setSuspended:value=>suspended.push(value),onMusicStateChange:value=>music.push(value),invalidate:()=>invalidations.push(true),notify(){}});
   const root=container.children[0];t.after(()=>live.dispose());
-  return {live,root,client,audience,initialPlayer,storage,canvas,header,nickname,document,records,suspended,music,waves,civilizations,civilization,skyUpdates,notices,setPlayer:value=>{currentPlayer=value;},
+  return {live,root,client,audience,initialPlayer,storage,canvas,header,nickname,document,records,suspended,music,waves,civilizations,civilization,skyUpdates,notices,panels,announcements,invalidations,wallProjections,setPlayer:value=>{currentPlayer=value;},
     enter(){document.body.classList.remove('entry-cover-open');header.inert=false;live.sync();},
     async receive(patch){client.state={...client.state,...patch};clientOptions.onState(client.state);await flush();},
     async reconnect(patch){client.connected=false;clientOptions.onConnection(false);client.state={...client.state,...patch};client.connected=true;clientOptions.onConnection(true);clientOptions.onState(client.state);await flush();},
@@ -152,4 +162,53 @@ for(const registered of [true,false])test(`entry does not bypass ${registered?'a
   assert.equal(f.root.querySelector('.live-pause').focuses||0,0);assert.equal(f.nickname.focuses||0,0);
   f.enter();assert.equal(f.live.frozen,true);assert.equal(f.canvas.inert,true);assert.equal(f.header.inert,true,'sync reinstates the existing gate on the shared header');assert.equal(f.suspended.at(-1),true);
   if(registered)assert.ok(f.root.querySelector('.live-pause').focuses>0);else assert.ok(f.nickname.focuses>0);
+});
+
+const marker={id:'test-beacon',label:'Activity',x:80,z:-80,height:40,radius:3,color:'#64e7cf'};
+for(const name of ['gomoku','learning']){
+  test(`${name} panel stops periodic beacon draws while its own UI ticks continue`,t=>{
+    const f=fixture(t,{activePortals:true,initialState:{markers:[marker],portals:[]}});f.live.sync();
+    assert.equal(f.root.dataset.markerCount,'1');assert.equal(f.live.tick(1000),true,'real beacon animation requests a frame before opening');
+    f.panels[name].setOpen(true);assert.equal(f.live.frozen,true);
+    const projections=f.wallProjections.length,invalidations=f.invalidations.length,ticks=f.panels[name].ticks;
+    for(let now=1100;now<=2100;now+=100){
+      f.refresh();
+      assert.equal(f.live.tick(now),false,'a covered beacon must not keep the 3D scene rendering at 10 Hz');
+    }
+    assert.equal(f.wallProjections.length,projections,'covered labels do no projection/layout work');
+    assert.equal(f.invalidations.length,invalidations,'unchanged host refreshes cause no extra scene draws');
+    assert.equal(f.panels[name].ticks,ticks+11,'the panel still services its UI/game state');
+    f.panels[name].setOpen(false);assert.equal(f.live.frozen,false);
+    assert.ok(f.invalidations.length>invalidations,'closing requests a fresh campus frame');
+    assert.equal(f.live.tick(2200),true,'normal beacon motion resumes on return');
+    assert.ok(f.wallProjections.length>projections);
+  });
+
+  test(`${name} panel pauses exterior flood sampling and player forces without blocking host messages`,async t=>{
+    const f=fixture(t,{activePortals:true,initialState:{markers:[marker],portals:[],c118Flood:{id:'host-wave'}}});f.live.sync();
+    assert.equal(f.waves.at(-1).locallyPaused,false);assert.equal(f.initialPlayer.flood.paused,false);
+    f.panels[name].setOpen(true);f.live.tick(1000);
+    assert.equal(f.waves.at(-1).visible,true,'the last campus frame remains available behind the panel');
+    assert.equal(f.waves.at(-1).locallyPaused,true);assert.equal(f.initialPlayer.flood.paused,true,'flood forces respect the same local pause');
+    const count=f.invalidations.length;
+    await f.receive({paused:true,pauseMessage:'主持人正在讲解',announcement:{id:'host-announcement',text:'请留意活动安排'}});
+    assert.equal(f.root.querySelector('.live-pause').hidden,false);assert.equal(f.root.querySelector('.live-pause').querySelector('p').textContent,'主持人正在讲解');
+    assert.equal(f.announcements.at(-1).id,'host-announcement');assert.ok(f.invalidations.length>count,'host updates can still invalidate a covered scene');
+    assert.equal(f.waves.at(-1).paused,true);assert.equal(f.waves.at(-1).locallyPaused,true);assert.equal(f.initialPlayer.flood.paused,true);
+    await f.receive({paused:false,c118Flood:{id:'replayed-wave'}});
+    assert.equal(f.waves.at(-1).event.id,'replayed-wave','new host event authority is retained while covered');
+    assert.equal(f.waves.at(-1).paused,false);assert.equal(f.waves.at(-1).locallyPaused,true);assert.equal(f.initialPlayer.flood.paused,true);
+    assert.equal(f.live.frozen,true,'host resume does not close or bypass the local panel');
+    f.panels[name].setOpen(false);f.live.tick(2200);
+    assert.equal(f.live.frozen,false);assert.equal(f.waves.at(-1).locallyPaused,false);assert.equal(f.initialPlayer.flood.paused,false);assert.equal(f.initialPlayer.flood.id,'replayed-wave');
+  });
+}
+
+test('sky QR is not a board overlay and retains the exterior event and beacon motion',t=>{
+  const f=fixture(t,{activePortals:true,initialState:{markers:[marker],portals:[],skyQrVisible:true,c118Flood:{id:'host-wave'}}});f.live.sync();
+  f.panels.sky.setOpen(true);const projections=f.wallProjections.length;
+  assert.equal(f.live.frozen,true,'QR interaction can still suspend movement');
+  assert.equal(f.live.tick(1000),true,'the QR view keeps the live campus visible');
+  assert.equal(f.waves.at(-1).locallyPaused,false);assert.equal(f.initialPlayer.flood.paused,false);
+  assert.ok(f.wallProjections.length>projections);
 });

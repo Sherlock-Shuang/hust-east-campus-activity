@@ -18,7 +18,7 @@ export function createPerformanceQuality({
   deviceRatio=1, handheld=false, hardwareConcurrency, deviceMemory,
   width=0, height=0, mode='auto',
 }={}) {
-  const nativeRatio=positive(deviceRatio)?deviceRatio:1;
+  let nativeRatio=positive(deviceRatio)?deviceRatio:1;
   const limited=!!handheld||(positive(hardwareConcurrency)&&hardwareConcurrency<=4)||(positive(deviceMemory)&&deviceMemory<=4);
   const autoCeiling=limited?1:2, initialLevel=limited?0:1;
   let selected=safeMode(mode),level=selected==='auto'?initialLevel:modeLevel[selected];
@@ -50,10 +50,15 @@ export function createPerformanceQuality({
       selected=next;level=selected==='auto'?initialLevel:modeLevel[selected];pixelStep=0;warmupMs=0;
       clearEvidence();lastReason='selection';return refresh();
     },
-    setViewport(nextWidth,nextHeight){
+    setViewport(nextWidth,nextHeight,nextDeviceRatio=nativeRatio){
       if(!positive(nextWidth)||!positive(nextHeight))return budget;
-      if(viewportWidth===nextWidth&&viewportHeight===nextHeight)return budget;
-      viewportWidth=nextWidth;viewportHeight=nextHeight;clearEvidence();lastReason='viewport';return refresh();
+      const ratio=positive(nextDeviceRatio)?nextDeviceRatio:nativeRatio;
+      if(viewportWidth===nextWidth&&viewportHeight===nextHeight&&ratio===nativeRatio)return budget;
+      // Moving between displays or changing browser zoom can alter DPR without
+      // changing CSS dimensions. Keep the selected tier while respecting the
+      // current display's native pixels and the existing total-pixel budget.
+      viewportWidth=nextWidth;viewportHeight=nextHeight;nativeRatio=ratio;
+      clearEvidence();lastReason='viewport';return refresh();
     },
     resetSamples(){clearEvidence();warmupMs=0;},
     update({elapsedMs,cpuMs,visible=true,active=true,rendered=true,targetFrameMs=1000/60}={}){

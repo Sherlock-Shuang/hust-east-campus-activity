@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {getBuildingSpatialIndex,invalidateBuildingSpatialIndex} from '../src/building-spatial-index.js';
 import {createPlayerMotion} from '../src/player-motion.js';
 import {calculatePlayerCamera,constrainPlayerCamera} from '../src/player-camera.js';
-import {spatialWorld,rectangle,motionReplay,cameraReplay} from './helpers/spatial-query-scenarios.mjs';
+import {spatialWorld,spatialRoute,rectangle,motionReplay,cameraReplay} from './helpers/spatial-query-scenarios.mjs';
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 test('bounded grid candidates equal an ordered full bounds scan, including negative cells and long sweeps',()=>{
@@ -45,9 +45,44 @@ test('large footprints and edge touching are retained without unbounded cell con
   assert.deepEqual(index.querySegment({x:-2,z:-2},{x:32,z:32},0,mapped),mapped);
 });
 
-test('six modes and camera traces retain pre-index behavior, including long frames and held casts',()=>{
+test('non-walking modes and camera traces retain pre-index behavior, including long frames and held casts',()=>{
   const baseline=JSON.parse(readFileSync(new URL('./fixtures/building-spatial-baseline.json',import.meta.url),'utf8'));
   const world=spatialWorld(),motion=motionReplay(createPlayerMotion,world);
-  for(const mode of Object.keys(motion))assert.equal(digest(motion[mode].map(({waterMode,waterY,surfRemaining,surfWindowRemaining,...legacy})=>legacy)),baseline.motion[mode],`${mode} deterministic fixed-step behavior unchanged`);
+  // Walking deliberately changes release braking and wall sliding. Compare
+  // its actual current behavior with a full scan below instead of replacing a
+  // legacy digest with another opaque snapshot. Keep every other mode locked.
+  for(const mode of Object.keys(motion).filter(mode=>mode!=='walk'))assert.equal(digest(motion[mode].map(({waterMode,waterY,surfRemaining,surfWindowRemaining,...legacy})=>legacy)),baseline.motion[mode],`${mode} deterministic fixed-step behavior unchanged`);
   assert.equal(digest(cameraReplay(calculatePlayerCamera,constrainPlayerCamera,world)),baseline.camera,'camera clipping including inner courts/overhead structures unchanged');
+});
+
+test('all six modes including revised walking match a real full-candidate scan on every replay frame',()=>{
+  const indexedWorld=spatialWorld(),fullWorld=spatialWorld();
+  const indexed=motionReplay(createPlayerMotion,indexedWorld,{sampleEvery:1});
+  const index=getBuildingSpatialIndex(fullWorld.buildings),original={queryBounds:index.queryBounds,queryPoint:index.queryPoint,querySegment:index.querySegment};
+  let fullScans=0;
+  // Keep the exact collision, support, web and walking-slide implementations.
+  // Only bypass their broad phase: each query receives every source record in
+  // the same order, including distant footprints and courtyard holes.
+  index.queryBounds=(_minX,_minZ,_maxX,_maxZ,mapped=index.records)=>{fullScans++;return mapped;};
+  index.queryPoint=(_x,_z,_radius,mapped=index.records)=>{fullScans++;return mapped;};
+  index.querySegment=(_a,_b,_radius,mapped=index.records)=>{fullScans++;return mapped;};
+  try{
+    const full=motionReplay(createPlayerMotion,fullWorld,{sampleEvery:1});
+    assert.ok(fullScans>1000,'the reference really bypasses the grid during simulation');
+    for(const mode of Object.keys(indexed)){
+      assert.equal(indexed[mode].length,480);
+      assert.deepEqual(indexed[mode],full[mode],`${mode} indexed and full-scan motion agree on all 480 frames`);
+    }
+    for(const start of [{x:8,z:-10},{x:33,z:-30},{x:0,z:-42}]){
+      const players=[indexedWorld,fullWorld].map(world=>{const player=createPlayerMotion({route:spatialRoute,world});assert.equal(player.placeWalker({...start,y:.14,yaw:0}).ok,true);return player;});
+      let contacts=0;
+      for(let frame=0;frame<240;frame++){
+        const input={moveX:start.x===33?-1:.4,moveZ:-1,fast:true};
+        for(const player of players)player.step(1/60,input);
+        if(players[0].state.blockedReason)contacts++;
+        assert.deepEqual(players[0].state,players[1].state,'wall, courtyard and thin-wall slides agree at every frame');
+      }
+      assert.ok(contacts>20,'each route exercises sustained exact collision and sliding');
+    }
+  }finally{Object.assign(index,original);}
 });

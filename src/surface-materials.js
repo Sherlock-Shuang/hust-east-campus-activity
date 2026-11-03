@@ -62,16 +62,18 @@ export function* buildSurfaceMaterials(THREE) {
     m.userData={materialBasis:'procedural, photo-informed; dimensions and weathering estimated',textureTileMetres:metres};materials.push(m);return m;
   }
   const asphalt=yield* surface('细骨料沥青 · 估计纹理',1.6,(u,v,x,y)=>{
-    const grain=hash(x,y,1),cloud=noise(u*4,v*4,4),aggregate=grain>.96?4:grain<.07?-4:0;
-    const n=(grain-.5)*7+(cloud-.5)*3+aggregate;
-    return [104+n,105+n,103+n,124+(grain-.5)*36];
+    // Canopy-road reference: dry, warm-neutral aggregate; individual stones
+    // catch light without making the road read as wet or polished plastic.
+    const grain=hash(x,y,1),cloud=noise(u*4,v*4,4),aggregate=grain>.94?7:grain<.06?-6:0;
+    const n=(grain-.5)*9+(cloud-.5)*4+aggregate;
+    return [105+n,105+n,102+n,124+(grain-.5)*34+aggregate];
   },{bump:.007,roughness:.91});
   const paving=yield* surface('灰色错缝铺装 · 估计砖尺度',1.6,(u,v,x,y)=>{
     const row=Math.floor(v*8),col=Math.floor(u*4+(row%2)*.5),fx=fract(u*4+(row%2)*.5),fy=fract(v*8);
     const edge=Math.min(fx/4,(1-fx)/4,fy/8,(1-fy)/8),seam=edge<.0026;
     const grain=(hash(x,y)-.5)*6,tile=(hash(col,row,4)-.5)*12,stain=(noise(u*4,v*4,4)-.5)*3;
-    const n=seam?112+grain:157+tile+grain+stain;
-    return[n+3,n+2,n,seam?110:158+grain];
+    const bevel=!seam&&edge<.0065,n=seam?112+grain:157+tile+grain+stain+(bevel?2:0);
+    return[n+3,n+2,n,seam?110:bevel?145:158+grain];
   },{bump:.012,roughness:.88});
   // The supplied lake-curve frames show small rectangular pavers across the
   // carriageway. A periodic herringbone bond avoids replacing it with asphalt.
@@ -90,8 +92,10 @@ export function* buildSurfaceMaterials(THREE) {
   const grass=yield* surface('草地与细碎落叶',6,(u,v,x,y)=>{
     // Fine blade contrast, with very weak broad variation. Large bump/noise
     // patches made a trimmed lawn read like corrugated terrain from eye level.
-    const blade=(hash(x,y)-.5)*13,n=(noise(u*16,v*16,16)-.5)*7+(noise(u*2,v*2,2)-.5)*4+blade,leaf=hash(x,y,5)>.997?11:0;
-    return[100+n+leaf,122+n,69+n-leaf*.3,128+blade];
+    const blade=(hash(x,y)-.5)*15,patch=(noise(u*16,v*16,16)-.5)*6+(noise(u*2,v*2,2)-.5)*3,leaf=hash(x,y,5)>.997?11:0;
+    // Trimmed Yunyuan lawns have fresh green midtones, while dry clippings
+    // stay sparse. Vary hue slightly as well as value, with almost no relief.
+    return[95+blade*.8+patch+leaf,121+blade+patch,65+blade*.65+patch-leaf*.3,128+blade];
   },{bump:.005,roughness:.98,roughnessVariation:.01});
   const ground=yield* surface('校园地面底色',10,(u,v,x,y)=>{const n=(noise(u*8,v*8,8)-.5)*3+(hash(x,y)-.5)*6;return[155+n,156+n,139+n,128+n];},{bump:.004});
   const bark=yield* surface('树皮纵向裂纹',1,(u,v,x,y)=>{
@@ -99,7 +103,7 @@ export function* buildSurfaceMaterials(THREE) {
     return[102+n,97+n,77+n,95+ridge*85];
   },{bump:.08});
   const paint=yield* surface('磨损道路标线',1,(u,v,x,y)=>{const n=hash(x,y),wear=n<.08?42:0;return[224-wear,224-wear,207-wear,145+n*35];},{bump:.006});
-  const water=yield* surface('校园水面细波',10,(u,v,x,y)=>{const n=noise(u*32,v*32,32);return[77+n*9,111+n*8,110+n*9,128+Math.sin(u*125.66+Math.sin(v*25.13))*14+n*20];},{bump:.09,roughness:.29,metalness:.12});
+  const water=yield* surface('校园水面细波',10,(u,v,x,y)=>{const n=noise(u*32,v*32,32);return[77+n*9,111+n*8,110+n*9,128+Math.sin(u*125.66+Math.sin(v*25.13))*14+n*20];},{bump:.07,roughness:.29,metalness:0});
   completed=true;return {asphalt,paving,roadPavers,concrete,grass,ground,bark,paint,water,dispose};
   }finally{if(!completed)dispose();}
 }

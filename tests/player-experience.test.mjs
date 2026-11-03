@@ -65,6 +65,9 @@ function fixture(t,{buildings=true,legacyControls=true,transportSources,coarsePo
     el.hidden=/\bhidden(?:\s|$|=)/.test(attributes);return el;
   };
   for(const match of html.matchAll(/<([a-z][\w-]*)\b([^>]*\bid="[^"]+"[^>]*)>/g)){const el=fromHTML(match[1],match[2]);ids.set(el.id,el);}
+  // Mirror the shipped guide hierarchy so descendant queries exercise its new settings host.
+  ids.get('player-hud').append(ids.get('player-guide-detail'));
+  ids.get('player-guide-detail').append(ids.get('player-guide-settings'));
   const mobileButtons=[];
   for(const match of html.matchAll(/<button\b([^>]*\bdata-mobile-(?:action|hold)="[^"]+"[^>]*)>/g)){
     const el=fromHTML('button',match[1]);mobileButtons.push(el);
@@ -1278,10 +1281,31 @@ for(const boundary of ['pause','blur','rotation','leave','dispose'])test(`pendin
   assert.equal(f.experience.state.mode,'walk');assert.equal(source.items[0].taken,false);assert.equal(f.scene.getObjectByName('spider-character'),undefined);
 });
 
+test('compact guide expands without changing the player and Escape closes it before leaving exploration',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter('walk');
+  const guide=f.el('player-guide-detail'),toggle=f.el('player-guide-toggle');
+  assert.equal(guide.hidden,true);assert.equal(toggle.getAttribute('aria-expanded'),'false');
+  assert.match(f.el('player-guide-summary').textContent,/WASD/);
+  const pose=structuredClone(f.experience.state);toggle.emit('click');
+  assert.equal(guide.hidden,false);assert.equal(toggle.getAttribute('aria-expanded'),'true');
+  assert.equal(f.experience.suspended,false);assert.deepEqual(f.experience.state,pose);
+  const event=f.el('player-hud').emit('keydown',{key:'Escape',code:'Escape',target:toggle});
+  assert.equal(event.propagationStopped,true);assert.equal(guide.hidden,true);assert.equal(f.experience.active,true);
+  toggle.emit('click');toggle.emit('click');assert.equal(guide.hidden,true);
+});
+
+test('visible view button and V share the same camera mode and cannot change a suspended player',t=>{
+  const f=fixture(t,{buildings:false,legacyControls:false});f.experience.enter('walk');
+  const button=f.el('player-view-toggle');assert.equal(f.el('player-hud').dataset.view,'third');
+  button.emit('click');assert.equal(f.el('player-hud').dataset.view,'first');assert.equal(f.camera.near,.06);assert.equal(button.textContent,'第三人称');
+  f.key('KeyV');assert.equal(f.el('player-hud').dataset.view,'third');assert.equal(button.textContent,'第一人称');
+  f.experience.setSuspended(true);button.emit('click');assert.equal(f.el('player-hud').dataset.view,'third');
+});
+
 test('opening control preferences releases both mobile gestures and closing never resumes their old contacts',t=>{
   const f=fixture(t,{buildings:false,legacyControls:false,coarsePointer:true});f.experience.enter('walk');
   pushJoystick(f,10);touch(f.canvas,'pointerdown',20,{clientX:600,clientY:160});assert.equal(f.canvas.captures.has(20),true);
-  const settings=f.el('player-hud').children.find(e=>e.attrs['aria-label']==='调整操作偏好');assert.ok(settings);settings.emit('click');
+  const settings=f.el('player-hud').querySelector('[aria-label="调整操作偏好"]');assert.ok(settings);settings.emit('click');
   const dialog=f.doc.body.children.find(e=>e.tagName==='DIALOG');assert.equal(dialog.open,true);assert.equal(f.canvas.captures.has(20),false);
   assert.equal(f.el('mobile-joystick').captures.size,0);f.tick(.5);const pose=f.experience.captureActivityPose();
   dialog.close();dialog.emit('close');touch(f.win,'pointermove',10,{clientY:0});touch(f.canvas,'pointermove',20,{clientX:800,clientY:50});f.tick(.5);
@@ -1292,7 +1316,7 @@ test('opening control preferences releases both mobile gestures and closing neve
 test('control settings persist changes and continue or Escape restores canvas focus without relocking',t=>{
   const entries=new Map(),storage={getItem:key=>entries.get(key),setItem:(key,value)=>entries.set(key,value)};
   const f=fixture(t,{buildings:false,legacyControls:false,storage});f.experience.enter('walk');let focused=0;f.canvas.focus=()=>{focused++;};
-  const button=f.el('player-hud').children.find(e=>e.attrs['aria-label']==='调整操作偏好');button.emit('click');
+  const button=f.el('player-hud').querySelector('[aria-label="调整操作偏好"]');button.emit('click');
   const dialog=f.doc.body.children.find(e=>e.tagName==='DIALOG'),sensitivity=dialog.querySelector('[aria-label="视角灵敏度"]'),invert=dialog.querySelector('[aria-label="反转上下视角"]');
   sensitivity.value='1.4';sensitivity.emit('input');invert.checked=true;invert.emit('change');
   assert.equal(JSON.parse(entries.get('dongjiu.controls.v1')).sensitivity,1.4);assert.equal(JSON.parse(entries.get('dongjiu.controls.v1')).invertY,true);

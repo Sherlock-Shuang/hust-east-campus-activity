@@ -374,13 +374,13 @@ export function createVehicleCameraRig() {
       }
     } else if (!ready||activeMode!==state.mode||teleport) transition=null;
     const snap=!!options.snap||!ready||activeMode!==state.mode||activeView!==view||teleport;
-    // Treads move the feet immediately. In comfort mode carry the eye and aim
+    // Treads move the feet immediately. Carry the eye and aim
     // together over small grounded steps, without delaying horizontal movement
     // or changing pitch. Falls, teleports and mode/view switches stay immediate.
     const previousGroundY=groundFrameY??origin.y;
-    const easeGround=options.comfortable&&state.mode==='walk'&&state.grounded!==false&&
+    const easeGround=state.mode==='walk'&&state.grounded!==false&&
       (!state.waterMode||state.waterMode==='dry')&&!snap&&previousOrigin&&Math.abs(origin.y-previousOrigin.y)<.5;
-    groundFrameY=easeGround?damp(previousGroundY,origin.y,12,h):origin.y;
+    groundFrameY=easeGround?damp(previousGroundY,origin.y,options.comfortable?12:18,h):origin.y;
     const bodyHeading=finite(state.yaw,0);
     if (!ready) heading=finite(options.heading,heading);
     if (Number.isFinite(options.heading)) heading=wrapAngle(options.heading);
@@ -424,11 +424,6 @@ export function createVehicleCameraRig() {
         const safe=clipCameraSegment(original,eased,options);
         safe.y=Math.max(safe.y,groundHeight(options.groundAt,safe)+CLEARANCE);
         desired.position=safe;desired.target.y+=safe.y-original.y;
-      }else if(!options.comfortable&&state.mode==='walk'&&state.grounded!==false&&!snap&&position){
-        // The feet land on the true tread. Ease only the eye's vertical travel
-        // over the short riser, without delaying horizontal steering or aim.
-        const eyeY=damp(position.y,desired.position.y,18,h),dy=eyeY-desired.position.y;
-        desired.position.y=eyeY;desired.target.y+=dy;
       }
       position={...desired.position};target={...desired.target};velocity={x:0,y:0,z:0};
     } else {

@@ -14,7 +14,7 @@ export function spatialWorld(){
 export const spatialRoute={length:300,points:[{x:0,y:.16,z:0,progress:0},{x:0,y:.16,z:-300,progress:300}],segments:[{startProgress:0,endProgress:300,width:7.2}]};
 const round=value=>typeof value==='number'?Number.isFinite(value)?Math.round(value*1e8)/1e8:String(value):Array.isArray(value)?value.map(round):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,round(value[key])])):value;
 
-export function motionReplay(createPlayerMotion,world=spatialWorld(),{frames=480}={}){
+export function motionReplay(createPlayerMotion,world=spatialWorld(),{frames=480,sampleEvery=24}={}){
   const result={};
   for(const mode of ['walk','scooter','roadster','hoverboard','helicopter','spider']){
     const player=createPlayerMotion({route:spatialRoute,world});player.reset(0,mode);
@@ -26,7 +26,7 @@ export function motionReplay(createPlayerMotion,world=spatialWorld(),{frames=480
         jump:mode==='spider'&&n%90===0,swing:mode==='spider'&&n%100<82,reel:mode==='spider'&&n%240>130,
         lift:n%180<95?1:0,vertical:n%180<95?.65:-.3,point:mode==='spider'&&n===215,trick:mode==='spider'&&n>360};
       const dt=n%137===136?.125:1/60;player.step(dt,input);
-      if(n%24===0||n===frames-1)trace.push(round(player.state));
+      if(n%sampleEvery===0||n===frames-1)trace.push(round(player.state));
     }
     result[mode]=trace;
   }

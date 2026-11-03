@@ -153,13 +153,24 @@
       <button id="transport-interact" class="world-interaction" hidden><kbd>F</kbd><span id="transport-interact-label"></span></button>
       <button id="resume-exploration" hidden>继续校园探索 <span>↗</span></button>
       <section id="player-hud" class="player-guide" aria-label="操作提示" hidden>
-        <span id="player-mode-label"></span>
-        <p id="player-help"></p>
-        <button id="player-mouse-toggle" type="button" aria-pressed="false" aria-describedby="player-mouse-status">锁定鼠标</button>
+        <div class="player-guide-heading">
+          <span id="player-mode-label"></span>
+          <button id="player-guide-toggle" type="button" aria-expanded="false" aria-controls="player-guide-detail">操作指引</button>
+        </div>
+        <p id="player-guide-summary"></p>
+        <div class="player-guide-actions">
+          <button id="player-mouse-toggle" type="button" aria-pressed="false" aria-describedby="player-mouse-status">锁定鼠标</button>
+          <button id="player-view-toggle" type="button">第一人称</button>
+        </div>
         <p id="player-mouse-status" role="status" aria-live="polite" hidden></p>
-        <label class="performance-choice"><select id="performance-mode" aria-label="画质与性能">
-          <option value="auto">画质 · 自动</option><option value="smooth">画质 · 流畅优先</option><option value="balanced">画质 · 均衡</option><option value="clear">画质 · 清晰</option>
-        </select></label>
+        <div id="player-guide-detail" hidden>
+          <p id="player-help"></p>
+          <div id="player-guide-settings">
+            <label class="performance-choice"><select id="performance-mode" aria-label="画质与性能">
+              <option value="auto">画质 · 自动</option><option value="smooth">画质 · 流畅优先</option><option value="balanced">画质 · 均衡</option><option value="clear">画质 · 清晰</option>
+            </select></label>
+          </div>
+        </div>
       </section>
       <button id="mobile-enable-touch" type="button" aria-label="启用触屏操作">触控</button>
       <div id="mobile-controls" aria-label="触屏操作" hidden>

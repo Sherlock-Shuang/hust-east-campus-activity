@@ -68,7 +68,7 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
   }
   function updateTsunami(){
     if(!client||disposed)return false;
-    const wasPaused=civilization.active,player=getPlayer();
+    const wasPaused=civilization.active,player=getPlayer(),boardCovered=!!learningBoard?.isOpen||!!gomoku?.isOpen;
     civilization.update({eventId:client.state.c118Flood?.id,elapsed:getC118FloodElapsed(client.state.c118Flood,client.now()),
       position:player?.state,outdoors:!opened&&!learningBoard?.isOpen&&!gomoku?.isOpen&&!skyQr?.isOpen,eligible:!entryCoverOpen()&&!!player?.active&&!!audienceUI?.registered&&!document.hidden,hostPaused:client.state.paused});
     civilizationPanel.hidden=!civilization.active;civilizationPanel.inert=!!client.state.paused;
@@ -78,8 +78,8 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
     const pauseChanged=wasPaused!==civilization.active;
     if(pauseChanged){updateFrozen();bridge();invalidate();if(civilization.active&&!entryCoverOpen())civilizationContinue.focus({preventScroll:true});}
     const changed=campusTsunami.update({event:client.state.c118Flood,now:client.now(),
-      visible:!entryCoverOpen()&&!opened&&!document.hidden&&!!audienceUI?.registered,paused:client.state.paused,locallyPaused:entryCoverOpen()||civilization.active,reducedMotion:reduced?.matches});
-    const flood=client.state.c118Flood&&campusTsunami.sample?{id:client.state.c118Flood.id,...campusTsunami.sample,paused:entryCoverOpen()||!!client.state.paused||civilization.active,reducedMotion:!!reduced?.matches}:null;
+      visible:!entryCoverOpen()&&!opened&&!document.hidden&&!!audienceUI?.registered,paused:client.state.paused,locallyPaused:entryCoverOpen()||civilization.active||boardCovered,reducedMotion:reduced?.matches});
+    const flood=client.state.c118Flood&&campusTsunami.sample?{id:client.state.c118Flood.id,...campusTsunami.sample,paused:entryCoverOpen()||!!client.state.paused||civilization.active||boardCovered,reducedMotion:!!reduced?.matches}:null;
     onFloodState(flood);
     getPlayer()?.setFloodState?.(flood);
     // Keep the frozen spray/fog frame under the civilization card. Its banner
@@ -365,6 +365,9 @@ export function createLiveExperience({THREE,scene,camera,canvas,container,getPla
       // A hidden/embedded campus submits no wave work while C118 renders itself.
       let tsunamiChanged=false;
       if(client.state.c118Flood||campusTsunami.active)tsunamiChanged=updateTsunami();
+      // Panels keep the last campus frame. Their DOM/network updates continue,
+      // but hidden beacons must not schedule a scene traversal every 100 ms.
+      if(learningBoard.isOpen||gomoku.isOpen)return tsunamiChanged;
       if(!items.length||document.hidden||opened)return tsunamiChanged;
       if(now-lastUpdate<66)return tsunamiChanged;lastUpdate=now;
       camera.updateMatrixWorld();

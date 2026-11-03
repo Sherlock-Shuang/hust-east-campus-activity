@@ -118,11 +118,15 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     const dx=targetX-state.vx,dz=targetZ-state.vz,error=Math.hypot(dx,dz),before=Math.hypot(state.vx,state.vz);
     // Ease the actual world velocity, not the avatar's heading. Reversing or
     // releasing a stick therefore brakes smoothly without walking in an arc.
-    if(error<.001){state.vx=targetX;state.vz=targetZ;groundAcceleration=0;}
+    const stopping=brake||magnitude<1e-5;
+    if(error<(stopping?.02:.001)){state.vx=targetX;state.vz=targetZ;groundAcceleration=0;}
     else{
       const slowing=targetX*state.vx+targetZ*state.vz<0||Math.hypot(targetX,targetZ)<before;
-      groundAcceleration=approach(Math.max(0,groundAcceleration),brake?18:slowing?15:11,STEP*(brake?100:60));
-      const change=Math.min(error,error*(1-Math.exp(-14*STEP)),groundAcceleration*STEP);
+      // Releasing a key/stick is a deliberate stop. A separate, still bounded
+      // braking response avoids the long exponential drift of cruise easing;
+      // small analogue input remains proportional and is never snapped away.
+      groundAcceleration=approach(Math.max(0,groundAcceleration),stopping?18:slowing?15:11,STEP*(stopping?120:60));
+      const change=Math.min(error,error*(1-Math.exp(-(stopping?24:14)*STEP)),groundAcceleration*STEP);
       state.vx+=dx/error*change;state.vz+=dz/error*change;
     }
     state.speed=Math.hypot(state.vx,state.vz);state.acceleration=(state.speed-before)/STEP;
@@ -355,6 +359,43 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
     }
     return false;
   }
+  function walkingSlide(nextX,nextZ,yaw){
+    const dx=nextX-state.x,dz=nextZ-state.z,radius=.26;
+    // Drop only the blocked component. Closest-point normals handle rotated
+    // facades and rounded footprint contact at vertices. Choosing an arbitrary
+    // adjacent edge at a pier tip would steer straight input around the pier.
+    // Every candidate still uses the complete movement validator, including
+    // traffic and bridge discontinuities. This is not collision penetration.
+    const candidates=[],point={x:nextX,z:nextZ};
+    const nearby=[...buildingIndex.queryBounds(nextX-radius,nextZ-radius,nextX+radius,nextZ+radius),
+      ...indexedIn(barrierCells,nextX-radius,nextZ-radius,nextX+radius,nextZ+radius)];
+    for(const polygon of nearby){
+      if(state.y>=(polygon.height??18)+.5||state.y+2<=(polygon.minHeight??0)||!overlapsPolygon(point,radius,polygon))continue;
+      let nearest=null,nearestDistance=radius*radius+EPS;
+      for(const ring of polygon.rings)for(let i=0;i<ring.length;i++){
+        const a=ring[i],b=ring[(i+1)%ring.length];
+        const ex=b.x-a.x,ez=b.z-a.z,length2=ex*ex+ez*ez;
+        if(length2<EPS)continue;
+        const t=clamp(((point.x-a.x)*ex+(point.z-a.z)*ez)/length2,0,1);
+        const nx=point.x-a.x-t*ex,nz=point.z-a.z-t*ez,distance=nx*nx+nz*nz;
+        if(distance<nearestDistance){nearestDistance=distance;nearest={x:nx,z:nz};}
+      }
+      if(nearest&&nearestDistance>1e-12){
+        const projection=(dx*nearest.x+dz*nearest.z)/nearestDistance;
+        candidates.push({x:dx-nearest.x*projection,z:dz-nearest.z*projection});
+      }
+    }
+    // Non-polygon constraints (bounds, water and unsupported steps) still
+    // receive safe axis projections through their original exact validators.
+    if(!candidates.length)candidates.push({x:dx,z:0},{x:0,z:dz});
+    candidates.sort((a,b)=>(b.x*b.x+b.z*b.z)-(a.x*a.x+a.z*a.z));
+    for(const candidate of candidates){
+      if(candidate.x*candidate.x+candidate.z*candidate.z<1e-12)continue;
+      const x=state.x+candidate.x,z=state.z+candidate.z;
+      if(!obstacleAt(x,z,yaw,'walk',state.y,state)&&!trafficBlocked(x,z,yaw))return{x,z,vx:candidate.x/STEP,vz:candidate.z/STEP};
+    }
+    return null;
+  }
   function roadsterContact(x=state.x,z=state.z,yaw=state.yaw,referenceY=state.y){const half=ROADSTER.wheelbase/2,f=contactAt(x-Math.sin(yaw)*half,z-Math.cos(yaw)*half,0,referenceY),r=contactAt(x+Math.sin(yaw)*half,z+Math.cos(yaw)*half,0,referenceY);return{y:(f.height+r.height)/2,pitch:Math.atan2(f.height-r.height,ROADSTER.wheelbase)};}
   function scooterContact(x=state.x,z=state.z,yaw=state.yaw,referenceY=state.y,lean=state.lean){
     const f=contactAt(x-Math.sin(yaw)*.59,z-Math.cos(yaw)*.59,0,referenceY),r=contactAt(x+Math.sin(yaw)*.56,z+Math.cos(yaw)*.56,0,referenceY),pitch=Math.atan2(f.height-r.height,1.15),support=.208*Math.cos(lean)+.046;
@@ -562,9 +603,17 @@ export function createPlayerMotion({route,world={},traffic=()=>[],getPoseAt}={})
       const clearance=Math.max(0,state.y-contactAt(state.x,state.z).height),tiltLimit=Math.min(1,clearance/2);
       state.pitch=clamp(approach(state.pitch,clamp(-state.speed*.012,-.22,.1)*tiltLimit,STEP*.5),-.22*tiltLimit,.1*tiltLimit);state.lean=clamp(approach(state.lean,-turn*Math.abs(state.speed)/18*.14*tiltLimit,STEP*.5),-.14*tiltLimit,.14*tiltLimit);
     }
-    const nextX=state.x+(worldWalking?state.vx:-Math.sin(nextYaw)*state.speed)*STEP,nextZ=state.z+(worldWalking?state.vz:-Math.cos(nextYaw)*state.speed)*STEP;
+    let nextX=state.x+(worldWalking?state.vx:-Math.sin(nextYaw)*state.speed)*STEP,nextZ=state.z+(worldWalking?state.vz:-Math.cos(nextYaw)*state.speed)*STEP;
     let reason=obstacleAt(nextX,nextZ,nextYaw,state.mode,state.y,state);
     if(!reason&&state.mode!=='helicopter'&&trafficBlocked(nextX,nextZ,nextYaw))reason='前方人车';
+    if(reason&&worldWalking){
+      const slide=walkingSlide(nextX,nextZ,nextYaw);
+      if(slide){
+        const speed=Math.hypot(slide.vx,slide.vz);
+        state.acceleration+=(speed-state.speed)/STEP;state.speed=speed;state.vx=slide.vx;state.vz=slide.vz;
+        nextX=slide.x;nextZ=slide.z;state.blockedReason=reason;reason='';
+      }
+    }
     const beforeYaw=state.yaw;
     if(reason){if(state.mode==='hoverboard'||state.mode==='roadster'){state.pitch=previousBodyPose.pitch;state.lean=previousBodyPose.lean;}state.speed=0;state.blockedReason=reason;
       if(state.mode==='roadster'){roadsterAcceleration=0;state.acceleration=0;state.forwardJetPower=0;}

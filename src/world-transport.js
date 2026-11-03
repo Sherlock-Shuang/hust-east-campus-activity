@@ -2,6 +2,7 @@ import {sampleFloodActorPose} from './campus-flood-actors.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { waterFootprint } from './water-details.js';
 import { planCanteenBoundary } from './yunyuan-canteen.js';
+import { createParkedContactShadows } from './parked-contact-shadows.js';
 
 // Activity props, deliberately separate from the surveyed/static campus model.
 // Positions are game placements, not claims about real campus aircraft or boats.
@@ -12,6 +13,7 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const finite=Number.isFinite;
 function inside(p,ring){let hit=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a.z>p.z)!==(b.z>p.z)&&p.x<(b.x-a.x)*(p.z-a.z)/(b.z-a.z)+a.x)hit=!hit;}return hit;}
 function segmentDistance(p,a,b){const dx=b.x-a.x,dz=b.z-a.z,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.z-a.z)*dz)/Math.max(1e-9,dx*dx+dz*dz)));return Math.hypot(p.x-a.x-t*dx,p.z-a.z-t*dz);}
+function overlaps(p,polygon,radius=0){return polygon?.length&&(inside(p,polygon)||polygon.some((a,i)=>segmentDistance(p,a,polygon[(i+1)%polygon.length])<radius));}
 function routePose(route,progress){const p=route.points,at=Math.max(0,Math.min(route.length??p.at(-1).progress,progress));let i=1;while(i<p.length-1&&p[i].progress<at)i++;const a=p[i-1],b=p[i],length=Math.hypot(b.x-a.x,b.z-a.z),t=Math.max(0,Math.min(1,(at-a.progress)/Math.max(.01,b.progress-a.progress)));const seg=route.segments?.find(s=>at>=s.startProgress&&at<=s.endProgress);return{x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,yaw:Math.atan2(a.x-b.x,a.z-b.z),width:seg?.width??8,progress:at,sourceId:seg?.sourceId};}
 function sourceSpawn(model){const canteen=model.buildings?.find(r=>r.id==='way/103814566'),edge=canteen&&planCanteenBoundary(canteen)?.adjacent;if(!edge)return null;const[a,b]=edge.points,l=distance(a,b),tx=(b.x-a.x)/l,tz=(b.z-a.z)/l;return{x:a.x+tx*2.4-tz*10,z:a.z+tz*2.4+tx*10,yaw:Math.atan2(-tz,tx)};}
 
@@ -20,6 +22,8 @@ export function planWorldTransport({model,route,groundAt=()=>({height:.14,allowe
   const blockers=[...(model.buildings||[]),...(model.water||[])].map(waterFootprint).filter(Boolean);
   const barriers=[...(model.architectureInfrastructure?.barriers||[]),...(model.sportsInfrastructure?.barriers||[]),...(model.parkingInfrastructure?.barriers||[])];
   const reservations=model.photoForecourtReservations||[];
+  const roads=(route.roadSurfaces||[]).filter(s=>!s.bridge&&Math.abs((s.surfaceY??.14)-.14)<.5);
+  const entrances=(model.architectureInfrastructure?.walkSurfaces||[]).filter(s=>/entry|approach|stair|porch/i.test(`${s.kind||''} ${s.id||''}`));
   function clear(p,mode,radius=RADII[mode]){
     if(![p.x,p.z,p.yaw].every(finite))return false;
     if(mode!=='spider'&&mode!=='walk'&&spawn&&distance(p,spawn)<radius+1.2)return false;
@@ -27,9 +31,23 @@ export function planWorldTransport({model,route,groundAt=()=>({height:.14,allowe
     if(blockers.some(b=>b.contains(p.x,p.z)||b.distance(p.x,p.z)<radius))return false;
     if(barriers.some(b=>b.polygon?.length&&(inside(p,b.polygon)||b.polygon.some((a,i)=>segmentDistance(p,a,b.polygon[(i+1)%b.polygon.length])<radius))))return false;
     if(reservations.some(q=>distance(p,q)<radius+(q.radius??1)))return false;
+    // Include crossing roads, not only the route segment used to place a prop.
+    // Door aprons and stairs stay clear so the activity does not obstruct arrivals.
+    if(mode!=='walk'&&(roads.some(s=>overlaps(p,s.polygon,radius+.3))||entrances.some(s=>overlaps(p,s.polygon,radius+1.2)&&!s.holes?.some(h=>inside(p,h)))))return false;
     if(items.some(q=>q.mode!=='boat'&&distance(p,q)<radius+RADII[q.mode]+2))return false;
     if(canPlaceMode&&canPlaceMode({...p,y:g.height},mode)?.ok===false)return false;
     return true;
+  }
+  function walkClear(p){
+    const g=groundAt(p.x,p.z,.38,.14);
+    return g.allowed&&Math.abs(g.height-.14)<.5&&!blockers.some(b=>b.contains(p.x,p.z)||b.distance(p.x,p.z)<.38)&&!barriers.some(b=>overlaps(p,b.polygon,.38))&&canPlaceMode?.({...p,y:g.height},'walk')?.ok!==false;
+  }
+  function approach(p,from,mode){
+    const d=distance(p,from);if(d<.01)return null;
+    const standOff=Math.min(RADII[mode]+.48,INTERACT[mode]-.25),t=Math.max(0,(d-standOff)/d);
+    const at={x:from.x+(p.x-from.x)*t,z:from.z+(p.z-from.z)*t,yaw:p.yaw};
+    for(let i=0,n=Math.max(1,Math.ceil(distance(from,at)/.35));i<=n;i++)if(!walkClear({x:from.x+(at.x-from.x)*i/n,z:from.z+(at.z-from.z)*i/n,yaw:p.yaw}))return null;
+    return {approachPose:{...at,y:groundAt(at.x,at.z,0,.14).height},approachStart:{...from,y:groundAt(from.x,from.z,0,.14).height}};
   }
   function add(mode,pose,extra={}){const item={id:`world-${mode}-${items.filter(p=>p.mode===mode).length+1}`,mode,label:NAMES[mode],source:'placed',x:pose.x,z:pose.z,y:pose.y??groundAt(pose.x,pose.z,0,.14).height,yaw:pose.yaw??0,interactionRadius:INTERACT[mode],taken:false,...extra};items.push(item);return item;}
   // Only this source lawn can host the single helicopter; no fallback aircraft.
@@ -37,14 +55,14 @@ export function planWorldTransport({model,route,groundAt=()=>({height:.14,allowe
   if(lawn){const b=lawn.bounds,cx=(b.minX+b.maxX)/2,cz=(b.minZ+b.maxZ)/2,candidates=[];for(let x=b.minX+6;x<b.maxX-6;x+=3)for(let z=b.minZ+6;z<b.maxZ-6;z+=3)candidates.push({x,z,yaw:Math.PI/2});candidates.sort((a,b)=>Math.hypot(a.x-cx,a.z-cz)-Math.hypot(b.x-cx,b.z-cz));const p=candidates.find(p=>lawn.contains(p.x,p.z)&&lawn.distance(p.x,p.z)>6&&clear(p,'helicopter'));if(p)add('helicopter',p,{placement:'韵苑草坪',sourceId:'way/98867860'});else rejected.push({mode:'helicopter',reason:'韵苑草坪没有足够净空'});}
   function roadside(mode,target,index){
     const offsets=[0,6,-6,12,-12,20,-20,32,-32,48,-48,70,-70];
-    for(const shift of offsets){const p=routePose(route,target+shift);for(const side of[1,-1])for(const extra of[1.5,3,5,7]){const offset=p.width/2+RADII[mode]+extra,q={x:p.x+Math.cos(p.yaw)*offset*side,z:p.z-Math.sin(p.yaw)*offset*side,yaw:p.yaw};if(clear(q,mode))return add(mode,q,{placement:'校园路边',routeProgress:p.progress,sourceId:p.sourceId});}}
+    for(const shift of offsets){const p=routePose(route,target+shift);for(const side of[1,-1])for(const extra of[1.5,3,5,7]){const offset=p.width/2+RADII[mode]+extra,q={x:p.x+Math.cos(p.yaw)*offset*side,z:p.z-Math.sin(p.yaw)*offset*side,yaw:p.yaw};if(!clear(q,mode))continue;const from={x:p.x+Math.cos(p.yaw)*(p.width/2+.45)*side,z:p.z-Math.sin(p.yaw)*(p.width/2+.45)*side,yaw:p.yaw},access=approach(q,from,mode);if(access)return add(mode,q,{placement:'校园路边',routeProgress:p.progress,sourceId:p.sourceId,...access});}}
     rejected.push({mode,index,reason:'路边没有足够净空'});return null;
   }
   const length=route.length??route.points.at(-1).progress;
   for(const [i,t]of[.412,.25,.88].entries())roadside('roadster',length*t,i);
   for(const [i,t]of[.397,.13,.29,.72,.94].entries())roadside('hoverboard',length*t,i);
   let nearSuit=false;
-  if(spawn){for(const side of[1,-1])for(const d of[3.4,4.8,6.2]){if(nearSuit)break;const p={x:spawn.x+Math.cos(spawn.yaw)*d*side,z:spawn.z-Math.sin(spawn.yaw)*d*side,yaw:spawn.yaw+.3};if(clear(p,'spider')){add('spider',p,{placement:'韵苑食堂前'});nearSuit=true;}}}
+  if(spawn){for(const side of[1,-1])for(const d of[3.4,4.8,6.2]){if(nearSuit)break;const p={x:spawn.x+Math.cos(spawn.yaw)*d*side,z:spawn.z-Math.sin(spawn.yaw)*d*side,yaw:spawn.yaw+.3},access=approach(p,spawn,'spider');if(access&&clear(p,'spider')){add('spider',p,{placement:'韵苑食堂前',...access});nearSuit=true;}}}
   const suiteFractions=nearSuit?[.045,.12,.19,.28,.335,.49,.65,.78,.95]:[.40,.045,.12,.19,.28,.335,.49,.65,.78,.95];
   for(const[i,t]of suiteFractions.entries())roadside('spider',length*t,i);
   // Two shore-parallel boats are moored in the real lake polygon, away from its
@@ -59,7 +77,7 @@ export function planWorldTransport({model,route,groundAt=()=>({height:.14,allowe
     if(!['roadster','hoverboard'].includes(extra.mode)||typeof extra.id!=='string'||!extra.id||items.some(i=>i.id===extra.id)||!clear(extra,extra.mode)){
       rejected.push({id:extra.id,mode:extra.mode,reason:'附加路边载具没有足够净空'});continue;
     }
-    add(extra.mode,{...extra,y:groundAt(extra.x,extra.z,0,extra.y??.14).height},{id:extra.id,sourceId:extra.sourceId,placement:extra.placement||'光电楼沿路',activityRegion:'opto-road'});
+    add(extra.mode,{...extra,y:groundAt(extra.x,extra.z,0,extra.y??.14).height},{id:extra.id,sourceId:extra.sourceId,placement:extra.placement||'光电楼沿路',activityRegion:'opto-road',boardingPose:extra.boardingPose,approachPose:extra.approachPose});
   }
   return{items,rejected,counts:Object.fromEntries(Object.keys(NAMES).map(mode=>[mode,items.filter(i=>i.mode===mode).length]))};
 }
@@ -76,6 +94,13 @@ function createFoldedSuit(THREE){
   function line(points,name,r=.004){const g=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),12,r,3,false);geometries.add(g);const m=new THREE.Mesh(g,dark);m.name=name;group.add(m);}
   for(const side of[-1,1])for(let i=0;i<4;i++)line([[side*.02,.329,-.07+i*.023],[side*(.07+i*.011),.331,-.16+i*.07],[side*(.13+i*.014),.313,-.22+i*.12]],'embroidered-spider-leg',.007);
   for(let i=-2;i<=2;i++)line([[i*.065,.31,-.24],[i*.07,.331,-.04],[i*.065,.312,.22]],'cloth-web-thread');
+  // A thin, rounded canvas mat gives the folded costume a deliberate place.
+  // No pedestal, emissive trim or floating marker competes with the campus.
+  const outline=new THREE.Shape(),w=.48,h=.65,r=.09;
+  outline.moveTo(-w+r,-h);outline.lineTo(w-r,-h);outline.quadraticCurveTo(w,-h,w,-h+r);outline.lineTo(w,h-r);outline.quadraticCurveTo(w,h,w-r,h);outline.lineTo(-w+r,h);outline.quadraticCurveTo(-w,h,-w,h-r);outline.lineTo(-w,-h+r);outline.quadraticCurveTo(-w,-h,-w+r,-h);
+  const matGeometry=new THREE.ExtrudeGeometry(outline,{depth:.018,bevelEnabled:false,curveSegments:4});matGeometry.rotateX(-Math.PI/2);geometries.add(matGeometry);
+  const canvasMat=new THREE.Mesh(matGeometry,mat('#74756b'));canvasMat.name='folded-suit-canvas-mat';canvasMat.position.z=-.07;canvasMat.receiveShadow=true;group.add(canvasMat);
+  for(const child of group.children)if(child!==canvasMat)child.position.y+=.021;
   return{group,dispose(){for(const g of geometries)g.dispose();for(const m of materials)m.dispose();}};
 }
 
@@ -102,23 +127,24 @@ export function createWorldTransport({THREE,scene,model,route,groundAt,canPlaceM
     });
     for(const batch of batches.values()){
       const geometry=mergeGeometries(batch.geometries,false);if(!geometry)throw new Error('Static transport parts have incompatible geometry.');mergedGeometries.add(geometry);for(const g of batch.geometries)g.dispose();
-      const mesh=new THREE.Mesh(geometry,batch.material);mesh.name=`parked-${mode}-material`;mesh.userData.sourceParts=batch.names;mesh.castShadow=batch.castShadow;mesh.receiveShadow=batch.receiveShadow;mesh.renderOrder=batch.renderOrder;result.add(mesh);
+      const mesh=new THREE.Mesh(geometry,batch.material);mesh.name=`parked-${mode}-material`;mesh.userData.sourceParts=batch.names;mesh.castShadow=batch.castShadow;mesh.receiveShadow=batch.receiveShadow;mesh.renderOrder=batch.renderOrder;mesh.updateMatrix();mesh.matrixAutoUpdate=false;result.add(mesh);
     }
     result.userData={staticBatched:true,drawMeshes:result.children.length,sourceMeshes:[...batches.values()].reduce((n,b)=>n+b.names.length,0)};return result;
   }
   const templates={spider:staticTemplate(suit.group,'spider')};
   for(const mode of['roadster','hoverboard','helicopter','boat'])templates[mode]=staticTemplate(playerModels?.group.getObjectByName(`player-${mode}`),mode);
   for(const item of items){const visual=templates[item.mode].clone(true);visual.visible=true;visual.name=item.id;
-    visual.position.set(item.x,item.y,item.z);visual.rotation.set(0,item.yaw,0);group.add(visual);item.visual=visual;
+    visual.position.set(item.x,item.y,item.z);visual.rotation.set(0,item.yaw,0);visual.updateMatrix();visual.matrixAutoUpdate=false;group.add(visual);item.visual=visual;
   }
+  const contacts=createParkedContactShadows(THREE,items);group.add(contacts.mesh);resources.push(contacts);
   const ringGeometry=new THREE.RingGeometry(.52,.57,40),ringMaterial=new THREE.MeshBasicMaterial({color:'#edf4da',transparent:true,opacity:.7,depthWrite:false,side:THREE.DoubleSide});
   const ring=new THREE.Mesh(ringGeometry,ringMaterial);ring.rotation.x=-Math.PI/2;ring.visible=false;ring.name='nearby-transport-ring';group.add(ring);let disposed=false,floodState=null;
   const floating=item=>sampleFloodActorPose(item,floodState);
   function nearest(pose){if(!pose||!finite(pose.x)||!finite(pose.z))return null;let best=null,bestDistance=Infinity;for(const item of items){if(item.taken)continue;const fp=floating(item),at=fp.flooded?fp:item.mode==='boat'&&item.boardingPose?item.boardingPose:item,d=distance(pose,at);if(d>item.interactionRadius||Math.abs((pose.y??at.y)-at.y)>(fp.flooded?1.5:.45))continue;if(d<bestDistance){best=item;bestDistance=d;}}return best;}
-  function take(item){if(disposed||!items.includes(item)||item.taken)return{ok:false,reason:'载具已在使用中'};item.taken=true;item.visual.visible=false;ring.visible=false;return{ok:true,item,pose:((p)=>({x:p.x,y:p.y,z:p.z,yaw:p.yaw}))(floating(item))};}
-  function release(item,pose){if(disposed||!items.includes(item)||!item.taken||!pose||![pose.x,pose.y,pose.z,pose.yaw].every(finite))return{ok:false,reason:'无法放下载具'};Object.assign(item,{x:pose.x,y:pose.y,z:pose.z,yaw:pose.yaw,taken:false});if(item.mode==='boat'&&item.boardingPose&&distance(item,item.boardingPose)>8)item.boardingPose=null;item.visual.position.set(item.x,item.y,item.z);item.visual.rotation.set(0,item.yaw,0);item.visual.visible=true;return{ok:true};}
+  function take(item){if(disposed||!items.includes(item)||item.taken)return{ok:false,reason:'载具已在使用中'};item.taken=true;item.visual.visible=false;contacts.update(item,{visible:false});ring.visible=false;return{ok:true,item,pose:((p)=>({x:p.x,y:p.y,z:p.z,yaw:p.yaw}))(floating(item))};}
+  function release(item,pose){if(disposed||!items.includes(item)||!item.taken||!pose||![pose.x,pose.y,pose.z,pose.yaw].every(finite))return{ok:false,reason:'无法放下载具'};Object.assign(item,{x:pose.x,y:pose.y,z:pose.z,yaw:pose.yaw,taken:false});if(item.mode==='boat'&&item.boardingPose&&distance(item,item.boardingPose)>8)item.boardingPose=null;if(item.approachPose&&distance(item,item.approachPose)>item.interactionRadius)item.approachPose=null;if(item.mode!=='boat'&&item.boardingPose&&distance(item,item.boardingPose)>item.interactionRadius)item.boardingPose=null;item.visual.position.set(item.x,item.y,item.z);item.visual.rotation.set(0,item.yaw,0);item.visual.updateMatrix();item.visual.visible=true;contacts.update(item,{visible:!floating(item).flooded});return{ok:true};}
   function getDismountCandidates(item,pose){const result=[],base=item.mode==='helicopter'?5:item.mode==='roadster'?2:item.mode==='boat'?2.2:1.4;for(const radius of[base,base+1.1,base+2.5,...(item.mode==='boat'?[6.8]:[])])for(const offset of[Math.PI/2,-Math.PI/2,Math.PI,0,Math.PI/4,-Math.PI/4,Math.PI*.75,-Math.PI*.75]){const angle=(pose.yaw??0)+offset;result.push({x:pose.x-Math.sin(angle)*radius,z:pose.z-Math.cos(angle)*radius,yaw:pose.yaw??0});}if(item.boardingPose&&distance(pose,item.boardingPose)<8)result.push({...item.boardingPose});return result;}
-  function update(dt,pose){if(disposed)return;for(const item of items){const p=floating(item);item.visual.visible=!item.taken&&(!pose||distance(p,pose)<220);item.visual.position.set(p.x,p.y,p.z);item.visual.rotation.set(p.pitch??0,p.yaw,p.roll??0,'YXZ');}const candidate=pose?.mode==='walk'?nearest(pose):null;ring.visible=!!candidate;if(candidate){const fp=floating(candidate),p=fp.flooded?fp:candidate.boardingPose||candidate;ring.position.set(p.x,p.y+.018,p.z);ring.scale.setScalar(candidate.mode==='spider'?1:1.5);}}
+  function update(dt,pose){if(disposed)return;for(const item of items){const p=floating(item),visual=item.visual;visual.visible=!item.taken&&(!pose||distance(p,pose)<220);if(visual.position.x!==p.x||visual.position.y!==p.y||visual.position.z!==p.z||visual.rotation.x!==(p.pitch??0)||visual.rotation.y!==p.yaw||visual.rotation.z!==(p.roll??0)){visual.position.set(p.x,p.y,p.z);visual.rotation.set(p.pitch??0,p.yaw,p.roll??0,'YXZ');visual.updateMatrix();}contacts.update(item,{visible:visual.visible&&!p.flooded});}const candidate=pose?.mode==='walk'?nearest(pose):null;ring.visible=!!candidate;if(candidate){const fp=floating(candidate),p=fp.flooded?fp:candidate.boardingPose||candidate.approachPose||candidate;ring.position.set(p.x,p.y+.018,p.z);ring.scale.setScalar(candidate.mode==='spider'?1:1.5);}}
   function dispose(){if(disposed)return;disposed=true;group.removeFromParent();group.clear();for(const resource of resources)resource.dispose();for(const geometry of mergedGeometries)geometry.dispose();mergedGeometries.clear();ringGeometry.dispose();ringMaterial.dispose();}
   return{setFloodState(value){floodState=value;},group,items,plan,nearest,take,release,getDismountCandidates,update,dispose};
 }

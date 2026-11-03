@@ -108,3 +108,18 @@ test('visual cadence bounds work frequency while preserving elapsed time and cle
   visual.reset();assert.equal(visual.step({elapsedMs:16,hz:30}),0);
   assert.equal(visual.step({elapsedMs:20,hz:30}),.036);
 });
+
+test('moving between displays updates native resolution even with identical CSS viewport dimensions',()=>{
+  const q=createPerformanceQuality({mode:'clear',deviceRatio:1,width:1280,height:720});
+  const initial=q.budget;assert.equal(initial.pixelRatio,1);
+  q.setViewport(1280,720,2);assert.equal(q.budget.pixelRatio,1.5);assert.equal(q.budget.level,2);assert.equal(q.budget.mode,'clear');
+  q.setViewport(1280,720,1);assert.equal(q.budget.pixelRatio,1);assert.equal(q.budget.shadowMapSize,2048);
+  const ordinary=q.budget;q.setViewport(1280,720,NaN);assert.equal(q.budget,ordinary,'invalid browser hints do not reset the display ratio');
+  q.setViewport(3840,2160,2);assert.ok(q.budget.pixelRatio**2*3840*2160<2810000,'native DPR changes still obey the pixel cap');
+});
+
+test('DPR changes do not reset an adaptive quality decision or pixel-pressure step',()=>{
+  const q=createPerformanceQuality({deviceRatio:2,width:1280,height:720});run(q,6000,40,{cpuMs:2});
+  const before=q.state;assert.equal(before.level,0);assert.ok(before.pixelStep>0);
+  q.setViewport(1280,720,1);assert.equal(q.state.level,before.level);assert.equal(q.state.pixelStep,before.pixelStep);
+});

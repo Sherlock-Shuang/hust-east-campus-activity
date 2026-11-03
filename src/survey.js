@@ -36,6 +36,7 @@ import { mountPerformanceUI,readQualityPreference,getQualityStorage } from './pe
 import {preloadSpiderGeometry} from './spider-model.js';
 import './mobile-controls.css';
 import './performance-ui.css';
+import './player-guide.css';
 import {createFrameMetrics} from './frame-metrics.js';
 import {createGraphicsRecovery} from './graphics-recovery.js';
 import {mountRuntimeDiagnostics} from './runtime-diagnostics.js';
@@ -125,8 +126,10 @@ Object.assign(sun.shadow.camera, {
   near: 1,
   far: 4000,
 });
-sun.shadow.normalBias = 0.035;
-sun.shadow.bias = -0.00006;
+// The walking frustum spans 160 m: a balanced shadow texel is 0.156 m.
+// Offset its neighbouring PCF samples enough to avoid striped self-shadowing.
+sun.shadow.normalBias = 0.16;
+sun.shadow.bias = -0.00010;
 scene.add(sun);
 scene.add(sun.target);
 const datum = new THREE.Mesh(
@@ -225,7 +228,7 @@ function syncAtmosphereLighting(mode){
 }
 const atmosphere=createCampusAtmosphere({THREE,scene,renderer,hemisphere,sun,sunOffset,daylight,storage:getQualityStorage(),onChange:syncAtmosphereLighting,invalidate:()=>{needsRender=true;}});
 syncAtmosphereLighting(atmosphere.mode);
-mountAtmosphereUI({document,atmosphere,onChange:()=>canvas.focus({preventScroll:true})});
+mountAtmosphereUI({document,host:document.getElementById('player-guide-settings'),atmosphere,onChange:()=>canvas.focus({preventScroll:true})});
 campusMusic.update({atmosphere:atmosphere.mode});
 atmosphere.subscribe(mode=>campusMusic.update({atmosphere:mode}));
 function applyPerformanceBudget(){
@@ -264,7 +267,7 @@ function resize() {
   const r = container.getBoundingClientRect();
   viewportHeight = Math.max(1,r.height);
   viewportWidth = Math.max(1,r.width);
-  performanceQuality.setViewport(viewportWidth,viewportHeight);
+  performanceQuality.setViewport(viewportWidth,viewportHeight,window.devicePixelRatio);
   applyPerformanceBudget();
   renderer.setSize(viewportWidth, viewportHeight);
   camera.aspect = viewportWidth / viewportHeight;

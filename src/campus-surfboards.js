@@ -4,7 +4,7 @@ import {CAMPUS_SURF} from './campus-water-motion.js';
 // materials; creating or restarting a storm never accumulates scene objects.
 export function createCampusSurfboards(THREE,scene,water){
   const root=new THREE.Group();root.name='campus-surfboards';root.visible=false;scene.add(root);
-  let fleet=null,stripes=null,rider=null,wake=null,resources=[];
+  let fleet=null,stripes=null,rider=null,wake=null,resources=[],disposed=false;
   const dummy=new THREE.Object3D();
   function build(){
     if(fleet)return;
@@ -19,6 +19,7 @@ export function createCampusSurfboards(THREE,scene,water){
     resources=[body,stripe,white,blue,foam,wakeGeometry];
   }
   function update(state,visible=true){
+    if(disposed)return;
     root.visible=visible&&water.active;
     if(!root.visible)return;
     build();let count=0;
@@ -34,5 +35,5 @@ export function createCampusSurfboards(THREE,scene,water){
     wake.visible=rider.visible&&state.speed>5;
     if(wake.visible){wake.position.set(state.x,state.waterY+.08,state.z);wake.rotation.y=state.yaw;wake.scale.z=Math.min(2,state.speed/16);}
   }
-  return{root,update,dispose(){root.removeFromParent();resources.forEach(r=>r.dispose());fleet?.dispose();stripes?.dispose();root.clear();}};
+  return{root,update,dispose(){if(disposed)return;disposed=true;root.visible=false;root.removeFromParent();resources.forEach(r=>r.dispose());fleet?.dispose();stripes?.dispose();resources=[];root.clear();}};
 }

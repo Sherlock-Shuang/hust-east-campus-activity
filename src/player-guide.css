@@ -1,0 +1,67 @@
+/* A compact field guide: the campus stays in view, detailed controls are opt-in. */
+body.transport-layout #player-hud.player-guide {
+  --guide-ink: #264538;
+  box-sizing: border-box;
+  top: 64px; right: max(24px, env(safe-area-inset-right)); left: auto; bottom: auto;
+  width: 310px; max-width: calc(100% - 32px);
+  max-height: calc(100dvh - 100px); overflow: auto;
+  padding: 12px 14px;
+  color: var(--guide-ink); background: #f4f6f3ed;
+  border: 1px solid #ffffffb8; border-radius: 12px;
+  box-shadow: 0 3px 18px #183a2514;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  font: 12px/1.5 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  text-align: left; text-shadow: none; pointer-events: auto;
+  overscroll-behavior: contain;
+}
+#player-hud.player-guide [hidden] { display: none !important; }
+#player-hud .player-guide-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+body.transport-layout #player-hud #player-mode-label { font-size: 13px; line-height: 1.5; font-weight: 600; color: var(--guide-ink); }
+#player-hud.player-guide button,
+#player-hud.player-guide select {
+  box-sizing: border-box; min-height: 32px; margin: 0; padding: 5px 10px;
+  border: 1px solid #26453826; border-radius: 7px;
+  color: var(--guide-ink); background: #ffffff61;
+  font: inherit; font-size: 11px; text-shadow: none; box-shadow: none;
+  cursor: pointer; pointer-events: auto; touch-action: manipulation;
+}
+#player-hud.player-guide button:hover,
+#player-hud.player-guide select:hover { background: #e4eae1; border-color: #2645384d; }
+#player-hud.player-guide button:disabled { opacity: .5; cursor: default; }
+#player-hud.player-guide :focus-visible { outline: 2px solid #517a92; outline-offset: 3px; }
+#player-hud.player-guide #player-guide-toggle { border: 0; background: transparent; padding: 5px 0 5px 10px; color: #587063; white-space: nowrap; }
+#player-hud.player-guide #player-guide-summary { margin: 3px 0 10px; color: #53675c; font-size: 11px; line-height: 1.6; }
+#player-hud .player-guide-actions { display: flex; gap: 7px; }
+#player-hud.player-guide #player-mouse-toggle[aria-pressed=true] { background: #264538; color: #f4f6f3; }
+#player-hud.player-guide #player-mouse-status { margin: 9px 0 0; color: #53675c; font-size: 11px; text-shadow: none; line-height: 1.6; }
+#player-hud.player-guide #player-mouse-status[data-state=error] { color: #885533; }
+#player-guide-detail { margin-top: 13px; padding-top: 12px; border-top: 1px solid #26453820; }
+body.transport-layout #player-hud.player-guide #player-help { margin: 0; color: #385445; font-size: 11px; line-height: 1.7; text-shadow: none; }
+#player-hud.player-guide .control-hint-row { gap: 4px; margin: 4px 0; }
+#player-hud.player-guide .control-hint-row kbd { min-width: 22px; min-height: 24px; padding: 2px 5px; border: 1px solid #26453820; border-bottom-width: 2px; border-radius: 4px; color: #385445; background: #fff9; box-shadow: none; font-size: 10px; }
+#player-guide-settings { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 13px; }
+#player-hud.player-guide .performance-choice,
+#player-hud.player-guide .campus-atmosphere-choice { display: block; margin: 0; }
+#player-hud.player-guide select { max-width: 170px; padding-right: 22px; }
+#player-hud.player-guide select option { color: #264538; background: #f4f6f3; }
+/* The opt-in touch button previously sat underneath the music control. */
+body:not(.touch-controls).campus-playing #mobile-enable-touch { top: calc(max(18px, env(safe-area-inset-top)) + 48px); }
+body.touch-controls.transport-layout #player-hud.player-guide {
+  top: max(66px, calc(env(safe-area-inset-top) + 54px));
+  right: max(14px, env(safe-area-inset-right));
+  width: 234px; max-width: calc(100% - 148px);
+  padding: 5px 11px 9px;
+  max-height: calc(100dvh - 220px);
+}
+.touch-controls #player-hud.player-guide button,
+.touch-controls #player-hud.player-guide select { min-height: 44px; font-size: 12px; }
+.touch-controls #player-hud.player-guide #player-guide-toggle { min-width: 64px; }
+.touch-controls #player-hud.player-guide #player-guide-summary { margin: -1px 0 0; font-size: 10px; }
+.touch-controls #player-hud .player-guide-actions { margin-top: 7px; }
+.touch-controls #player-hud.player-guide #player-view-toggle { display: none; }
+@media (any-pointer: coarse) and (any-hover: none) {
+  .touch-controls #player-hud .player-guide-actions { display: none; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  body.touch-controls.transport-layout #player-hud.player-guide { top: max(58px, calc(env(safe-area-inset-top) + 46px)); max-height: calc(100dvh - 140px); }
+}

@@ -16,6 +16,7 @@ export function createCampusStartupDataLoader({
   setTimer=setTimeout,clearTimer=clearTimeout,
 }={}){
   let pending;
+  const resources=new Map();
   async function attempt(url,label,deadlineMs=timeoutMs){
     const controller=new AbortController();let timer;
     const deadline=new Promise((_,reject)=>{
@@ -55,13 +56,23 @@ export function createCampusStartupDataLoader({
       }
     }
   }
+  function cached(url,read){
+    if(resources.has(url))return resources.get(url);
+    const task=read().catch(error=>{
+      // Leave other successful or still-running files in place. A fresh attempt
+      // must not redownload the whole campus after one failed request.
+      if(resources.get(url)===task)resources.delete(url);
+      throw error;
+    });
+    resources.set(url,task);return task;
+  }
   return function getData(){
     if(!pending)pending=Promise.all([
-      load(MAP_URL,'校园地图'),
+      cached(MAP_URL,()=>load(MAP_URL,'校园地图')),
       // Metadata must not hold up playable map data through another retry.
-      attempt(MANIFEST_URL,'地图说明',manifestTimeoutMs).then(manifest=>({...fallbackManifest(),...manifest}),()=>fallbackManifest()),
-      load(EXTENSION_URL,'光电大楼补充地图'),
-    ]);
+      cached(MANIFEST_URL,()=>attempt(MANIFEST_URL,'地图说明',manifestTimeoutMs).then(manifest=>({...fallbackManifest(),...manifest}),()=>fallbackManifest())),
+      cached(EXTENSION_URL,()=>load(EXTENSION_URL,'光电大楼补充地图')),
+    ]).catch(error=>{pending=undefined;throw error;});
     return pending;
   };
 }

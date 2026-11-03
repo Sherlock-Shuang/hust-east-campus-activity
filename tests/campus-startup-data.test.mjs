@@ -94,3 +94,31 @@ test('successful reads preserve real manifest metadata and clear every request d
   const [,result]=await getData();
   assert.deepEqual(result,actual);assert.equal(next,3);assert.equal(timers.size,0);
 });
+
+test('a later retry recovers a failed startup and reuses successful files',async()=>{
+  const calls=new Map();let online=false;
+  const getData=createCampusStartupDataLoader({waitImpl:noWait,fetchImpl:async url=>{
+    calls.set(url,(calls.get(url)||0)+1);
+    if(url===map&&!online)return {ok:false,status:503};
+    return response({url});
+  }});
+  await assert.rejects(getData(),/校园地图.*HTTP 503/);
+  online=true;const retried=getData();assert.equal(retried,getData(),'concurrent consumers share the retry');
+  const [data,,extra]=await retried;assert.equal(data.url,map);assert.equal(extra.url,extension);
+  assert.equal(calls.get(map),3);assert.equal(calls.get(extension),1);assert.equal(calls.get(manifest),1);
+  assert.equal(getData(),retried,'completed retries remain cached');
+});
+
+test('retrying a failed resource keeps other unfinished downloads in flight',async()=>{
+  const calls=new Map();let releaseMap,extensionReady=false;
+  const getData=createCampusStartupDataLoader({fetchImpl:url=>{
+    calls.set(url,(calls.get(url)||0)+1);
+    if(url===map)return new Promise(resolve=>{releaseMap=()=>resolve(response({url}));});
+    if(url===extension&&!extensionReady)return Promise.resolve({ok:false,status:404});
+    return Promise.resolve(response({url}));
+  }});
+  await assert.rejects(getData(),/光电大楼补充地图/);extensionReady=true;
+  const retried=getData();releaseMap();
+  const [data,,extra]=await retried;assert.equal(data.url,map);assert.equal(extra.url,extension);
+  assert.equal(calls.get(map),1);assert.equal(calls.get(extension),2);assert.equal(calls.get(manifest),1);
+});

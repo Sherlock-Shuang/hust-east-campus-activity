@@ -267,6 +267,12 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
       if(spider){const target=$('web-target-label');if(target)target.textContent=target.textContent.replaceAll('按 E / 左键挂丝','按住「摆荡」').replaceAll('空格','「跳跃」').replaceAll('WASD','摇杆').replaceAll('E 接丝','按住「摆荡」').replaceAll('松开 X','松开「俯冲」').replaceAll('松开 T','松开「空中特技」');}
     }
     renderControlHints($('player-help'),helpText,{document,keycaps:!mobileControls?.enabled});
+    const summary=mobileControls?.enabled
+      ?(s.mode==='walk'?'左侧移动 · 右侧环视':helpText.split('\n')[0])
+      :s.mode==='spider'?'空格起跳 · E 挂丝 · 松手荡出':basics[s.mode].split('\n')[0];
+    updateElement('player-guide-summary',{textContent:summary});
+    updateElement('player-view-toggle',{textContent:view==='first'?'第三人称':'第一人称',disabled:!active||inputBlocked()});
+    $('player-view-toggle')?.setAttribute('aria-label',`切换到${view==='first'?'第三':'第一'}人称视角`);
     updateElement('web-point-label',{textContent:mobileControls?.enabled?'定点':'G'});
   }
   function armRoadsterJet(){
@@ -419,6 +425,16 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   on(canvas,'auxclick',e=>{if(active&&e.button===1)e.preventDefault();});
   on(canvas,'mousedown',pressMiddleMouse);
   on($('player-mouse-toggle'),'click',togglePointerLock);
+  function setGuideExpanded(expanded){
+    updateElement('player-guide-detail',{hidden:!expanded});
+    $('player-guide-toggle')?.setAttribute('aria-expanded',String(expanded));
+    updateElement('player-guide-toggle',{textContent:expanded?'收起指引':'操作指引'});
+  }
+  on($('player-guide-toggle'),'click',()=>setGuideExpanded($('player-guide-detail')?.hidden!==false));
+  on($('player-hud'),'keydown',event=>{
+    if(event.key==='Escape'&&$('player-guide-detail')?.hidden===false){event.stopPropagation();event.preventDefault();setGuideExpanded(false);$('player-guide-toggle')?.focus();}
+  });
+  on($('player-view-toggle'),'click',()=>setView(view==='first'?'third':'first'));
   on($('look-sensitivity'),'input',e=>{const value=Number(e.target.value);if(Number.isFinite(value))preferences.set({sensitivity:value});});
   document.querySelectorAll('[data-player-mode]').forEach(b=>on(b,'click',()=>enter(b.dataset.playerMode)));
   on($('transport-interact'),'click',()=>{if(active){interact();canvas.focus({preventScroll:true});updateUI();}});
@@ -572,7 +588,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     onReset:()=>{spiderRequest=null;mobileHeld.clear();mobileAxes={forward:0,sideways:0};pulses.clear();if(!suspended)motion.clearActionInputs?.();releaseLookContact();},
     onChange:()=>{updateUI();invalidate();},
   });
-  preferencesUI=createControlPreferencesUI({document,host:$('player-hud'),preferences,canOpen:()=>active&&!disposed&&!suspended,
+  preferencesUI=createControlPreferencesUI({document,host:$('player-guide-settings')||$('player-hud'),preferences,canOpen:()=>active&&!disposed&&!suspended,
     onBoundary:()=>{clearInput();pointerLock.release();updateElement('player-look-reticle',{hidden:true});},
     onClose:()=>{updateUI();if(active&&!disposed&&!suspended)canvas.focus({preventScroll:true});},
   });
