@@ -1,6 +1,7 @@
 import polygonClipping from 'polygon-clipping';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { streetFootprint } from './street-clearance.js';
+import {createCampusGlazing} from './campus-glazing.js';
 import { addOptoPhotoDetails, addOptoSignAtlas, makeOptoTerrazzoTexture } from './opto-photo-details.js';
 
 /** The new optoelectronics building lies south of the original capture extent.
@@ -163,7 +164,8 @@ export function createOptoBuilding(THREE, record, options = {}) {
   const geos = new Set(), mats = new Set(), batches = new Map(), dummy = new THREE.Object3D();
   const geometry = g => { geos.add(g); return g; };
   const material = (color, roughness = .82, metalness = 0) => { const m = new THREE.MeshStandardMaterial({ color, roughness, metalness }); mats.add(m); return m; };
-  const stone = material('#9a9b94'), screen = material('#c8c7bc', .57, .32), glass = material('#5a959c', .24, .30), frameMat = material('#354248', .48, .30), roof = material('#b9b9ae'), dark = material('#56615d'), paving = material('#aeaca0'), white = material('#e3e7df', .6, .15), grass = material('#728b55');
+  const stone = material('#9a9b94'), screen = material('#c8c7bc', .57, .32), glass = createCampusGlazing(THREE,{color:'#709b9f',interiorStrength:.42}), frameMat = material('#354248', .48, .30), roof = material('#b9b9ae'), dark = material('#56615d'), paving = material('#aeaca0'), white = material('#e3e7df', .6, .15), grass = material('#728b55');
+  mats.add(glass);
   const openDoorGlass = material('#98c4c6', .2, .1);
   openDoorGlass.transparent = true; openDoorGlass.opacity = .3; openDoorGlass.depthWrite = false; openDoorGlass.side = THREE.DoubleSide;
   const wayfinding = material('#234d70', .7, .1);

@@ -1,22 +1,25 @@
 // Small original procedural effects. Audio is opt-in, created by the sound
 // button's user gesture, and stops whenever traversal is paused or exited.
-export function createWebSwingAudio(){
-  let context=null,enabled=false,active=false,noise=null,wind=null,windGain=null,lastCount=0,lastZip=0,lastPoint=0,lastLaunch=0,lastTrick=0,lastPhase='',disposed=false;
+export function createWebSwingAudio({AudioContext:Audio=globalThis.AudioContext||globalThis.webkitAudioContext}={}){
+  let context=null,enabled=false,active=false,noise=null,wind=null,windGain=null,master=null,volume=1,lastCount=0,lastZip=0,lastPoint=0,lastLaunch=0,lastTrick=0,lastPhase='',disposed=false;
+  function output(){if(master&&context){master.gain.cancelScheduledValues(context.currentTime);master.gain.setValueAtTime(enabled&&active?volume:0,context.currentTime);}}
+  function setVolume(value){if(disposed||!Number.isFinite(value))return;const next=Math.max(0,Math.min(1,value));if(next===volume)return;volume=next;output();}
   function initialize(){
-    const Audio=globalThis.AudioContext||globalThis.webkitAudioContext;if(!Audio)return false;
+    if(!Audio)return false;
     context=new Audio();noise=context.createBuffer(1,context.sampleRate*2,context.sampleRate);
+    master=context.createGain();master.gain.value=0;master.connect(context.destination);
     const data=noise.getChannelData(0);let previous=0;
     for(let i=0;i<data.length;i++){previous=(previous+Math.random()*.04-.02)/1.02;data[i]=previous*3.5;}
     wind=context.createBufferSource();wind.buffer=noise;wind.loop=true;
     const filter=context.createBiquadFilter();filter.type='lowpass';filter.frequency.value=1700;
-    windGain=context.createGain();windGain.gain.value=0;wind.connect(filter).connect(windGain).connect(context.destination);wind.start();return true;
+    windGain=context.createGain();windGain.gain.value=0;wind.connect(filter).connect(windGain).connect(master);wind.start();return true;
   }
   function burst(frequency,duration,level){
-    if(!context||!enabled||!active)return;
+    if(!context||!enabled||!active||volume===0)return;
     const at=context.currentTime,source=context.createBufferSource(),filter=context.createBiquadFilter(),gain=context.createGain();
     source.buffer=noise;filter.type='bandpass';filter.frequency.setValueAtTime(frequency,at);filter.frequency.exponentialRampToValueAtTime(Math.max(100,frequency*.4),at+duration);filter.Q.value=.9;
     gain.gain.setValueAtTime(.001,at);gain.gain.exponentialRampToValueAtTime(level,at+.012);gain.gain.exponentialRampToValueAtTime(.001,at+duration);
-    source.connect(filter).connect(gain).connect(context.destination);source.start(at);source.stop(at+duration+.02);
+    source.connect(filter).connect(gain).connect(master);source.start(at);source.stop(at+duration+.02);
     source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
   }
   async function setEnabled(value){
@@ -25,11 +28,12 @@ export function createWebSwingAudio(){
     enabled=!!value;
     if(enabled)try{await context.resume();}catch{enabled=false;}
     if(!enabled&&windGain)windGain.gain.setTargetAtTime(0,context.currentTime,.04);
+    output();
     return enabled;
   }
-  function setActive(value){active=!!value;if(!active&&windGain)windGain.gain.setTargetAtTime(0,context.currentTime,.04);}
+  function setActive(value){const next=!!value;if(disposed||next===active)return;active=next;if(!active&&windGain)windGain.gain.setTargetAtTime(0,context.currentTime,.04);output();}
   function tick(state){
-    if(enabled&&active&&context){
+    if(enabled&&active&&context&&volume>0){
       const strength=Math.min(1,Math.hypot(state.vx||0,state.vz||0,state.verticalSpeed||0)/32);
       windGain.gain.setTargetAtTime(state.grounded?.005:strength*strength*.10,context.currentTime,.18);
       if(state.swingCount>lastCount)burst(2100,.13,.16);
@@ -42,5 +46,5 @@ export function createWebSwingAudio(){
     }
     lastCount=state.swingCount||0;lastZip=state.zipCount||0;lastPoint=state.pointCount||0;lastLaunch=state.pointLaunchCount||0;lastTrick=state.trickCount||0;lastPhase=state.traversalPhase;
   }
-  return {setEnabled,setActive,tick,get enabled(){return enabled;},dispose(){disposed=true;enabled=false;wind?.stop();wind?.disconnect();windGain?.disconnect();context?.close();}};
+  return {setEnabled,setActive,setVolume,tick,get enabled(){return enabled;},dispose(){if(disposed)return;disposed=true;enabled=false;active=false;output();wind?.stop();wind?.disconnect();windGain?.disconnect();master?.disconnect();context?.close();}};
 }

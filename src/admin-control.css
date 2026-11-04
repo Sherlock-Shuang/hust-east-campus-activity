@@ -1,3 +1,4 @@
+@import './interface-tokens.css';
 :root{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Microsoft YaHei",sans-serif;color:#292d2a;background:#f7f6f3;font-synthesis:none;--ink:#292d2a;--muted:#797c76;--green:#303c35;--line:#eaeaea;--paper:#fff;--red:#9f4640}
 *{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button,a{touch-action:manipulation;-webkit-tap-highlight-color:transparent}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}[hidden]{display:none!important}a{color:inherit;text-decoration:none}a:hover{text-decoration:underline}h1,h2,h3,p{margin:0}.sr-only{position:absolute;width:1px;height:1px;clip:rect(0,0,0,0);overflow:hidden}button{border:0}button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #617765;outline-offset:4px}
 label{display:block;font-size:12px;font-weight:500;margin:18px 0 7px}label small,.field-note{font-size:11px;font-weight:400;color:var(--muted);line-height:1.7}.field-note{margin-top:9px}input,textarea,select{width:100%;border:1px solid #dedfda;border-radius:5px;background:#fff;color:var(--ink);padding:10px 11px;font-size:13px;line-height:1.5}input:focus,textarea:focus,select:focus{outline:2px solid #b7c5b8;outline-offset:1px}input::placeholder,textarea::placeholder{color:#a0a39c}textarea{resize:vertical}input[type=checkbox]{width:16px;height:16px;accent-color:#303c35;margin:0}input[type=color]{height:40px;padding:4px}
@@ -21,3 +22,25 @@ label{display:block;font-size:12px;font-weight:500;margin:18px 0 7px}label small
 .activity-choice{cursor:default}.activity-choice-select{display:flex;align-items:flex-start;gap:11px;flex:1;min-width:0;margin:0;cursor:pointer}.activity-choice-copy{min-width:0}.activity-choice-actions{display:flex;flex-direction:column;align-items:flex-end;gap:9px;flex:none}.activity-choice-toggle{padding:7px 10px;font-size:11px;white-space:nowrap}
 
 .c118-codex-composer{display:grid;gap:8px}.c118-codex-composer label{font-size:11px}.c118-codex-composer textarea{width:100%;resize:vertical;font:12px/1.7 inherit}.c118-codex-composer button{justify-self:start}
+
+/* The host console uses the same ink and action hierarchy as the campus. */
+:root{font-family:var(--campus-font);color:var(--campus-ink);background:var(--campus-paper);--ink:var(--campus-ink);--muted:var(--campus-muted);--green:var(--campus-accent);--line:var(--campus-line);--paper:var(--campus-surface);--red:var(--campus-danger)}
+.primary,.pause-button{background:var(--campus-accent)}
+.primary:hover,.pause-button:hover{background:#274c3c}
+.primary,.secondary,.pause-button,input,select,textarea{border-radius:6px}
+.primary,.secondary,.pause-button,.quick-controls button,.activity-choice-toggle{min-height:38px}
+.tabs button{font-size:13px}
+.tabs button[aria-selected=true]{color:var(--campus-accent)}
+.tabs button[aria-selected=true]::after{background:var(--campus-accent)}
+.announcement-preview{background:var(--campus-paper);border-color:var(--campus-line);border-radius:8px}
+.announcement-preview h3{font-family:var(--campus-display);font-size:26px;font-weight:500}
+.announcement-preview>span{letter-spacing:.02em}
+.learning-message{background:var(--campus-surface);border-radius:7px}
+.learning-summary{background:#e9f0e6;border-color:var(--campus-line);border-radius:7px}
+.field-note,.quick-controls p,.quick-controls small,.section-heading p{font-size:12px;line-height:1.75}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline-color:var(--campus-focus)}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--campus-focus);outline-offset:2px}
+@media(any-pointer:coarse){
+  .primary,.secondary,.pause-button,.quick-controls button,.activity-choice-toggle,.object-actions button,.text-button,.tabs button{min-height:44px}
+  .map-controls button{min-width:44px;min-height:44px}
+}

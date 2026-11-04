@@ -3,6 +3,8 @@
 // calf by over 40% and let the knee bend backwards during a forward stride.
 // A small, symmetric reach allowance accommodates those existing foot targets
 // without moving the feet, bobbing the camera, or changing water/vehicle poses.
+export const walkingAnimationSpeed=speed=>speed<=3.2?speed*2.2/3.2:2.2+(Math.min(speed,5.2)-3.2)*1.6/2;
+
 export function refineWalkingLegPose(pose,speed=0){
   const thigh=.415,calf=.435;
   const activity=Math.min(1,Math.max(0,speed)/.8);

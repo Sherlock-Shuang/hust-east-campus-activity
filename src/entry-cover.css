@@ -1,3 +1,4 @@
+@import './interface-tokens.css';
 /* Let the film and a few handwritten letters carry the opening. */
 body.entry-cover-open{overflow:hidden;background:#2c2638}
 body.entry-cover-open #campus-music{visibility:hidden}
@@ -20,7 +21,7 @@ body.entry-cover-open #campus-music{visibility:hidden}
 }
 .entry-cover-word{display:inline-flex;align-items:baseline}
 .entry-cover-glyph{display:inline-block;transform:rotate(var(--tilt));animation:entry-ink-arrive 1600ms cubic-bezier(.2,.6,.25,1) calc(120ms + var(--glyph)*240ms) both}
-.entry-cover-glyph>span{display:inline-block;animation:entry-letter-float 7s ease-in-out calc(var(--glyph)*-1.8s) infinite alternate}
+.entry-cover-glyph>span{display:inline-block}
 .entry-cover-glyph:nth-child(2){margin-left:-.06em;translate:0 .05em}
 .entry-cover-glyph:nth-child(3){margin-left:-.08em;translate:0 -.025em}
 #campus-entry-cover .entry-cover-online{
@@ -34,12 +35,12 @@ body.entry-cover-open #campus-music{visibility:hidden}
   position:relative;min-width:228px;min-height:60px;padding:10px 32px 12px 36px;
   border:0;border-radius:0;outline-offset:8px;background:linear-gradient(90deg,transparent,#241a2c40 28%,#241a2c40 72%,transparent);
   font-family:CampusBrushUI,"Kaiti SC",cursive;font-size:32px;font-weight:400;letter-spacing:.16em;rotate:-2deg;
-  text-shadow:0 2px 12px #211222aa;transition:color 250ms,background 250ms,letter-spacing 300ms;
+  text-shadow:0 2px 12px #211222aa;transition:color 180ms,background 180ms;
   animation:entry-start-arrive 900ms cubic-bezier(.2,.6,.3,1) both;
 }
 #entry-cover-start::before,#entry-cover-start::after{content:"";position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#fff1d666 25%,#fff5df9c 50%,#fff1d666 75%,transparent);transition:transform 350ms,opacity 350ms}
 #entry-cover-start::before{top:0}#entry-cover-start::after{bottom:0;opacity:.6}
-#entry-cover-start:hover:not(:disabled){background:linear-gradient(90deg,transparent,#60412760 25%,#60412760 75%,transparent);color:#fff;letter-spacing:.2em}
+#entry-cover-start:hover:not(:disabled){background:linear-gradient(90deg,transparent,#60412760 25%,#60412760 75%,transparent);color:#fff}
 #entry-cover-start:hover::before{transform:translateY(-3px)}#entry-cover-start:hover::after{transform:translateY(3px);opacity:1}
 #entry-cover-start:focus-visible{outline:2px solid #fff4db}
 #entry-cover-start:disabled{cursor:wait}

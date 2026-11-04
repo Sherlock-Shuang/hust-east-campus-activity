@@ -2,6 +2,7 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {applyWorldUV} from './surface-materials.js';
 import {createStreetFurniture} from './street-furniture.js';
 import {createRoadClearance} from './street-clearance.js';
+import {createChamferedStone} from './architectural-profiles.js';
 
 /** Styling follows campus road photographs. These strips, pits and drainage
  * fittings are inferred details, not a new survey of pavement boundaries.
@@ -26,6 +27,7 @@ export function createStreetDetails(THREE,route,surfaces,{treesForPits=route.roa
     if(!batches.has(material))batches.set(material,[]);batches.get(material).push(non);
   }
   const box=(w,h,d,material,position,yaw=0)=>bake(new THREE.BoxGeometry(w,h,d),material,position,yaw);
+  const stoneEdge=(w,h,d,position,yaw=0)=>bake(createChamferedStone(THREE,w,h,d),curb,position,yaw);
   const junctions=[...(route.trafficSignals||[]),...(route.crossings||[]),...(route.trafficOrigins||[]).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.z))];
   const insideJunction=(x,z)=>junctions.some(p=>Math.hypot(p.x-x,p.z-z)<(p.stopLine?Math.max(11,p.stopLine.clearance||0):(p.geometryEvidence?12:4.5)));
   let curbCount=0,drainCount=0,pavingLength=0,repairs=0,clearanceOmissions=0;
@@ -57,7 +59,7 @@ export function createStreetDetails(THREE,route,surfaces,{treesForPits=route.roa
         }else clearanceOmissions++;
         const curbX=x+nx*edge*side,curbZ=z+nz*edge*side;
         if(!obstructsRoad(curbX,curbZ,1,.18,yaw)){
-          box(1,.17,.18,curb,[curbX,.145,curbZ],yaw);curbCount++;
+          stoneEdge(1,.17,.18,[curbX,.145,curbZ],yaw);curbCount++;
           placements.curbs.push({x:curbX,z:curbZ,width:1,depth:.18,yaw,sourceRoadId:segment.sourceId,progress});
         }else clearanceOmissions++;
         // Shallow, dark storm drain with individual metal bars at sparse intervals.
@@ -66,6 +68,9 @@ export function createStreetDetails(THREE,route,surfaces,{treesForPits=route.roa
           box(.7,.006,.38,soil,[gx,.145,gz],yaw);
           for(let k=-.3;k<=.31;k+=.09)box(.038,.009,.35,grate,[gx+dx*k,.149,gz+dz*k],yaw);
           for(const sign of[-1,1])box(.74,.009,.035,grate,[gx+nx*.18*sign,.149,gz+nz*.18*sign],yaw);drainCount++;
+          // Closed end rails frame the dark slots without raising the road
+          // surface or changing the existing drain footprint.
+          for(const sign of[-1,1])box(.028,.009,.35,grate,[gx+dx*.34*sign,.149,gz+dz*.34*sign],yaw);
         }
       }
     }
@@ -82,7 +87,7 @@ export function createStreetDetails(THREE,route,surfaces,{treesForPits=route.roa
     // campus road photographs. Dimensions and individual locations are inferred.
     for(const side of[-1,1]){
       const a=new THREE.Vector3(0,0,side*.82).applyAxisAngle(new THREE.Vector3(0,1,0),yaw),b=new THREE.Vector3(side*.82,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),yaw);
-      box(1.8,.1,.16,curb,[tree.x+a.x,.20,tree.z+a.z],yaw);box(.16,.1,1.48,curb,[tree.x+b.x,.20,tree.z+b.z],yaw);
+      stoneEdge(1.8,.1,.16,[tree.x+a.x,.20,tree.z+a.z],yaw);stoneEdge(1.48,.1,.16,[tree.x+b.x,.20,tree.z+b.z],yaw+Math.PI/2);
     }
     const blades=[];
     for(let i=0;i<34;i++) {

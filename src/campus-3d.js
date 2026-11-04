@@ -11,6 +11,7 @@ import {planBridgeStructure} from './bridge-infrastructure.js';
 import { getBuildingProfile, getRoadProfile, getBuildingPartGroups } from './building-profiles.js';
 import { createEastNineDetails } from './east-nine.js';
 import { createArchitecturalMaterials, applyBuildingUV } from './architectural-materials.js';
+import {createCampusGlazing} from './campus-glazing.js';
 import { buildSurfaceMaterials, applyWorldUV, applySurfaceDepthBias } from './surface-materials.js';
 import { createCampusLandcover,buildCampusLandcover,buildCampusLandcoverPlan } from './campus-landcover.js';
 import { createCampusLandmarkDetails } from './campus-landmarks.js';
@@ -99,7 +100,8 @@ function* buildCampus3D(THREE, model, { frame, geoToLocal, progressive=false,ini
   const batches = new Map(), temp = new THREE.Object3D();let targetBatches=batches;
   const box = new THREE.BoxGeometry(1, 1, 1), pane = new THREE.PlaneGeometry(1, 1);
   sharedGeometries.add(box); sharedGeometries.add(pane);
-  const glassMaterial = solid('#ffffff', .26, .13), frameMaterial = solid('#b8c4c2', .64, .15), trimMaterial = solid('#d1d3c8');
+  const glassMaterial = createCampusGlazing(THREE,{color:'#ffffff',interiorStrength:.30}), frameMaterial = solid('#b8c4c2', .64, .15), trimMaterial = solid('#d1d3c8');
+  materials.set('campus-glazing',glassMaterial);
   function instance(key, geometry, material, x, y, z, sx, sy, sz, yaw, featureId, color, category = 'building') {
     if (!targetBatches.has(key)) targetBatches.set(key, { geometry, material, matrices: [], ids: [], colors: [], category });
     const b = targetBatches.get(key); temp.position.set(x, y, z); temp.scale.set(sx, sy, sz); temp.rotation.set(0, yaw, 0); temp.updateMatrix();
@@ -601,7 +603,10 @@ function* buildCampus3D(THREE, model, { frame, geoToLocal, progressive=false,ini
     if(disposed)return;disposed=true;facadeLods.forEach(lod=>lod.resident?.dispose());
     if(model.eastNineGround===eastNineGround)delete model.eastNineGround;
     forestLayer?.dispose();detailDisposers.forEach(dispose=>dispose());architecture.dispose();surfaces.dispose();
-    const geometries = new Set(sharedGeometries), usedMaterials = new Set(materials.values()); group.traverse(o => { if (o.geometry) geometries.add(o.geometry); if (o.material) for (const m of Array.isArray(o.material) ? o.material : [o.material]) usedMaterials.add(m); });
+    // Dedicated owners and resident batches already remove their instances.
+    // The remaining authored batches (including canteen columns) also own GPU
+    // instance attributes, which geometry.dispose() alone cannot release.
+    const geometries = new Set(sharedGeometries), usedMaterials = new Set(materials.values()); group.traverse(o => { if (o.isInstancedMesh) o.dispose(); if (o.geometry) geometries.add(o.geometry); if (o.material) for (const m of Array.isArray(o.material) ? o.material : [o.material]) usedMaterials.add(m); });
     geometries.forEach(g => g.dispose()); usedMaterials.forEach(m => m.dispose()); group.removeFromParent();
   }
   function tick(dt,camera){return forecourt?.update?.(dt,camera)||false;}

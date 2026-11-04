@@ -140,23 +140,23 @@ export function createCampusMusic({tracks=CAMPUS_TRACKS,storage=defaultStorage()
   };
 }
 
-export function mountCampusMusic({document=globalThis.document,window=globalThis.window,...options}={}){
-  const root=document.createElement('section');root.id='campus-music';root.hidden=true;root.setAttribute('aria-label','校园配乐');
-  root.innerHTML='<button type="button" class="music-toggle" aria-label="开启配乐" aria-pressed="false"><span aria-hidden="true">♫</span><span class="music-label">配乐</span></button><details><summary aria-label="配乐音量设置">⌄</summary><div class="music-panel"><span class="music-now">校园配乐</span><label>音量<input type="range" min="0" max="100" step="1" aria-label="配乐音量"></label><small class="music-status"></small></div></details>';
+export function mountCampusMusic({document=globalThis.document,window=globalThis.window,onGesture=()=>{},...options}={}){
+  const root=document.createElement('section');root.id='campus-music';root.hidden=true;root.setAttribute('aria-label','校园声音');
+  root.innerHTML='<button type="button" class="music-toggle" aria-label="开启校园声音" aria-pressed="false"><span aria-hidden="true">♫</span><span class="music-label">声音</span></button><details><summary aria-label="校园声音音量设置">⌄</summary><div class="music-panel"><span class="music-now">校园配乐</span><label>音量<input type="range" min="0" max="100" step="1" aria-label="校园声音音量"></label><small class="music-status"></small></div></details>';
   document.body.append(root);
   const button=root.querySelector('.music-toggle'),label=root.querySelector('.music-label'),input=root.querySelector('input'),title=root.querySelector('.music-now'),status=root.querySelector('.music-status');
   function paint(state){
     root.hidden=state.status==='waiting';root.dataset.state=state.status;root.dataset.track=state.trackId||'';
     const enable=state.muted||!state.unlocked||state.blocked||state.volume===0;
     button.setAttribute('aria-pressed',String(!enable));
-    button.setAttribute('aria-label',enable?'开启配乐':'静音配乐');button.title=enable?'点击开启校园配乐':`静音 · ${state.title||'校园配乐'}`;
-    label.textContent=enable?'开启配乐':'配乐';input.value=String(Math.round(state.volume*100));title.textContent=state.title||'作品独立声音';
+    button.setAttribute('aria-label',enable?'开启校园声音':'静音校园声音');button.title=enable?'点击开启校园声音':`静音 · ${state.title||'校园配乐'}`;
+    label.textContent=enable?'开启声音':'声音';input.value=String(Math.round(state.volume*100));title.textContent=state.title||'作品独立声音';
     status.textContent=state.status==='locked'||state.status==='blocked'?'点击开启配乐':state.status==='muted'?'已静音':state.status==='paused'?'配乐已暂停':state.status==='loading'?'正在加载配乐':'随场景自动切换';
   }
   const music=createCampusMusic({...options,onState:paint});
-  const toggle=()=>{const state=music.state;if(state.muted||!state.unlocked||state.blocked||state.volume===0){if(state.volume===0)music.setVolume(.36);music.setMuted(false);music.unlock();}else music.setMuted(true);};
-  const change=()=>{music.unlock();music.setVolume(Number(input.value)/100);if(Number(input.value)>0)music.setMuted(false);};
-  const gesture=event=>{if(event.isTrusted===false||root.contains(event.target))return;if(!music.state.unlocked||music.state.blocked)music.unlock();};
+  const toggle=()=>{onGesture();const state=music.state;if(state.muted||!state.unlocked||state.blocked||state.volume===0){if(state.volume===0)music.setVolume(.36);music.setMuted(false);music.unlock();}else music.setMuted(true);};
+  const change=()=>{onGesture();music.unlock();music.setVolume(Number(input.value)/100);if(Number(input.value)>0)music.setMuted(false);};
+  const gesture=event=>{if(event.isTrusted===false||root.contains(event.target))return;onGesture();if(!music.state.unlocked||music.state.blocked)music.unlock();};
   const stop=event=>event.stopPropagation();
   const visibility=()=>{music.update({hidden:document.hidden});};
   const pagehide=()=>music.update({hidden:true});

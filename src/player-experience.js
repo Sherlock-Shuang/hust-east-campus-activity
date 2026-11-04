@@ -53,7 +53,7 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
   };
   const motion = createPlayerMotion({route,world,traffic:()=>scooterTransport?[...simulation.agents,...scooterTransport.parkedAgents]:simulation.agents,getPoseAt:simulation.getPoseAt});
   const spawnPose = getCampusPlayerSpawn(model);
-  const models = createPlayerModels(THREE), spiderCamera=createTraversalCameraRig(), vehicleCamera=createVehicleCameraRig(), webAudio=createWebSwingAudio();
+  const models = createPlayerModels(THREE,{groundAt:motion.groundAt}), spiderCamera=createTraversalCameraRig(), vehicleCamera=createVehicleCameraRig(), webAudio=createWebSwingAudio();
   const disposeReferences=installRoadsterReferences(),disposeHoverboardReferences=installHoverboardReferences();
   scene.add(models.group); models.group.visible = false;
   const worldTransport=scooterTransport?createWorldTransport({THREE,scene,model,route,simulation,playerModels:models,groundAt:motion.groundAt,canPlaceMode:motion.canPlaceMode,additionalItems:additionalTransport}):null;
@@ -597,6 +597,6 @@ export function createPlayerExperience({ THREE, scene, camera, controls, canvas,
     if(saved?.mode==='spider')await ready;
     return !disposed&&restoreActivityPose(saved);
   }
-  return {get active(){return active;},get suspended(){return suspended;},state:motion.state,setFloodState(value){worldTransport?.setFloodState(value);motion.campusWater.setFlood(value);if(!active||suspended||!value)surfboards.root.visible=false;waterControls.update();},enter,enterAt,exit,tick,setSuspended,setSkyQrVisible,captureActivityPose,restoreActivityPose,restorePreparedActivityPose,
+  return {get active(){return active;},get suspended(){return suspended;},get walkingPhase(){return models.walkingPhase;},setSoundLevel(value){webAudio.setVolume(value);},releaseInput(){clearInput();pointerLock.release();},state:motion.state,setFloodState(value){worldTransport?.setFloodState(value);motion.campusWater.setFlood(value);if(!active||suspended||!value)surfboards.root.visible=false;waterControls.update();},enter,enterAt,exit,tick,setSuspended,setSkyQrVisible,captureActivityPose,restoreActivityPose,restorePreparedActivityPose,
     dispose(){exit();disposed=true;waterControls.dispose();surfboards.dispose();preferencesUI.dispose();mobileControls.dispose();pointerLock.dispose();listeners.forEach(remove=>remove());worldTransport?.dispose();models.dispose();webAudio.dispose();disposeReferences();disposeHoverboardReferences();}};
 }

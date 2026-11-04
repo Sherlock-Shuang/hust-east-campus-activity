@@ -16,6 +16,8 @@ import { createCampus3D, createCampus3DProgressive } from "./campus-3d.js";
 import {createCampusAtmosphere,mountAtmosphereUI} from "./campus-atmosphere.js";
 import "./campus-atmosphere.css";
 import {mountCampusMusic} from './campus-music.js';
+import {createPlayerFootstepAudio} from './player-footstep-audio.js';
+import {mountFootstepPreference} from './footstep-preference.js';
 import './campus-music.css';
 import {getCampusPlayerSpawn} from './player-experience.js';
 import {mergeCampusExtension} from './campus-data-merge.js';
@@ -37,6 +39,9 @@ import {preloadSpiderGeometry} from './spider-model.js';
 import './mobile-controls.css';
 import './performance-ui.css';
 import './player-guide.css';
+import {createCampusNavigation} from './campus-navigation.js';
+import {createExplorationGuide} from './exploration-guide.js';
+import './campus-interface.css';
 import {createFrameMetrics} from './frame-metrics.js';
 import {createGraphicsRecovery} from './graphics-recovery.js';
 import {mountRuntimeDiagnostics} from './runtime-diagnostics.js';
@@ -48,7 +53,9 @@ const layerSettings = { symbolic: true, building: true, road: true, water: true 
 const $ = (id) => document.getElementById(id),
   canvas = $("map-canvas"),
   container = $("viewport");
-const campusMusic=mountCampusMusic({document,window});
+const footstepAudio=createPlayerFootstepAudio();
+const campusMusic=mountCampusMusic({document,window,onGesture:()=>{if(footstepAudio.enabled&&!footstepAudio.unlocked)void footstepAudio.unlock();}});
+mountFootstepPreference({document,window,music:campusMusic,audio:footstepAudio});
 campusMusic.update({paused:document.body.classList.contains('entry-cover-open')});
 // Prepare the authored skin off the UI thread while map data and static campus
 // geometry load. No extra multi-megabyte model download or first-pickup build.
@@ -171,13 +178,15 @@ let fc,
   animation = null,
   needsRender = true,
   viewMode = "oblique";
-let liveControl, liveFrozen = false, graphicsSuspended=false,datasetLoading=false,campusBuildAbort;
+let liveControl, navigation, explorationGuide, liveFrozen = false, graphicsSuspended=false,datasetLoading=false,campusBuildAbort;
+let campusSoundLevel=campusMusic.state.muted?0:campusMusic.state.volume;
+campusMusic.subscribe(state=>{campusSoundLevel=state.muted?0:state.volume;commute?.player.setSoundLevel(campusSoundLevel);});
 let entryCoverOpen=document.body.classList.contains('entry-cover-open');
 const recoveryPanel=document.createElement('div');recoveryPanel.className='graphics-recovery';recoveryPanel.hidden=true;recoveryPanel.setAttribute('role','status');
 const recoveryText=document.createElement('p'),recoveryButton=document.createElement('button');recoveryButton.textContent='重新载入校园';recoveryButton.type='button';recoveryPanel.append(recoveryText,recoveryButton);container.append(recoveryPanel);
 const RECOVERY_POSE_KEY='campus-graphics-recovery-pose-v1';
 let recoveryPose=null;
-function suspendCampus(){const frozen=entryCoverOpen||liveFrozen||graphicsSuspended||datasetLoading;commute?.setSuspended(frozen);controls.enabled=!frozen&&!commute?.player.active;needsRender=true;}
+function suspendCampus(){const frozen=entryCoverOpen||liveFrozen||graphicsSuspended||datasetLoading;commute?.setSuspended(frozen);if(frozen){navigation?.close({restoreFocus:false});footstepAudio.setActive(false);}controls.enabled=!frozen&&!commute?.player.active;needsRender=true;}
 window.addEventListener('campus:entry-entered',()=>{entryCoverOpen=false;liveControl?.sync();suspendCampus();needsRender=true;});
 window.addEventListener('pageshow',event=>{if(event.persisted){entryCoverOpen=document.body.classList.contains('entry-cover-open');liveControl?.sync();suspendCampus();}});
 function observeFirstInput(event){
@@ -231,6 +240,10 @@ syncAtmosphereLighting(atmosphere.mode);
 mountAtmosphereUI({document,host:document.getElementById('player-guide-settings'),atmosphere,onChange:()=>canvas.focus({preventScroll:true})});
 campusMusic.update({atmosphere:atmosphere.mode});
 atmosphere.subscribe(mode=>campusMusic.update({atmosphere:mode}));
+const navigationDirection=new THREE.Vector3();
+const navigationHeading=()=>{camera.getWorldDirection(navigationDirection);return Math.atan2(-navigationDirection.x,-navigationDirection.z);};
+navigation=createCampusNavigation({document,window,host:container,canvas,getPlayer:()=>commute?.player,getHeading:navigationHeading,notify:toast});
+explorationGuide=createExplorationGuide({document,window,host:container,getPlayer:()=>commute?.player,getHeading:navigationHeading});
 function applyPerformanceBudget(){
   qualityBudget=performanceQuality.budget;
   if(qualityBudget===appliedBudget)return;
@@ -789,6 +802,7 @@ async function loadDataset(data, manifest = {}) {
       }else sessionStorage.removeItem(RECOVERY_POSE_KEY);
     }catch{}
     commute.setPerformanceBudget?.({trafficHz:qualityBudget.trafficHz,detailDistanceScale:qualityBudget.detailDistanceScale});
+    navigation.setData(campus,model);
   } catch (error) {
     const selector = document.querySelector('.transport-selector') || $("commute-panel");
     if (selector) selector.hidden = true;
@@ -1124,16 +1138,21 @@ function render(now) {
     controls.target.lerpVectors(animation.targetFrom, animation.target, u);
     if (t >= 1) animation = null;
   }
-  const tickStart=performance.now();
+  const tickStart=performance.now(),dialogOpen=!!document.querySelector('dialog[open]');
   if(pendingLandmark&&!frozen&&commute?.player){
     const pose=campusLandmarkArrival(campus,pendingLandmark);pendingLandmark=null;
     if(pose){const arrived=commute.player.enterAt(pose);if(!arrived?.ok)toast('该导览位置暂不可达，请从校园步行前往');}
   }
-  if (!frozen && commute?.tick(dt)) needsRender = true;
-  if(!frozen&&!document.hidden&&layerSettings.symbolic&&commute?.running&&campus?.tick?.(dt,camera))needsRender=true;
+  commute?.player.setSoundLevel(campusSoundLevel);
+  if (!frozen && !dialogOpen && commute?.tick(dt)) needsRender = true;
+  footstepAudio.setActive(!frozen&&!document.hidden&&!!commute?.player.active&&!dialogOpen);
+  footstepAudio.tick(commute?.player.state,{dt,phase:commute?.player.walkingPhase});
+  navigation.tick(now,{enabled:!frozen});
+  explorationGuide.tick(now,{enabled:!frozen&&!dialogOpen});
+  if(!frozen&&!dialogOpen&&!document.hidden&&layerSettings.symbolic&&commute?.running&&campus?.tick?.(dt,camera))needsRender=true;
   tickWork+=performance.now()-tickStart;
-  if (waterDetails?.update(dt,{paused:frozen || (commute ? !commute.running : false),enabled:layerSettings.symbolic && layerSettings.water && !document.hidden && !reducedMotion.matches})) needsRender=true;
-  if (!frozen && !commute?.player.active) {
+  if (waterDetails?.update(dt,{paused:frozen || dialogOpen || (commute ? !commute.running : false),enabled:layerSettings.symbolic && layerSettings.water && !document.hidden && !reducedMotion.matches})) needsRender=true;
+  if (!frozen && !dialogOpen && !commute?.player.active) {
     controls.update();
     if(camera.position.y<.6){camera.position.y=.6;camera.lookAt(controls.target);}
   }
@@ -1144,10 +1163,10 @@ function render(now) {
     viewMetricsDirty=false;lastViewMetricsAt=now;
   }
   if (liveControl?.tick(now)) needsRender = true;
-  if(!needsRender||frozen){lastRenderedAt=NaN;renderCpuAccumulator=0;}
+  if(!needsRender||frozen||dialogOpen){lastRenderedAt=NaN;renderCpuAccumulator=0;}
   // A work owns the screen; live DOM announcements still update while the
   // covered campus keeps its last frame. Closing the portal invalidates it.
-  if (needsRender && !liveControl?.portalOpen && renderCadence.shouldRender(now,qualityBudget.maxFps)) {
+  if (needsRender && !dialogOpen && !liveControl?.portalOpen && renderCadence.shouldRender(now,qualityBudget.maxFps)) {
     const sceneStart=performance.now();
     renderer.info.reset();gpuTimer.begin();
     // A ground-scale fog cutoff hid the far half of the campus in overview.

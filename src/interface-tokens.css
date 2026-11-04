@@ -1,0 +1,13 @@
+:root {
+  --campus-ink: #223d33;
+  --campus-muted: #596d63;
+  --campus-paper: #f3f5ef;
+  --campus-surface: #fbfcf8;
+  --campus-line: #223d3326;
+  --campus-accent: #355e4c;
+  --campus-focus: #4c7187;
+  --campus-danger: #a04739;
+  --campus-overlay: #182b278a;
+  --campus-font: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --campus-display: "Songti SC", "STSong", "SimSun", serif;
+}

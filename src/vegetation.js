@@ -58,7 +58,18 @@ function sprayGeometry(THREE,clumps,{random,count,folded=false,scale=1}={}){
     tint.setHSL(.245+random()*.045,.37+random()*.14,.235+random()*.075+(dy/c.ry)*.025,THREE.SRGBColorSpace);
     for(const face of faces)for(const index of face){const p=corners[index],v=new THREE.Vector3(...p).applyMatrix4(matrix);positions.push(v.x,v.y,v.z);colors.push(tint.r,tint.g,tint.b);uvs.push(p[0]+.5,p[1]+.5);}
   }
-  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.computeVertexNormals();g.computeBoundingSphere();return g;
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.computeVertexNormals();
+  // A spray represents many overlapping leaves, rather than one flat sheet.
+  // Keep most of its real folded normal, adding a little local bough volume.
+  // Aligning hemispheres prevents flipped normals; no emissive/backlight pass
+  // or extra draw is needed, and each crown retains distinct smaller boughs.
+  const p=g.attributes.position,n=g.attributes.normal,normal=new THREE.Vector3(),volume=new THREE.Vector3(),verticesPerSpray=faces.length*3;
+  for(let i=0;i<p.count;i++){
+    const c=clumps[Math.floor(i/verticesPerSpray)%clumps.length];
+    normal.fromBufferAttribute(n,i);volume.set((p.getX(i)-c.x)/(c.rx*c.rx),(p.getY(i)-c.y)/(c.ry*c.ry),(p.getZ(i)-c.z)/(c.rz*c.rz));
+    if(volume.lengthSq()<1e-8)continue;volume.normalize();if(volume.dot(normal)<0)volume.negate();normal.lerp(volume,.32).normalize();n.setXYZ(i,normal.x,normal.y,normal.z);
+  }
+  g.computeBoundingSphere();return g;
 }
 
 /** Photograph-informed mature, young and layered broadleaf trees. Crowns use
@@ -87,18 +98,38 @@ export function* buildTreeLayer(THREE, trees, {name='photo-informed-trees',detai
   const distantFoliage=own(new THREE.MeshStandardMaterial({color:'#ffffff',map:canopyTexture,alphaTest:.43,alphaToCoverage:false,roughness:.92,side:THREE.DoubleSide,vertexColors:true}));
   for(let variant=0;variant<variantCount;variant++) {
     yield {stage:`树冠形态 ${variant+1}/${variantCount}`};
-    const random=randomFrom(17339+variant*7717),branches=[],painted=[];
+    const random=randomFrom(17339+variant*7717),branches=[],painted=[],distantBranches=[];
     const crownWidth=[1.16,.94,.73][variant%3],crownRise=[.83,1,1.13][variant%3];
     function branch(a,b,ra,rb,parts=branches) {
-      const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),d=end.clone().sub(start),g=new THREE.CylinderGeometry(rb,ra,d.length(),detail==='forest'?5:7,1);
-      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()));g.translate(...start.add(end).multiplyScalar(.5).toArray());
+      const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),d=end.clone().sub(start),length=d.length();
+      const g=new THREE.CylinderGeometry(rb,ra,length,detail==='forest'?5:7,1);
+      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()));const center=start.clone().add(end).multiplyScalar(.5);g.translate(center.x,center.y,center.z);
       const non=g.toNonIndexed();g.dispose();parts.push(non);
     }
     const leanX=(random()-.5)*.44,leanZ=(random()-.5)*.38;
-    branch([0,0,0],[leanX,.95,leanZ],.36,.30);
-    branch([leanX,.95,leanZ],[leanX*.7,3.15,leanZ*.6],.30,.205);
-    branch([leanX*.7,3.15,leanZ*.6],[leanX+.12,5.35,leanZ-.08],.205,.085);
-    if(whitewash){branch([0,0,0],[leanX,.95,leanZ],.364,.304,painted);branch([leanX,.95,leanZ],[leanX*.92,1.5,leanZ*.9],.304,.281,painted);}
+    // Distant trunks retain the original three low-poly segments and cost.
+    branch([0,0,0],[leanX,.95,leanZ],.36,.30,distantBranches);
+    branch([leanX,.95,leanZ],[leanX*.7,3.15,leanZ*.6],.30,.205,distantBranches);
+    branch([leanX*.7,3.15,leanZ*.6],[leanX+.12,5.35,leanZ-.08],.205,.085,distantBranches);
+    // Shared horizontal rings follow that same path, closing the visible gaps
+    // between tilted cylinder caps. Paint uses the same root rings and profile.
+    const trunkProfile=[[0,0,0,.36],[leanX,.95,leanZ,.30],[leanX*.7,3.15,leanZ*.6,.205],[leanX+.12,5.35,leanZ-.08,.085]];
+    function trunkGeometry(paint=false){
+      const heights=[0,.2375,.475,.7125,.95,1.5,...(paint?[]:[2.05,2.6,3.15,3.7,4.25,4.8,5.35])];
+      const g=new THREE.CylinderGeometry(1,1,1,detail==='forest'?8:10,heights.length-1),p=g.attributes.position,phase=variant*.83;
+      for(let i=0;i<p.count;i++){
+        const x=p.getX(i),z=p.getZ(i),ring=Math.round((p.getY(i)+.5)*(heights.length-1)),angle=Math.atan2(z,x);
+        const edge=paint&&ring===heights.length-1?.018+.032*(.5+.5*Math.sin(angle*3+phase))+.014*(.5+.5*Math.cos(angle*7+.9)):0;
+        const height=heights[ring]-edge,segment=height<.95?0:height<3.15?1:2,a=trunkProfile[segment],b=trunkProfile[segment+1],t=(height-a[1])/(b[1]-a[1]);
+        // Low-amplitude fluting and a narrower neck leave the original root
+        // envelope intact; no additional footprint or collision clearance.
+        const flute=.025*(1+Math.sin(angle*3+phase))+.014*(1+Math.sin(angle*5-phase+height*.4));
+        const neck=.055*Math.exp(-(((height-.38)/.28)**2)),radius=(a[3]+(b[3]-a[3])*t+(paint?.004:0))*(1-flute-neck);
+        p.setXYZ(i,a[0]+(b[0]-a[0])*t+x*radius,height,a[2]+(b[2]-a[2])*t+z*radius);
+      }
+      g.computeVertexNormals();const non=g.toNonIndexed();g.dispose();return non;
+    }
+    branches.push(trunkGeometry());if(whitewash)painted.push(trunkGeometry(true));
     // Roots remain low against the soil and stop well before a pavement edge.
     for(let k=0;k<5;k++){const angle=k*1.26+random()*.3;branch([Math.cos(angle)*.55,.03,Math.sin(angle)*.55],[0,.34,0],.06,.12);}
     const clumps=[];
@@ -138,7 +169,7 @@ export function* buildTreeLayer(THREE, trees, {name='photo-informed-trees',detai
     const extent=new THREE.Box3();let radius=0;
     for(const g of [leaves,distantLeaves,horizonLeaves]){g.computeBoundingBox();extent.union(g.boundingBox);const p=g.attributes.position;for(let i=0;i<p.count;i++)radius=Math.max(radius,Math.hypot(p.getX(i),p.getZ(i)));}
     modelBounds.push({height:extent.max.y,radius});
-    const distantTrunk=merged(branches.slice(0,3).map(g=>g.clone()));
+    const distantTrunk=merged(distantBranches);
     farModels.push([{geometry:distantTrunk,material:bark,part:'branches-distant'},{geometry:distantLeaves,material:distantFoliage,part:'leaves-distant'}]);
     models.push([{geometry:merged(branches),material:bark,part:'branches'},{geometry:leaves,material:foliage,part:'leaves'},...(painted.length?[{geometry:merged(painted),material:lime,part:'whitewash'}]:[])]);
   }

@@ -1,3 +1,4 @@
+@import './interface-tokens.css';
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#28272a;color:#fff;font-family:system-ui,"PingFang SC",sans-serif}#hall-canvas{display:block;width:100%;height:100%;touch-action:none;outline:0}header{position:fixed;top:max(20px,env(safe-area-inset-top));left:max(24px,env(safe-area-inset-left));right:max(24px,env(safe-area-inset-right));display:flex;align-items:center;justify-content:space-between;pointer-events:none;text-shadow:0 2px 14px #0009}header span{font-size:11px;letter-spacing:.18em;opacity:.8}h1{font-size:20px;font-weight:500;letter-spacing:.04em;margin:5px 0}#hall-return{pointer-events:auto;color:#fff;text-decoration:none;font-size:12px;padding:11px 17px;border:1px solid #fff5;border-radius:24px;background:#19191945;backdrop-filter:blur(12px)}aside{position:fixed;top:95px;right:24px;font-size:11px;line-height:1.8;text-align:right;text-shadow:0 1px 7px #000;pointer-events:none;opacity:.86}footer{position:fixed;bottom:max(13px,env(safe-area-inset-bottom));left:20px;font-size:10px;color:#fff9;pointer-events:none;text-shadow:0 1px 5px #000}#hall-status{position:fixed;left:50%;bottom:55px;transform:translateX(-50%);font-size:12px;padding:10px 20px;border-radius:30px;background:#1d1c1c70;backdrop-filter:blur(12px);pointer-events:none}#hall-stick{position:fixed;width:100px;height:100px;border-radius:50%;border:1px solid #fff5;background:#ffffff13;transform:translate(-50%,-50%);pointer-events:none}#hall-stick i{position:absolute;left:32px;top:32px;width:36px;height:36px;background:#fff8;border-radius:50%}#hall-pause{position:fixed;inset:0;display:grid;place-items:center;background:#15191c65;backdrop-filter:blur(4px)}[hidden]{display:none!important}@media(max-height:500px){header{top:10px;left:18px;right:18px}h1{font-size:16px}aside{top:65px;font-size:10px}footer{font-size:9px}}
 #hall-screen-controls{position:fixed;right:max(24px,env(safe-area-inset-right));bottom:max(25px,env(safe-area-inset-bottom));width:300px;padding:14px 16px;border:1px solid #ffffff26;border-radius:14px;background:#141916d9;backdrop-filter:blur(12px);box-shadow:0 6px 28px #0003}#hall-screen-controls>div{display:flex;justify-content:space-between;align-items:center;gap:10px}#hall-screen-controls strong{font-size:12px;font-weight:500}#screen-time{font-size:10px;font-variant-numeric:tabular-nums;color:#c3cfca}#screen-status{margin:7px 0 11px;font-size:11px;color:#c3cfca}#hall-screen-controls nav{display:flex;gap:7px}#hall-screen-controls button{min-height:36px;border:1px solid #ffffff2b;border-radius:7px;background:#ffffff0c;color:#fff;padding:7px 11px;font:11px system-ui;cursor:pointer}#hall-screen-controls button:hover{background:#ffffff20}#hall-screen-controls button:focus-visible{outline:2px solid #c6ff65;outline-offset:2px}#screen-sound[aria-pressed=true]{color:#c6ff65;border-color:#c6ff6570}@media(max-height:500px),(max-width:600px){#hall-screen-controls{right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));width:265px;padding:10px 12px}#hall-screen-controls button{padding:6px 8px}#screen-status{margin:4px 0 7px}footer{max-width:42%}}
 
@@ -14,3 +15,29 @@ body[data-cinema=true] header{justify-content:flex-end}
 #hall-input-hint .control-hint-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px}#hall-input-hint .control-hint-row+.control-hint-row{margin-top:9px}#hall-input-hint .control-hint-row>span{white-space:pre-wrap}#hall-input-hint kbd{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:25px;padding:0 5px;border:1px solid #fff;border-bottom-width:3px;border-radius:4px;background:#f3f7ef;color:#20372b;font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace}
 body[data-cinema=true] #hall-input-hint{display:block;font-size:12px;padding:9px 12px}body[data-swimming=true] #hall-input-hint{max-width:360px}
 @media(max-width:600px){#hall-input-hint,body[data-cinema=true] #hall-input-hint,body[data-swimming=true] #hall-input-hint{top:80px;right:12px;max-width:calc(100% - 24px);padding:9px 11px;font-size:11px}#hall-input-hint .control-hint-row+.control-hint-row{margin-top:5px}}
+
+/* The auditorium is another campus space, with the same quiet control language. */
+html,body{font-family:var(--campus-font)}
+header span{letter-spacing:.04em;opacity:.85}
+header h1{font-family:var(--campus-display);font-size:24px;font-weight:500;letter-spacing:.02em}
+#hall-return{display:inline-flex;align-items:center;min-height:40px;border-radius:6px;background:#243e35bf;border-color:#ffffff60;font-family:var(--campus-font)}
+#hall-status{border-radius:6px;background:#233d34d9;color:#f3f5ef;padding:11px 16px}
+#hall-input-hint{background:#f3f5efed;color:var(--campus-ink);border-color:#ffffff82;border-radius:9px;box-shadow:0 4px 18px #14271c18;font-weight:400;font-size:12px}
+#hall-input-hint kbd{background:#fff9;color:var(--campus-ink);border-color:var(--campus-line);border-bottom-width:2px;border-radius:3px;white-space:nowrap}
+#hall-screen-controls,#hall-seating-controls{background:#233c33e6;border-color:#ffffff45;border-radius:9px;box-shadow:0 4px 20px #14271c26}
+#hall-screen-controls button,#hall-seating-controls button,#hall-swim-controls button{border-radius:6px;font-family:var(--campus-font);min-height:38px;transition:background-color 140ms ease}
+#hall-screen-controls button:focus-visible,#hall-seating-controls button:focus-visible,#hall-swim-controls button:focus-visible,#hall-return:focus-visible{outline:2px solid #d3e5ed;outline-offset:3px}
+#hall-screen-controls #screen-sound[aria-pressed=true]{color:#e1f1df;border-color:#e1f1df80;background:#ffffff14}
+#hall-seating-controls #seat-enter{background:var(--campus-paper);border-color:var(--campus-paper);color:var(--campus-ink)}
+#screen-time,#screen-status,#seat-status{color:#d9e4dc}
+#screen-program-note{color:#bdcec2;line-height:1.6}
+#hall-swim-controls button{background:#294e58e8;border-color:#d8e7eb80;box-shadow:0 2px 12px #102b3526}
+#hall-flood-status{border-radius:6px;background:#183c46e6;box-shadow:0 6px 28px #102b3526}
+#hall-pause{background:var(--campus-overlay);backdrop-filter:blur(8px);font:500 clamp(26px,3vw,38px)/1.5 var(--campus-display)}
+@media(any-pointer:coarse){
+  #hall-return,#hall-screen-controls button,#hall-seating-controls button,#hall-swim-controls button,
+  body[data-cinema=true] #hall-screen-controls button,body[data-cinema=true] #hall-seating-controls button{min-height:44px;touch-action:manipulation}
+  #hall-swim-controls button{touch-action:none}
+}
+@media(max-height:500px){header h1{font-size:20px}#hall-input-hint{font-size:11px}}
+@media(prefers-reduced-motion:reduce){#hall-screen-controls button,#hall-seating-controls button,#hall-swim-controls button{transition:none}}

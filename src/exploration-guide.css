@@ -1,0 +1,11 @@
+.exploration-guide{position:absolute;left:max(24px,env(safe-area-inset-left));bottom:94px;z-index:14;display:flex;align-items:flex-start;gap:16px;box-sizing:border-box;width:310px;max-width:calc(100% - 48px);padding:14px 16px;border:1px solid #fff9;border-left:3px solid #4c7187;border-radius:7px;background:#f3f5eff0;color:#223d33;box-shadow:0 4px 20px #10251d18;font:12px/1.6 var(--campus-font,system-ui)}
+.exploration-guide[hidden]{display:none!important}.exploration-guide span{display:block;font-size:10px;color:#596d63;margin-bottom:3px}.exploration-guide strong{font-size:14px;font-weight:600}.exploration-guide p{margin:4px 0 0;font-size:11px;color:#596d63}.exploration-guide button{min-height:36px;flex:none;padding:4px 0 4px 8px;border:0;color:#596d63;background:transparent;font:11px var(--campus-font,system-ui);cursor:pointer;touch-action:manipulation}.exploration-guide button:focus-visible{outline:2px solid #4c7187;outline-offset:3px}
+.exploration-guide>div{min-width:0}
+.touch-controls .exploration-guide{left:50%;transform:translateX(-50%);bottom:calc(max(18px,env(safe-area-inset-bottom)) + 72px);width:320px;max-width:calc(100% - 28px);padding:10px 12px}.touch-controls .exploration-guide button{min-height:44px;min-width:44px}
+.touch-controls:has(#player-guide-toggle[aria-expanded=true]) .exploration-guide{visibility:hidden;pointer-events:none}
+@media(max-height:500px) and (orientation:landscape){
+  .touch-controls .exploration-guide{left:max(14px,env(safe-area-inset-left));transform:none;top:max(148px,calc(env(safe-area-inset-top) + 136px));bottom:auto;width:310px;max-width:calc(100% - 282px);padding:10px 12px;gap:10px}
+  .touch-controls:has(.exploration-guide:not([hidden])) .campus-location{visibility:hidden;pointer-events:none}
+  .touch-controls:has(.live-portal-prompt:not([hidden])) .exploration-guide{display:none}
+}
+@media(prefers-reduced-motion:reduce){.exploration-guide{transition:none}}

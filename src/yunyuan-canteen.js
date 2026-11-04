@@ -1,3 +1,6 @@
+import {createCampusGlazing} from './campus-glazing.js';
+import {createChamferedStone,createChamferedColumn} from './architectural-profiles.js';
+
 /** The map supplies location and two storeys; street photos supply the curved
  * silhouette. This derived boundary is deliberately separate from source GIS.
  */
@@ -48,7 +51,7 @@ export function createPhotoCanteen(THREE,record,profile,evidence){
   const base=(profile.baseHeight??0)+.08,h=profile.height,f=h/2;
   const unit=new THREE.BoxGeometry(1,1,1),batches=new Map(),materials=new Map(),dummy=new THREE.Object3D();
   function mat(color,roughness=.86,metalness=0){const key=`${color}/${roughness}/${metalness}`;if(!materials.has(key))materials.set(key,new THREE.MeshStandardMaterial({color,roughness,metalness,side:THREE.DoubleSide}));return materials.get(key);}
-  const cream=mat('#d2c1a0'),trim=mat('#d9d9cf'),grey=mat('#8c928c'),dark=mat('#44483e'),glass=mat('#334643',.27,.28),frame=mat('#a1aca3',.48,.35),navy=mat('#173743'),mint=mat('#468c79'),black=mat('#202a28'),stone=mat('#a8aaa0'),gold=mat('#ac935a',.56,.2);
+  const cream=mat('#d2c1a0'),trim=mat('#d9d9cf'),grey=mat('#8c928c'),dark=mat('#44483e'),glass=createCampusGlazing(THREE,{color:'#536a66',interiorStrength:.24,roughness:.18}),frame=mat('#a1aca3',.48,.35),navy=mat('#173743'),mint=mat('#468c79'),black=mat('#202a28'),stone=mat('#a8aaa0'),gold=mat('#ac935a',.56,.2);
   // Fine plaster grain, not an invented brick/tile facade photograph.
   const grainBytes=new Uint8Array(128*128*4);let seed=917;
   for(let i=0;i<128*128;i++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;const value=242+(seed%13);grainBytes.set([value,value,value,255],i*4);}
@@ -79,6 +82,7 @@ export function createPhotoCanteen(THREE,record,profile,evidence){
       [base+f+.96,.11,.22,-.23,trim],[base+h-.59,.20,.27,-.20,trim],
       [base+h-.39,.22,.43,-.28,grey],[base+h-.16,.16,.57,-.25,trim],
       [base+h+.02,.08,.61,-.25,trim]])band('canteen-curved-cornice',p,y,height,front,back,m);
+    band('canteen-cornice-recessed-drip',p,base+h-.62,.035,.20,-.20,dark);
     const bays=Math.round(p.length/5.8),pitch=p.length/bays;
     for(let i=0;i<=bays;i++){
       const s=Math.min(p.length-.15,Math.max(.15,i*pitch));
@@ -205,8 +209,10 @@ export function createPhotoCanteen(THREE,record,profile,evidence){
       put(p,u,'canteen-roof-letter-supports',grey,y-.64,-.13,.035,.53,.045);
     }
   }
+  const pierProfile=createChamferedColumn(THREE,1,1,1,.035),stoneProfile=createChamferedStone(THREE,1,1,1,.045);
   for(const{name,material,items}of batches.values()){
-    const o=new THREE.InstancedMesh(unit,material,items.length);o.name=name;items.forEach((m,i)=>o.setMatrixAt(i,m));o.instanceMatrix.needsUpdate=true;o.computeBoundingSphere();o.castShadow=true;o.receiveShadow=true;o.renderOrder=205;o.userData={...group.userData,component:name,instanceCount:items.length};group.add(o);
+    const geometry=name==='canteen-open-gallery-columns'?pierProfile:['canteen-column-footings','canteen-column-capitals'].includes(name)?stoneProfile:unit;
+    const o=new THREE.InstancedMesh(geometry,material,items.length);o.name=name;items.forEach((m,i)=>o.setMatrixAt(i,m));o.instanceMatrix.needsUpdate=true;o.computeBoundingSphere();o.castShadow=true;o.receiveShadow=true;o.renderOrder=205;o.userData={...group.userData,component:name,instanceCount:items.length};group.add(o);
   }
   return group;
 }

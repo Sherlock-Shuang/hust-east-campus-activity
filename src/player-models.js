@@ -3,17 +3,20 @@ import { createSpiderModel } from './spider-model.js';
 import { createHoverboardModel } from './hoverboard-model.js';
 import { createRoadsterModel } from './roadster-model.js';
 import {createActorLibrary} from './commute-actors.js';
-import {refineWalkingLegPose,refineWalkingUpperBodyPose} from './player-walking-pose.js';
+import {refineWalkingLegPose,refineWalkingUpperBodyPose,walkingAnimationSpeed} from './player-walking-pose.js';
+import {createPlayerClothingDetails} from './player-clothing-details.js';
+import {createPlayerFootContacts} from './player-foot-contacts.js';
 
 // Original, metre-scale player assets. The helicopter is an exploration vehicle,
 // not a claim about aircraft operating at HUST. All resources belong to this rig.
 const finite=(value,fallback=0)=>Number.isFinite(value)?value:fallback;
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
-export function createPlayerModels(THREE){
-  const geometries=new Set(),materials=new Set();
+export function createPlayerModels(THREE,{groundAt}={}){
+  const geometries=new Set(),materials=new Set(),textures=new Set();
   const ownGeometry=g=>(geometries.add(g),g);
   const ownMaterial=m=>(materials.add(m),m);
+  const ownTexture=t=>(textures.add(t),t);
   const group=new THREE.Group();group.name='player';
   const walker=new THREE.Group(),scooter=new THREE.Group(),helicopter=new THREE.Group();
   walker.name='player-walk';scooter.name='player-scooter';helicopter.name='player-helicopter';
@@ -40,6 +43,11 @@ export function createPlayerModels(THREE){
     });
   }
   const walkingParts=actorParts(walker,library.walker);
+  const walkingDetails=createPlayerClothingDetails(THREE,{palette:library.palette,ownGeometry,ownMaterial,ownTexture});
+  const footContacts=createPlayerFootContacts(THREE,{groundAt,ownGeometry,ownMaterial,ownTexture});
+  const detailAnchors=new Map([['torso',walkingParts.find(({part})=>part.joint==='torso'&&part.name==='coat').mesh],
+    ...walkingParts.filter(({part})=>part.joint==='shoe'&&part.name==='rubber').map(({part,mesh})=>[part.anchor,mesh])]);
+  walker.add(...walkingDetails.parts.map(part=>part.mesh),...footContacts.meshes);
   let ridingParts=actorParts(scooter,library.scooter);
   const selectedScooterPaint=ownMaterial(library.palette.paint.clone());
   function setScooterAppearance(source={}){
@@ -182,10 +190,10 @@ export function createPlayerModels(THREE){
   }
   // Keep the original foot contacts and pre-speed-up cadence. Articulation is
   // refined separately without fast-forwarding the familiar walking rhythm.
-  const walkingAnimationSpeed=speed=>speed<=3.2?speed*2.2/3.2:2.2+(Math.min(speed,5.2)-3.2)*1.6/2;
   function update(state={},dt=0){
     if(disposed)return;
     const mode=state.mode??'walk';
+    if(mode!=='walk')footContacts.update(state,null);
     ensureMode(mode);
     group.position.set(finite(state.x),finite(state.y),finite(state.z));
     group.rotation.set(finite(state.pitch),finite(state.yaw),finite(state.lean),'YXZ');
@@ -235,6 +243,7 @@ export function createPlayerModels(THREE){
       }
 
       for(const {mesh,part}of mode==='walk'?walkingParts:ridingParts){
+        if(mode==='walk')mesh.material=!wet&&walkingDetails.materials[part.name]||part.material;
         library.partMatrix(part,agent,pose,mesh.matrix);
         if(mode==='walk'&&!wet){
           if(part.joint==='torso'||!part.joint)mesh.matrix.elements[14]+=pose.bodyOffsetZ;
@@ -242,6 +251,10 @@ export function createPlayerModels(THREE){
           if(part.joint==='hand')mesh.matrix.multiply(walkingHandRotation.makeRotationX(pose.handRotation[part.anchor]));
         }
         mesh.matrixWorldNeedsUpdate=true;
+      }
+      if(mode==='walk'){
+        for(const {anchor,mesh} of walkingDetails.parts){mesh.visible=!wet;mesh.matrix.copy(detailAnchors.get(anchor).matrix);mesh.matrixWorldNeedsUpdate=true;}
+        footContacts.update(state,pose);
       }
     }
     const power=clamp(finite(state.rotorPower,mode==='helicopter'?1:0),0,1);
@@ -252,9 +265,9 @@ export function createPlayerModels(THREE){
   }
   function dispose(){
     if(disposed)return;disposed=true;group.removeFromParent();roadster.dispose();hoverboard.dispose();spider?.dispose();boat.dispose();
-    for(const geometry of geometries)geometry.dispose();for(const material of materials)material.dispose();
-    group.clear();geometries.clear();materials.clear();
+    for(const geometry of geometries)geometry.dispose();for(const material of materials)material.dispose();for(const texture of textures)texture.dispose();
+    group.clear();geometries.clear();materials.clear();textures.clear();
   }
   update({mode:'walk'});
-  return{group,update,dispose,setScooterAppearance,ensureMode,get spiderReady(){return !!spider;}};
+  return{group,update,dispose,setScooterAppearance,ensureMode,get spiderReady(){return !!spider;},get walkingPhase(){return walkProgress*5.2;}};
 }
