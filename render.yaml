@@ -1,0 +1,29 @@
+# One Free web service, no new database, disk, paid compute or workspace plan.
+# Keep credentials in Render's environment settings, never in this file.
+services:
+  - type: web
+    name: hust-east-campus-online
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --include=dev && npm run build:host
+    startCommand: npm run start:host
+    healthCheckPath: /healthz
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: TASAY_LLM_API_KEY
+        sync: false
+      - key: TASAY_LLM_BASE_URL
+        sync: false
+      - key: TASAY_LLM_MODEL
+        sync: false

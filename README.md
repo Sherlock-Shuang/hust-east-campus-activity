@@ -34,6 +34,10 @@ npm start
 
 本地 Node 将活动数据保存在 `server-data/`。管理员密码由 `ADMIN_PASSWORD` 提供（至少 12 字符），未配置则首次随机生成并保存到 `server-data/admin-password.txt`。局域网使用 `HOST=0.0.0.0 npm start`，分享这台电脑的局域网 IP；不要分享 localhost。模型服务设置见下文。
 
+## 免费托管与独立服务器
+
+除 Vercel 外，可使用 `npm run build:host` 和 `npm run start:host` 在 Node.js 24 主机运行完整生产版本。它继续使用现有 Turso 数据库，支持校园、控制台、留言、五子棋、作品和模型代理；不会改用本地 JSON 数据库。仓库提供一个明确选择 Free 实例的 `render.yaml`，操作步骤、免费休眠与流量限制见 [免费迁移说明](docs/FREE-HOST-MIGRATION.md)。这份配置不代表线上已迁移。
+
 ## Vercel 部署
 
 这是 Vercel + Turso 生产部署源码，`vercel.json` 已配置静态作品、Node API、路由和 300 秒函数时限。校园与大型模型、Unity 文件由静态 CDN 提供；活动数据、管理认证和模型代理进入 `api/activity.mjs`，不依赖临时文件系统。实时连接会在 240 秒主动轮换并自动重连。

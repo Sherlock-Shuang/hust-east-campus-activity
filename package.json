@@ -11,6 +11,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test tests/*.test.mjs deploy-assets/*.test.mjs",
     "start": "node server/index.mjs",
+    "start:host": "node server/production.mjs",
+    "build:host": "npm run build:vercel",
     "build:vercel": "node deploy-assets/sync-vercel-routes.mjs --check && vite build && node deploy-assets/materialize.mjs --assets asset-source --output dist",
     "sync:routes": "node deploy-assets/sync-vercel-routes.mjs",
     "db:migrate": "node serverless/migrate.mjs",

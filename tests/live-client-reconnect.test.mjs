@@ -46,10 +46,11 @@ test('repeated network failures have a bounded retry rate and dispose cancels sc
   const count=f.requests.length;f.client.dispose();await f.advance(120000);assert.equal(f.requests.length,count);assert.equal(f.timers.size,0);
 });
 
-test('offline suspends retries; online resumes even when the document is hidden',async()=>{
+test('offline and hidden pages suspend retries; online waits for a visible foreground',async()=>{
   const f=fixture();await flush();f.sources[0].emit('snapshot',f.payload());f.window.dispatchEvent(new Event('offline'));
   assert.equal(f.sources[0].closed,1);await f.advance(120000);assert.equal(f.sources.length,1);
-  f.document.hidden=true;f.window.dispatchEvent(new Event('online'));await f.advance(750);assert.equal(f.sources.length,2);
+  f.document.hidden=true;f.window.dispatchEvent(new Event('online'));await f.advance(120000);assert.equal(f.sources.length,1);assert.equal(f.timers.size,0);
+  f.document.hidden=false;f.document.dispatchEvent(new Event('visibilitychange'));await f.advance(550);assert.equal(f.sources.length,2);assert.equal(f.requests.length,2,'resuming performs a fresh authoritative GET');
   f.sources[1].emit('snapshot',f.payload(2));assert.equal(f.client.state.revision,2);f.client.dispose();
 });
 

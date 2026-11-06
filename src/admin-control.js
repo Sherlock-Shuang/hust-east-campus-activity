@@ -8,6 +8,7 @@ import { readAdminCoordinates, bindAdminCoordinateInputs } from './admin-coordin
 import { activitySelectionSignature, selectActivitiesNow } from './activity-launch.js';
 import { getC118FloodElapsed } from './c118-flood-state.js';
 import { normalizeC118Screen } from './c118-screen-state.js';
+import {createAdminPolling} from './admin-polling.js';
 
 const $ = id => document.getElementById(id);
 const cueSidebar = mountCueSidebar({
@@ -35,7 +36,7 @@ let pauseMessageDirty = false, pauseMessageBase = '';
 let phaseDirty=false, phaseBase='', audienceData=null, audiencePending=false, selectedAudienceId=null, selectedAudience=null, detailLimit=100, searchTimer, detailRequest=0;
 let launchDirty=false, launchBase='', launchSelection=new Set();
 let learningData=null,learningPending=false,learningSession=0,learningLimit=100,learningSearchTimer;
-let skyQrReady = false,screenSelectionDirty=false,codexDraftDirty=false;
+let skyQrReady = false,screenSelectionDirty=false,codexDraftDirty=false,adminPolling;
 const screenTitles={'vibe-coding':'Vibe Coding 成果展示','club-promo':'AI 俱乐部宣传片','ai-dream-plan':'AI圆梦计划','codex':'Codex 页面'};
 const defaultPauseMessage = '请稍候，活动即将继续';
 let selection = { x: 58.2, z: 17.6, label: '东九 B/C 前场' };
@@ -118,14 +119,17 @@ function showLogin(message = '') {
   skyQrReady = false; renderSkyQr();renderC118Flood();renderC118Screen();
   launchDirty=false;launchBase='';launchSelection.clear();delete $('activity-choices').dataset.signature;
   audienceData=null;selectedAudienceId=null;selectedAudience=null;detailRequest++;$('audience-list').replaceChildren();$('audience-detail').replaceChildren();delete $('audience-list').dataset.signature;delete $('audience-detail').dataset.signature;
+  for(const key of ['stat-participants','stat-online','stat-experiencing','audience-count'])$(key).textContent='—';
   clearLearningRequests();
-  $('login-error').textContent = message;
+  $('login-error').textContent = message;adminPolling?.sync();
 }
 function showDashboard() {
   loggedIn = true; $('login-screen').hidden = true; $('dashboard').hidden = false;
   cueSidebar?.resize();
   skyQrReady = false; renderSkyQr();renderC118Flood();renderC118Screen();
-  $('admin-password').value = '';
+  if(!audienceData){$('audience-count').textContent='—';$('audience-sync-note').textContent=$('panel-audience').hidden?'打开「观众记录」查看参与统计':'正在读取参与记录…';}
+  if(!learningData)$('learning-count').textContent='—';
+  $('admin-password').value = '';adminPolling?.sync();
 }
 function applySnapshot(data) {
   if (!data?.state) return;
@@ -135,12 +139,13 @@ function applySnapshot(data) {
   syncPauseMessage();
   if (Number.isFinite(data.serverTime)) serverOffset = data.serverTime - Date.now();
   connection(true);
-  $('online-count').textContent = String(data.onlineAudienceCount ?? audienceData?.summary?.onlineParticipants ?? '—');
+  const online=data.onlineAudienceCount ?? audienceData?.summary?.onlineParticipants ?? '—';
+  $('online-count').textContent=String(online);$('stat-online').textContent=String(online);
   $('last-sync').textContent = `最近同步 ${dateLabel(Date.now())}`;
   renderState();
 }
 async function refresh() {
-  if (!loggedIn || pollInFlight || busy) return;
+  if (!loggedIn || document.hidden || pollInFlight || busy) return;
   pollInFlight = true;
   try { const [live]=await Promise.all([request('/api/live/state'),refreshAudience(),refreshLearningRequests()]);applySnapshot(live); }
   catch { connection(false); }
@@ -379,12 +384,12 @@ function renderAudienceList() {
   }
 }
 async function refreshAudience() {
-  if (!loggedIn || audiencePending) return;
+  if (!loggedIn || document.hidden || $('panel-audience').hidden || audiencePending) return;
   audiencePending = true;
   const query = $('audience-search').value.trim();
   try {
     const result = await request(`/api/admin/audience${query ? `?q=${encodeURIComponent(query)}` : ''}`);
-    if (!loggedIn || query !== $('audience-search').value.trim()) return;
+    if (!loggedIn || document.hidden || $('panel-audience').hidden || query !== $('audience-search').value.trim()) return;
     audienceData = result; renderStatistics(); renderAudienceList();
     $('audience-sync-note').textContent = `记录同步于 ${readableTime(Date.now())}`;
     if (selectedAudienceId && !$('panel-audience').hidden) await loadAudienceDetail(false);
@@ -451,7 +456,7 @@ function renderAudienceDetail() {
 function clearLearningRequests(){
   learningSession++;learningData=null;learningPending=false;learningLimit=100;clearTimeout(learningSearchTimer);
   $('learning-list').replaceChildren();delete $('learning-list').dataset.signature;
-  $('learning-search').value='';$('learning-count').textContent='0';$('learning-total').textContent='—';$('learning-participants').textContent='—';
+  $('learning-search').value='';$('learning-count').textContent='—';$('learning-total').textContent='—';$('learning-participants').textContent='—';
   $('learning-empty').hidden=true;$('learning-more').hidden=true;$('learning-list').removeAttribute('aria-busy');
   $('learning-results').textContent='按最新留言排序';$('learning-sync-note').textContent='登录后可查看操场留言';delete $('learning-sync-note').dataset.error;
 }
@@ -476,12 +481,12 @@ function renderLearningRequests(){
   }
 }
 async function refreshLearningRequests(){
-  if(!loggedIn||learningPending)return;
+  if(!loggedIn||document.hidden||$('panel-learning').hidden||learningPending)return;
   const query=$('learning-search').value.trim(),session=learningSession;learningPending=true;$('learning-list').setAttribute('aria-busy','true');
   if(!learningData)$('learning-sync-note').textContent='正在读取操场留言…';
   try{
     const result=await request(`/api/admin/learning-requests${query?`?q=${encodeURIComponent(query)}`:''}`);
-    if(!loggedIn||session!==learningSession||query!==$('learning-search').value.trim())return;
+    if(!loggedIn||document.hidden||$('panel-learning').hidden||session!==learningSession||query!==$('learning-search').value.trim())return;
     if(!Array.isArray(result.messages)||!Number.isFinite(result.total)||!Number.isFinite(result.participants))throw new Error('留言数据未完整返回，请重试。');
     learningData=result;renderLearningRequests();
     $('learning-sync-note').textContent=`每 5 秒自动刷新 · 最近同步 ${learningDateLabel(Date.now())}（北京时间）`;delete $('learning-sync-note').dataset.error;
@@ -500,7 +505,8 @@ function activateTab(name, focus = false) {
   document.querySelector('.workspace').classList.toggle('show-audience',['audience','learning'].includes(name));
   document.querySelector('.workspace').classList.toggle('with-map',['marker','portal'].includes(name));
   document.querySelector('.map-workspace').hidden=!['marker','portal'].includes(name);
-  if(name==='audience')refreshAudience();
+  if(name==='audience'){if(!audienceData)$('audience-sync-note').textContent='正在读取参与记录…';refreshAudience();}
+  else{$('stat-experiencing').textContent='—';$('audience-sync-note').textContent=audienceData?'参与统计为上次记录，打开「观众记录」刷新':'打开「观众记录」查看参与统计';}
   if(name==='learning'){cueSidebar?.setOpen(false);refreshLearningRequests();}
   document.querySelector('.map-workspace').dataset.tab = name;
   $('map-instruction').textContent = name === 'announcement' ? '查看当前地图事件与体验入口。' : `点击地图，为${name === 'marker' ? '光柱' : '入口'}选择位置。`;
@@ -754,6 +760,4 @@ try {
   const session = await request('/api/admin/session');
   if (session.authenticated) { csrfToken = session.csrfToken; showDashboard(); applySnapshot(await request('/api/live/state')); populateInitialForms(); }
 } catch (error) { showLogin(error.message); }
-setInterval(refresh, 5000);
-setInterval(() => { if (loggedIn && snapshot) renderState(); }, 1000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+adminPolling=createAdminPolling({canPoll:()=>loggedIn,refresh,render:()=>{if(snapshot)renderState();}});
